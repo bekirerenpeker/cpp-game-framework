@@ -1,5 +1,7 @@
 #pragma once
 
+#if OS_NAME == WINDOWS
+
 #include "window_manager/IWindow.hpp"
 
 class WindowsWindow : public IWindow
@@ -29,3 +31,5 @@ class WindowsWindow : public IWindow
 
     void vsync(bool enable = true) override;
 };
+
+#endif   // OS_NAME == WINDOWS

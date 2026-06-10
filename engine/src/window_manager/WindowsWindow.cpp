@@ -1,5 +1,7 @@
 #include "window_manager/WindowsWindow.hpp"
 
+#if OS_NAME == WINDOWS
+
 WindowsWindow::WindowsWindow() {}
 WindowsWindow::~WindowsWindow() {}
 
@@ -23,3 +25,5 @@ void WindowsWindow::minimize() {}
 void WindowsWindow::restore() {}
 
 void WindowsWindow::vsync(bool enable) {}
+
+#endif   // OS_NAME == WINDOWS

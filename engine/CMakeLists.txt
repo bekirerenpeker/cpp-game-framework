@@ -18,6 +18,13 @@ file(GLOB_RECURSE ENGINE_SOURCE_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
 )
 
+# Conditionally exclude Windows-specific files on non-Windows platforms
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    list(FILTER ENGINE_HEADER_FILES EXCLUDE REGEX "WindowsWindow\\.hpp$")
+    list(FILTER ENGINE_SOURCE_FILES EXCLUDE REGEX "WindowsWindow\\.cpp$")
+    message(STATUS "Excluded Windows-specific files on ${CMAKE_SYSTEM_NAME}")
+endif()
+
 # Create engine library
 add_library(engine ${ENGINE_HEADER_FILES} ${ENGINE_SOURCE_FILES})
 
@@ -25,6 +32,9 @@ add_library(engine ${ENGINE_HEADER_FILES} ${ENGINE_SOURCE_FILES})
 target_include_directories(engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+# Apply OS preprocessor definition to the target
+target_compile_definitions(engine PRIVATE OS_NAME=${OS_NAME})
 
 # Print out collected files (for debugging)
 message(STATUS "Engine Headers: ${ENGINE_HEADER_FILES}")
