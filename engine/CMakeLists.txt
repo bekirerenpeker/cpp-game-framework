@@ -25,13 +25,21 @@ if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
     message(STATUS "Excluded Windows-specific files on ${CMAKE_SYSTEM_NAME}")
 endif()
 
+# Add lib source files and headers into engine
+list(APPEND ENGINE_HEADER_FILES ${LIB_HEADER_FILES})
+list(APPEND ENGINE_SOURCE_FILES ${LIB_SOURCE_FILES})
+
 # Create engine library
 add_library(engine ${ENGINE_HEADER_FILES} ${ENGINE_SOURCE_FILES})
 
 # Include directories
 target_include_directories(engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${LIB_INCLUDE_DIRS}
 )
+
+# Link libraries
+target_link_libraries(engine PRIVATE ${LIB_LINK_LIBRARIES})
 
 # Apply OS preprocessor definition to the target
 target_compile_definitions(engine PRIVATE OS_NAME=${OS_NAME})
