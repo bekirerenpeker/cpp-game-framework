@@ -1,6 +1,7 @@
 #include "math/Random.hpp"
 #include "math/Math.hpp"
 #include <random>
+#include <ctime>
 
 namespace Random {
 

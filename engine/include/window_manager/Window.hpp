@@ -1,11 +1,11 @@
 #pragma once
 
-#include "GLFW/glfw3.h"
 #include "math/Mat4.hpp"
 #include "math/Vec2.hpp"
 #include <cstdint>
 #include <string>
 #include <unordered_map>
+#include "GLFW/glfw3.h"
 
 #define WINDOW_HINT_NOT_RESIZABLE      1 << 0    // disbale resizing of window
 #define WINDOW_HINT_NOT_VISIBLE        1 << 1    // make the window unvisible

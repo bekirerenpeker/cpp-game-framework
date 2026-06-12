@@ -1,13 +1,12 @@
 #include "window_manager/Window.hpp"
-#include "lib/glfw/GlfwImpl.hpp"
+#include "context/GlfwContext.hpp"
 #include "GLFW/glfw3.h"
-#include "GL/glew.h"
 
 std::unordered_map<GLFWwindow*, Window*> Window::s_CreatedWindows;
 
 Window::Window(int width, int height, const std::string& title, uint16_t creationHints)
 {
-    GlfwImpl::init();
+    GlfwContext::Init();
 
     glfwDefaultWindowHints();
     if (creationHints & WINDOW_HINT_NOT_RESIZABLE) glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
@@ -37,7 +36,7 @@ Window::Window(int width, int height, const std::string& title, uint16_t creatio
     glfwGetWindowSize(m_GlfwHandle, &m_Width, &m_Height);
     glfwGetWindowPos(m_GlfwHandle, &m_XPos, &m_YPos);
 
-    glViewport(0, 0, m_Width, m_Height);
+    // glViewport(0, 0, m_Width, m_Height);
 }
 
 Window::~Window() { glfwDestroyWindow(m_GlfwHandle); }
@@ -104,7 +103,7 @@ void Window::sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height)
     Window* window = s_CreatedWindows[glfwHandle];
     window->m_Width = width;
     window->m_Height = height;
-    glViewport(0, 0, width, height);
+    // glViewport(0, 0, width, height);
 }
 void Window::positionUpdateCallback(GLFWwindow* glfwHandle, int x, int y)
 {

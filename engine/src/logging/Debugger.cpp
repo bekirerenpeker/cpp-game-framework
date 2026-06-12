@@ -3,13 +3,13 @@
 
 namespace Debugger {
 
-static std::string colorStr(FGColor fgColor) { return "\e[" + std::to_string((int)fgColor) + "m"; }
-static std::string colorStr(BGColor bgColor) { return "\e[" + std::to_string((int)bgColor) + "m"; }
-static std::string colorStr(FGColor fgColor, BGColor bgColor)
+std::string colorStr(FGColor fgColor) { return "\x1b[" + std::to_string((int)fgColor) + "m"; }
+std::string colorStr(BGColor bgColor) { return "\x1b[" + std::to_string((int)bgColor) + "m"; }
+std::string colorStr(FGColor fgColor, BGColor bgColor)
 {
-    return "\e[" + std::to_string((int)fgColor) + ";" + std::to_string((int)bgColor) + "m";
+    return "\x1b[" + std::to_string((int)fgColor) + ";" + std::to_string((int)bgColor) + "m";
 }
-static std::string defaultColorStr() { return "\e[39;49m"; }
+std::string defaultColorStr() { return "\x1b[39;49m"; }
 
 void glfwMessageCallback(int error, const char* msg)
 {
