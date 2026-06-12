@@ -7,7 +7,7 @@ namespace GlfwContext {
 
 static bool s_IsInitialized = false;
 
-bool Init()
+bool init()
 {
     if (s_IsInitialized) return true;
 
@@ -20,7 +20,7 @@ bool Init()
     return true;
 }
 
-void Quit()
+void quit()
 {
     if (!s_IsInitialized) return;
 
@@ -29,6 +29,8 @@ void Quit()
     LOG_INFO("[GLFW] Terminated successfully.");
 }
 
-bool IsInitialized() { return s_IsInitialized; }
+void pollEvents() { glfwPollEvents(); }
+
+bool isInitialized() { return s_IsInitialized; }
 
 }   // namespace GlfwContext

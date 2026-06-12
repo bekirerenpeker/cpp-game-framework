@@ -2,8 +2,9 @@
 
 namespace GlfwContext {
 
-bool Init();
-void Quit();
-bool IsInitialized();
+bool init();
+void quit();
+void pollEvents();
+bool isInitialized();
 
 }   // namespace GlfwContext

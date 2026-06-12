@@ -1,7 +1,14 @@
-#include <iostream>
+#include "EngineInclude.hpp"
 
 int main()
 {
-    std::cout << "Hello, World!" << std::endl;
+    Window window(1000, 800, "Terraria Clone");
+
+    while (window.isOpen()) {
+        window.swapBuffers();
+        GlfwContext::pollEvents();
+    }
+
+    GlfwContext::quit();
     return 0;
 }

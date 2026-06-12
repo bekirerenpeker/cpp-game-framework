@@ -4,11 +4,11 @@
 #include <string>
 #include <iostream>
 
-// #ifdef Windows
-// #define __FILENAME__ (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
-// #else
+#if OS_NAME == OS_WINDOWS
+#define __FILENAME__ (strrchr(__FILE__, '\\') ? strrchr(__FILE__, '\\') + 1 : __FILE__)
+#else
 #define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
-// #endif
+#endif
 
 namespace Debugger {
 

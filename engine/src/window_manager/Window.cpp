@@ -6,7 +6,7 @@ std::unordered_map<GLFWwindow*, Window*> Window::s_CreatedWindows;
 
 Window::Window(int width, int height, const std::string& title, uint16_t creationHints)
 {
-    GlfwContext::Init();
+    GlfwContext::init();
 
     glfwDefaultWindowHints();
     if (creationHints & WINDOW_HINT_NOT_RESIZABLE) glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
