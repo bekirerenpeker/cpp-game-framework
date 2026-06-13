@@ -16,6 +16,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     add_compile_definitions(OS_NAME=3)
 endif()
 
+add_compile_definitions(DEBUG=1)
+
 # --- Include Modules & Dependencies ---
 add_subdirectory(lib)
 add_subdirectory(engine)
