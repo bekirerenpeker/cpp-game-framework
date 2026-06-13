@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Logger.hpp"
+#include <format>
 
 namespace Engine {
 
@@ -35,5 +36,16 @@ namespace Engine {
 #define LOG_ERROR(msg, ...)
 
 #endif
+
+// The Master Macro
+#define DEFINE_TYPE_FORMATTER(Type, FormatString, ...)                                             \
+    template<> struct std::formatter<Type>                                                         \
+    {                                                                                              \
+        constexpr auto parse(std::format_parse_context& ctx) { return ctx.begin(); }               \
+        auto format(const Type& obj, std::format_context& ctx) const                               \
+        {                                                                                          \
+            return std::format_to(ctx.out(), FormatString, __VA_ARGS__);                           \
+        }                                                                                          \
+    };
 
 }   // namespace Engine
