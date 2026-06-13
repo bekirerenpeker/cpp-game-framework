@@ -15,18 +15,16 @@ namespace Engine {
 
 #define LOG_INFO(msg, ...)                                                                         \
     Logger::get().Log(                                                                             \
-        LogLevel::Info, __FILENAME__, std::to_string(__LINE__), __FUNCTION__, __TIME__, msg,       \
-        ##__VA_ARGS__                                                                              \
+        LogLevel::Info, __FILENAME__, std::to_string(__LINE__), __FUNCTION__, msg, ##__VA_ARGS__   \
     )
 #define LOG_WARNING(msg, ...)                                                                      \
     Logger::get().Log(                                                                             \
-        LogLevel::Warning, __FILENAME__, std::to_string(__LINE__), __FUNCTION__, __TIME__, msg,    \
+        LogLevel::Warning, __FILENAME__, std::to_string(__LINE__), __FUNCTION__, msg,              \
         ##__VA_ARGS__                                                                              \
     )
 #define LOG_ERROR(msg, ...)                                                                        \
     Logger::get().Log(                                                                             \
-        LogLevel::Error, __FILENAME__, std::to_string(__LINE__), __FUNCTION__, __TIME__, msg,      \
-        ##__VA_ARGS__                                                                              \
+        LogLevel::Error, __FILENAME__, std::to_string(__LINE__), __FUNCTION__, msg, ##__VA_ARGS__  \
     )
 
 #else

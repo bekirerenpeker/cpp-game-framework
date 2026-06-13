@@ -2,6 +2,7 @@
 
 #include "utils/Singleton.hpp"
 #include "logging/ILogSink.hpp"
+#include "core/Time.hpp"
 #include <format>
 #include <string>
 #include <string_view>
@@ -39,9 +40,10 @@ class Logger : public Singleton<Logger>
 
     template<typename... Args>
     void
-    Log(LogLevel level, const std::string& file, const std::string& line,
-        const std::string& function, const std::string& time, const std::string_view& message,
-        Args&&... args);
+    Log(LogLevel level, const std::string& file, const std::string& function,
+        const std::string& time, const std::string_view& message, Args&&... args);
+
+    static void logGlfwMessage(int error, const char* description);
 
   private:
     void workerLoop();
@@ -57,11 +59,12 @@ template<typename T, typename... Args> void Logger::addSink(Args&&... args)
 template<typename... Args>
 void Logger::Log(
     LogLevel level, const std::string& file, const std::string& line, const std::string& function,
-    const std::string& time, const std::string_view& message, Args&&... args
+    const std::string_view& message, Args&&... args
 )
 {
     if (level < m_minLogLevel) return;
     std::string formattedMessage = std::vformat(message, std::make_format_args(args...));
+    std::string time = Time::get().currTimeStr();
     LogMessage logMessage = {level, file, line, function, time, formattedMessage};
 
     if (m_useAsync) {

@@ -1,5 +1,5 @@
 # Collect all engine source code
-file(GLOB_RECURSE ENGINE_SOURCES "src/*.cpp")
+file(GLOB_RECURSE ENGINE_SOURCES "src/**.cpp")
 
 # Create the engine static library
 add_library(engine STATIC ${ENGINE_SOURCES})
