@@ -1,7 +1,6 @@
 #pragma once
 
 #include <GLFW/glfw3.h>
-#include "utils/math/Mat4.hpp"
 #include "utils/math/Vec2.hpp"
 #include <cstdint>
 #include <string>
@@ -62,8 +61,6 @@ class Window
 
     void swapBuffers();
     bool isOpen();
-
-    Mat4 getProjMat() const;
 
     void fullscreen();
     void maximize();

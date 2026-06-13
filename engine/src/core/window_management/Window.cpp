@@ -68,11 +68,6 @@ Window& Window::operator=(Window&& other) noexcept
 void Window::swapBuffers() { glfwSwapBuffers(m_glfwHandle); }
 bool Window::isOpen() { return !glfwWindowShouldClose(m_glfwHandle); }
 
-Mat4 Window::getProjMat() const
-{
-    return Mat4::ortho(-m_width / 2.f, m_width / 2.f, -m_height / 2.f, m_height / 2.f, -1.f, 1.f);
-}
-
 void Window::fullscreen()
 {
     GLFWmonitor* monitor = glfwGetPrimaryMonitor();
