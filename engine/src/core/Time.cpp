@@ -9,7 +9,8 @@ Time::Time()
 {
     GlfwContext::init();
 
-    m_startupTime = std::chrono::system_clock::now();
+    auto utcNow = std::chrono::system_clock::now();
+    m_startupTime = std::chrono::current_zone()->to_local(utcNow);
     m_glfwTimeOffset = glfwGetTime();
 
     m_deltaTime = 0.0;
@@ -32,12 +33,13 @@ DateTime Time::getCurrentDateTime() const
     auto elapsedDuration = std::chrono::duration_cast<std::chrono::system_clock::duration>(
         std::chrono::duration<double>(currTime())
     );
-    std::chrono::system_clock::time_point currentTime = m_startupTime + elapsedDuration;
+    auto currentTime = m_startupTime + elapsedDuration;
 
-    auto sysSeconds = std::chrono::floor<std::chrono::seconds>(currentTime);
-    std::chrono::sys_days sysDays = std::chrono::floor<std::chrono::days>(sysSeconds);
-    std::chrono::year_month_day ymd {sysDays};
-    std::chrono::hh_mm_ss timeOfDay {sysSeconds - sysDays};
+    auto localSeconds = std::chrono::floor<std::chrono::seconds>(currentTime);
+    std::chrono::local_days localDays = std::chrono::floor<std::chrono::days>(localSeconds);
+
+    std::chrono::year_month_day ymd {localDays};
+    std::chrono::hh_mm_ss timeOfDay {localSeconds - localDays};
 
     return DateTime {
         static_cast<int>(ymd.year()),

@@ -15,7 +15,7 @@ struct DateTime
 class Time : public Singleton<Time>
 {
   private:
-    std::chrono::system_clock::time_point m_startupTime;
+    std::chrono::local_time<std::chrono::system_clock::duration> m_startupTime;
     double m_glfwTimeOffset;
 
     double m_deltaTime;
