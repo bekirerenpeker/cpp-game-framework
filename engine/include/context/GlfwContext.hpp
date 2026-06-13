@@ -1,6 +1,6 @@
 #pragma once
 
-#include "logging/LoggerMacros.hpp"
+#include "core/logging/LoggerMacros.hpp"
 #include "GLFW/glfw3.h"
 
 namespace Engine {

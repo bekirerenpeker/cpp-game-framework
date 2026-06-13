@@ -1,7 +1,7 @@
 #pragma once
 
 #include "utils/Singleton.hpp"
-#include "logging/ILogSink.hpp"
+#include "ILogSink.hpp"
 #include "core/Time.hpp"
 #include <format>
 #include <string>

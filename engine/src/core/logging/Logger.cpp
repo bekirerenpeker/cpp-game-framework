@@ -1,5 +1,5 @@
-#include "logging/Logger.hpp"
-#include "logging/ConsoleSink.hpp"
+#include "core/logging/Logger.hpp"
+#include "core/logging/ConsoleSink.hpp"
 
 namespace Engine {
 

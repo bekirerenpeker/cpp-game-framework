@@ -1,5 +1,4 @@
 #pragma once
 
-#include "core/Time.hpp"
-#include "logging/LoggingInclude.hpp"
+#include "core/CoreInclude.hpp"
 #include "utils/UtilsInclude.hpp"

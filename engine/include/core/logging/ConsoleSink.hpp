@@ -1,6 +1,6 @@
 #pragma once
 
-#include "logging/ILogSink.hpp"
+#include "ILogSink.hpp"
 
 namespace Engine {
 
