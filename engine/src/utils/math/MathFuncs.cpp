@@ -1,4 +1,5 @@
 #include "utils/math/MathFuncs.hpp"
+#include "stb/stb_perlin.h"
 #include <cmath>
 
 namespace Math {
@@ -65,13 +66,11 @@ float moveTowardsAngle(float a, float b, float step)
 
 float perlin2D(float x, float y, int seed)
 {
-    // return stb_perlin_noise3_seed(x, y, 0, 0, 0, 0, seed);
-    return 0;
+    return stb_perlin_noise3_seed(x, y, 0, 0, 0, 0, seed);
 }
 float perlin3D(float x, float y, float z, int seed)
 {
-    // return stb_perlin_noise3_seed(x, y, z, 0, 0, 0, seed);
-    return 0;
+    return stb_perlin_noise3_seed(x, y, z, 0, 0, 0, seed);
 }
 
 float sin(float radians) { return std::sin(radians); }

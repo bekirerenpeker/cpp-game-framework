@@ -8,4 +8,4 @@ add_library(engine STATIC ${ENGINE_SOURCES})
 target_include_directories(engine PUBLIC include)
 
 # Link GLFW to the engine
-target_link_libraries(engine PUBLIC glfw)
+target_link_libraries(engine PUBLIC glfw stb stb_impl)
