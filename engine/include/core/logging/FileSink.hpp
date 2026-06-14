@@ -1,19 +1,25 @@
 #pragma once
 
 #include "ILogSink.hpp"
-#include <filesystem>
+#include "core/file_management/TextFile.hpp"
 
 namespace Engine {
 
 class FileSink : public ILogSink
 {
   private:
-    std::filesystem::path m_filePath;
+    TextFile m_logFile;
+    std::vector<std::string> m_buffer;
+    const size_t m_flushThreshold = 50;
 
   public:
-    FileSink(const std::filesystem::path& filePath);
+    FileSink(const fs::path& path);
+    ~FileSink();
 
     void Log(const LogMessage& message) override;
+
+  private:
+    void flush();
 };
 
 }   // namespace Engine

@@ -4,6 +4,11 @@ using namespace Engine;
 
 int main()
 {
+    Logger::get().addSink<FileSink>("log.txt");
+    LOG_INFO("test 1");
+    LOG_WARNING("test 1");
+    LOG_ERROR("test 1");
+
     WindowManager::get().createWindow({1000, 800, "Test Window 1"});
     WindowManager::get().createWindow({800, 800, "Test Window 2"});
     WindowManager::get().createWindow({800, 1000, "Test Window 3"});

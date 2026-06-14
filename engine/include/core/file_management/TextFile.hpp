@@ -16,10 +16,10 @@ class TextFile : public File
     std::vector<std::string> readLines() const;
 
     bool writeText(const std::string& text);
-    bool writeLines(const std::vector<std::string>& lines);
+    bool writeLines(const std::vector<std::string>& lines, bool insertNewLine = true);
 
     bool appendText(const std::string& text);
-    bool appendLines(const std::vector<std::string>& lines);
+    bool appendLines(const std::vector<std::string>& lines, bool insertNewLine = true);
 };
 
 }   // namespace Engine

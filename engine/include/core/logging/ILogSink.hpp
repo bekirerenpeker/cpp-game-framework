@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <format>
 
 namespace Engine {
 
@@ -14,21 +15,29 @@ enum class LogLevel
 struct LogMessage
 {
     LogLevel level;
-    std::string file;
-    std::string line;
-    std::string function;
-    std::string time;
-    std::string message;
-};
+    std::string file, line, function, time, message;
 
-class ILogSink
-{
-  public:
-    virtual ~ILogSink() = default;
-    virtual void Log(const LogMessage& message) = 0;
+    std::string toString(bool useColor = true) const
+    {
+        std::string out;
+        out.reserve(256);
 
-  protected:
-    std::string getLevelString(LogLevel level)
+        if (useColor) {
+            std::string reset = "\x1b[0m";
+            std::string gray = "\x1b[90m";
+            std::string bold = "\x1b[1m";
+            out += gray + "[" + time + "] " + getColorCode() + bold + "[" + getLevelString() +
+                   "] " + reset;
+        } else {
+            out += "[" + time + "] [" + getLevelString() + "] ";
+        }
+
+        out += file + ":" + line + " (" + function + ") -> " + message + "\n";
+        return out;
+    }
+
+  private:
+    std::string getLevelString() const
     {
         switch (level) {
         case LogLevel::Info   : return "INFO";
@@ -37,6 +46,22 @@ class ILogSink
         default               : return "UNKNOWN";
         }
     }
+    std::string getColorCode() const
+    {
+        switch (level) {
+        case LogLevel::Info   : return "\x1b[32m";   // Vibrant Green
+        case LogLevel::Warning: return "\x1b[33m";   // Vibrant Yellow
+        case LogLevel::Error  : return "\x1b[31m";   // Vibrant Red
+        default               : return "\x1b[37m";                  // Default White
+        }
+    }
+};
+
+class ILogSink
+{
+  public:
+    virtual ~ILogSink() = default;
+    virtual void Log(const LogMessage& message) = 0;
 };
 
 }   // namespace Engine

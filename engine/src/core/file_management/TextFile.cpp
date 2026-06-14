@@ -38,7 +38,7 @@ bool TextFile::writeText(const std::string& text)
     return file.good();
 }
 
-bool TextFile::writeLines(const std::vector<std::string>& lines)
+bool TextFile::writeLines(const std::vector<std::string>& lines, bool insertNewLine)
 {
     std::ofstream file(m_path, std::ios::out | std::ios::trunc);
     if (!file.is_open()) return false;
@@ -46,7 +46,7 @@ bool TextFile::writeLines(const std::vector<std::string>& lines)
     for (size_t i = 0; i < lines.size(); ++i) {
         file << lines[i];
 
-        if (i < lines.size() - 1) file << '\n';
+        if (i < lines.size() - 1 && insertNewLine) file << '\n';
     }
     return file.good();
 }
@@ -61,12 +61,15 @@ bool TextFile::appendText(const std::string& text)
     return file.good();
 }
 
-bool TextFile::appendLines(const std::vector<std::string>& lines)
+bool TextFile::appendLines(const std::vector<std::string>& lines, bool insertNewLine)
 {
     std::ofstream file(m_path, std::ios::out | std::ios::app);
     if (!file.is_open()) return false;
 
-    for (const auto& line : lines) file << line << '\n';
+    for (const auto& line : lines) {
+        file << line;
+        if (insertNewLine) file << '\n';
+    }
     return file.good();
 }
 
