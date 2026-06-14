@@ -15,6 +15,7 @@ int main()
 
     while (WindowManager::get().anyWindowOpen()) {
         GlfwContext::pollEvents();
+        Time::get().update();
 
         std::vector<IdType> windowsToClose;
         auto& windows = WindowManager::get().getAllWindows();
