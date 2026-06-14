@@ -14,6 +14,8 @@ namespace Engine {
 
 class Logger : public Singleton<Logger>
 {
+    friend class Singleton<Logger>;
+
   private:
     std::vector<ILogSink*> m_sinks;
     std::queue<LogMessage> m_logQueue;
@@ -25,9 +27,6 @@ class Logger : public Singleton<Logger>
     std::atomic<bool> m_useAsync = false, m_threadRunning = false;
 
   public:
-    Logger();
-    ~Logger();
-
     void setMinLogLevel(LogLevel level);
     LogLevel getMinLogLevel() const;
 
@@ -46,6 +45,9 @@ class Logger : public Singleton<Logger>
     static void logGlfwMessage(int error, const char* description);
 
   private:
+    Logger();
+    ~Logger();
+
     void workerLoop();
     void startWorker();
     void stopWorker();

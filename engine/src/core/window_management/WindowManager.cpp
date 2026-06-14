@@ -1,9 +1,17 @@
 #include "core/window_management/WindowManager.hpp"
+#include "core/logging/LoggerMacros.hpp"
 
 namespace Engine {
 
 IdType WindowManager::createWindow(WindowCreationOptions opts, bool setAsMain)
 {
+    if (windowCount() >= m_maxWindowCount) {
+        LOG_WARNING(
+            "couldn't create window {} because the max window count of {} has been reached",
+            opts.title, m_maxWindowCount
+        );
+        return INVALID_ID;
+    }
     IdType id = m_windows.add(opts);
     if (setAsMain || m_mainWindowId == INVALID_ID) m_mainWindowId = id;
     return id;
@@ -32,6 +40,12 @@ void WindowManager::setMainWindowId(IdType windowId)
 }
 IdType WindowManager::getMainWindowId() const { return m_mainWindowId; }
 
-bool WindowManager::hasWindows() const { return m_windows.size() != 0; }
+bool WindowManager::anyWindowOpen() const { return m_windows.size() != 0; }
+size_t WindowManager::windowCount() const { return m_windows.size(); }
+size_t WindowManager::getMaxWindowCount() const { return m_maxWindowCount; }
+void WindowManager::setMaxWindowCount(size_t maxWinCount)
+{
+    m_maxWindowCount = maxWinCount == 0 ? 1 : maxWinCount;
+}
 
 }   // namespace Engine

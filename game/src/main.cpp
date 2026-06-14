@@ -8,7 +8,7 @@ int main()
     WindowManager::get().createWindow({800, 800, "Test Window 2"});
     WindowManager::get().createWindow({800, 1000, "Test Window 3"});
 
-    while (WindowManager::get().hasWindows()) {
+    while (WindowManager::get().anyWindowOpen()) {
         GlfwContext::pollEvents();
 
         std::vector<IdType> windowsToClose;

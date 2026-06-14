@@ -7,6 +7,8 @@ namespace Engine {
 
 class TypeRegistery : public Singleton<TypeRegistery>
 {
+    friend class Singleton<TypeRegistery>;
+
   private:
     IdType m_nextID = START_ID;
 
@@ -20,6 +22,7 @@ class TypeRegistery : public Singleton<TypeRegistery>
 
   private:
     TypeRegistery() = default;
+    ~TypeRegistery() = default;
 };
 
 }   // namespace Engine

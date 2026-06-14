@@ -23,7 +23,7 @@ int Input::getAxis(const std::string& name) { return m_axises.at(name).getValue(
 
 void Input::update(IdType windowId)
 {
-    if (!WindowManager::get().hasWindows()) return;
+    if (!WindowManager::get().anyWindowOpen()) return;
 
     Window* window = WindowManager::get().getWindow(windowId);
     if (window == nullptr) window = WindowManager::get().getMainWindow();

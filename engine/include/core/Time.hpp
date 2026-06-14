@@ -14,6 +14,8 @@ struct DateTime
 
 class Time : public Singleton<Time>
 {
+    friend class Singleton<Time>;
+
   private:
     std::chrono::local_time<std::chrono::system_clock::duration> m_startupTime;
     double m_glfwTimeOffset;
@@ -22,9 +24,6 @@ class Time : public Singleton<Time>
     double m_lastFrameTime;
 
   public:
-    Time();
-    ~Time() = default;
-
     void update();
 
     float deltaTime() const;
@@ -32,6 +31,10 @@ class Time : public Singleton<Time>
 
     DateTime getCurrentDateTime() const;
     std::string currTimeStr() const;
+
+  private:
+    Time();
+    ~Time() = default;
 };
 
 }   // namespace Engine
