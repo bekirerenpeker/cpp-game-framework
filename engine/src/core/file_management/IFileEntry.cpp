@@ -47,6 +47,7 @@ bool IFileEntry::rename(const std::string& nameWithExt)
 
 bool IFileEntry::deleteFromDisk()
 {
+#ifdef ALLOW_DELETE_FROM_DISK   // safety step so we don't delete anything accidentally
     std::error_code ec;
     std::uintmax_t deletedCount = fs::remove_all(m_path, ec);
 
@@ -54,6 +55,14 @@ bool IFileEntry::deleteFromDisk()
 
     m_isValid = false;
     return true;
+#else
+    LOG_WARNING(
+        "user is trying to delete {} but deleting is disabled "
+        "define ALLOW_DELETE_FROM_DISK to allow deleting",
+        m_path
+    );
+    return false;
+#endif
 }
 
 }   // namespace Engine
