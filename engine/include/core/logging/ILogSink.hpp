@@ -2,6 +2,7 @@
 
 #include <string>
 #include <format>
+#include "core/Time.hpp"
 
 namespace Engine {
 
@@ -15,7 +16,9 @@ enum class LogLevel
 struct LogMessage
 {
     LogLevel level;
-    std::string file, line, function, time, message;
+    std::string file, line, function;
+    DateTime time;
+    std::string message;
 
     std::string toString(bool useColor = true) const
     {
@@ -26,10 +29,10 @@ struct LogMessage
             std::string reset = "\x1b[0m";
             std::string gray = "\x1b[90m";
             std::string bold = "\x1b[1m";
-            out += gray + "[" + time + "] " + getColorCode() + bold + "[" + getLevelString() +
-                   "] " + reset;
+            out += gray + "[" + time.toString() + "] " + getColorCode() + bold + "[" +
+                   getLevelString() + "] " + reset;
         } else {
-            out += "[" + time + "] [" + getLevelString() + "] ";
+            out += "[" + time.toString() + "] [" + getLevelString() + "] ";
         }
 
         out += file + ":" + line + " (" + function + ") -> " + message + "\n";

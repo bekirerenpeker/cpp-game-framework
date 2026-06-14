@@ -51,12 +51,4 @@ DateTime Time::getCurrentDateTime() const
     };
 }
 
-std::string Time::currTimeStr() const
-{
-    DateTime currentDateTime = getCurrentDateTime();
-    return std::format(
-        "{:02}:{:02}:{:02}", currentDateTime.hour, currentDateTime.minute, currentDateTime.second
-    );
-}
-
 }   // namespace Engine

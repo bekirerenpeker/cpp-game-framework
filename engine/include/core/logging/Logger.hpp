@@ -66,7 +66,7 @@ void Logger::Log(
 {
     if (level < m_minLogLevel) return;
     std::string formattedMessage = std::vformat(message, std::make_format_args(args...));
-    std::string time = Time::get().currTimeStr();
+    DateTime time = Time::get().getCurrentDateTime();
     LogMessage logMessage = {level, file, line, function, time, formattedMessage};
 
     if (m_useAsync) {

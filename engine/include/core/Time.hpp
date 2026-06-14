@@ -10,6 +10,14 @@ struct DateTime
 {
     int year, month, day;
     int hour, minute, second;
+
+    static std::string pad(int value) { return (value < 10 ? "0" : "") + std::to_string(value); }
+    std::string toDateString() const
+    {
+        return std::to_string(year) + "-" + pad(month) + "-" + pad(day);
+    }
+    std::string toTimeString() const { return pad(hour) + ":" + pad(minute) + ":" + pad(second); }
+    std::string toString() const { return toDateString() + " " + toTimeString(); }
 };
 
 class Time : public Singleton<Time>
@@ -30,7 +38,6 @@ class Time : public Singleton<Time>
     float currTime() const;
 
     DateTime getCurrentDateTime() const;
-    std::string currTimeStr() const;
 
   private:
     Time();
