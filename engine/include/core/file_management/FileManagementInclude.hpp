@@ -1,5 +1,6 @@
 #pragma once
 
+#include "FileManager.hpp"
 #include "IFileEntry.hpp"
 #include "Folder.hpp"
 #include "File.hpp"

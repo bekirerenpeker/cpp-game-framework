@@ -6,7 +6,7 @@ namespace Engine {
 IFileEntry::IFileEntry(const fs::path& path, FileType fileType)
     : m_path(path), m_fileType(fileType), m_isValid(true)
 {
-    if (!fs::exists(path)) {
+    if (!FileManager::get().doesPathExist(path)) {
         m_path = "";
         m_fileType = FileType::None;
         m_isValid = false;

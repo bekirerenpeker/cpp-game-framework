@@ -5,7 +5,7 @@ namespace Engine {
 
 File::File(fs::path path, FileType fileType) : IFileEntry(path, fileType)
 {
-    if (fs::is_directory(path)) {
+    if (FileManager::get().isDirectory(path)) {
         m_path = "";
         m_fileType = FileType::None;
         m_isValid = false;

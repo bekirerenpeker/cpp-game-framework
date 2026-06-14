@@ -1,10 +1,8 @@
 #pragma once
 
-#include <filesystem>
+#include "core/file_management/FileManager.hpp"
 
 namespace Engine {
-
-namespace fs = std::filesystem;
 
 enum class FileType
 {
