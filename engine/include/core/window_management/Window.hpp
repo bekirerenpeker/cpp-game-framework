@@ -1,7 +1,8 @@
 #pragma once
 
-#include <GLFW/glfw3.h>
 #include "utils/math/Vec2.hpp"
+#include "utils/IdIndexedVector.hpp"
+#include <GLFW/glfw3.h>
 #include <cstdint>
 #include <string>
 
@@ -32,7 +33,7 @@ struct WindowCreationOptions
     uint16_t creationHints = WindowFlags::None;
 };
 
-class Window
+class Window : public IHasId
 {
   private:
     GLFWwindow* m_glfwHandle = nullptr;
