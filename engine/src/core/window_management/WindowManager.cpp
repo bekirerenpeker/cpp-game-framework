@@ -30,6 +30,7 @@ void WindowManager::setMainWindowId(IdType windowId)
 {
     if (m_windows.contains(windowId)) m_mainWindowId = windowId;
 }
+IdType WindowManager::getMainWindowId() const { return m_mainWindowId; }
 
 bool WindowManager::hasWindows() const { return m_windows.size() != 0; }
 

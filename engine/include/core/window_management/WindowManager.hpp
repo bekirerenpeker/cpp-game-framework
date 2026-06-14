@@ -21,8 +21,10 @@ class WindowManager : public Singleton<WindowManager>
 
     std::vector<std::pair<IdType, Window>>& getAllWindows();
     Window* getWindow(IdType windowId);
-    Window* getMainWindow();
+
     void setMainWindowId(IdType windowId);
+    IdType getMainWindowId() const;
+    Window* getMainWindow();
 
     bool hasWindows() const;
 };

@@ -16,6 +16,10 @@ int main()
 
         for (auto& [id, window] : windows) {
             if (window.isOpen()) {
+                Input::get().update(id);
+
+                if (Input::get().keyPressed(KeyCode::Q)) windowsToClose.push_back(id);
+
                 window.swapBuffers();
             } else {
                 windowsToClose.push_back(id);
