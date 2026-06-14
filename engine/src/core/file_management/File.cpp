@@ -36,4 +36,11 @@ bool File::renameExtension(const std::string& extensionName)
     return rename(tempName.string());
 }
 
+bool File::clear()
+{
+    std::error_code ec;
+    fs::resize_file(m_path, 0, ec);
+    return !ec;
+}
+
 }   // namespace Engine

@@ -8,7 +8,7 @@ class File : public IFileEntry
 {
   public:
     File(fs::path path, FileType fileType = FileType::File);
-    virtual ~File() = default;
+    virtual ~File() override = default;
 
     std::string getNameWithoutExt() const;
     std::string getExtension() const;
@@ -17,6 +17,8 @@ class File : public IFileEntry
 
     bool renameFilename(const std::string& filenameWithoutExt);
     bool renameExtension(const std::string& extensionName);
+
+    virtual bool clear();
 };
 
 }   // namespace Engine

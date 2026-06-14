@@ -8,7 +8,7 @@ class Folder : public IFileEntry
 {
   public:
     Folder(fs::path path, FileType fileType = FileType::Folder);
-    virtual ~Folder() = default;
+    virtual ~Folder() override = default;
 
     std::vector<std::unique_ptr<IFileEntry>> getChildren() const;
 

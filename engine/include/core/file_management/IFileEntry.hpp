@@ -10,7 +10,8 @@ enum class FileType
 {
     None,
     Folder,
-    File,   // only binary data extracted
+    File,
+    BinaryFile,
     TextFile,
     ImageFile,
 };
