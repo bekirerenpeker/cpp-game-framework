@@ -5,35 +5,21 @@ using namespace Engine;
 int main()
 {
     Logger::get().addSink<FileSink>("log.txt");
-    LOG_INFO("test 1");
-    LOG_WARNING("test 1");
-    LOG_ERROR("test 1");
 
-    WindowManager::get().createWindow({1000, 800, "Test Window 1"});
-    WindowManager::get().createWindow({800, 800, "Test Window 2"});
-    WindowManager::get().createWindow({800, 1000, "Test Window 3"});
-
-    while (WindowManager::get().anyWindowOpen()) {
-        GlfwContext::pollEvents();
-        Time::get().update();
-
-        std::vector<IdType> windowsToClose;
-        auto& windows = WindowManager::get().getAllWindows();
-
-        for (auto& [id, window] : windows) {
-            if (window.isOpen()) {
-                Input::get().update(id);
-
-                if (Input::get().keyPressed(KeyCode::Q)) windowsToClose.push_back(id);
-
-                window.swapBuffers();
-            } else {
-                windowsToClose.push_back(id);
-            }
+    float freq = 10.f;
+    ImageData imgData(1000, 1000, 1);
+    for (int x = 0; x < imgData.width; x++) {
+        for (int y = 0; y < imgData.height; y++) {
+            imgData.setValueAt(
+                x, y, 0,
+                Math::perlin2D(x / (float)imgData.width * freq, y / (float)imgData.height * freq) *
+                    256
+            );
         }
-
-        for (auto& id : windowsToClose) WindowManager::get().closeWindow(id);
     }
+    FileManager::get().createFile("test_image.png");
+    ImageFile file("test_image.png");
+    file.saveImage(imgData);
 
     return 0;
 }

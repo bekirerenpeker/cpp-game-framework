@@ -6,3 +6,4 @@
 #include "File.hpp"
 #include "BinaryFile.hpp"
 #include "TextFile.hpp"
+#include "ImageFile.hpp"

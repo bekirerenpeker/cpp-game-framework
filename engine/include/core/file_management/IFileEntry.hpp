@@ -36,6 +36,9 @@ class IFileEntry
     bool moveTo(const fs::path& parentFolder);
     bool rename(const std::string& nameWithExt);
     bool deleteFromDisk();
+
+  protected:
+    void makeInvalid();
 };
 
 }   // namespace Engine

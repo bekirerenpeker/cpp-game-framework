@@ -6,11 +6,14 @@ namespace Engine {
 IFileEntry::IFileEntry(const fs::path& path, FileType fileType)
     : m_path(path), m_fileType(fileType), m_isValid(true)
 {
-    if (!FileManager::get().doesPathExist(path)) {
-        m_path = "";
-        m_fileType = FileType::None;
-        m_isValid = false;
-    }
+    if (!FileManager::get().doesPathExist(path)) makeInvalid();
+}
+
+void IFileEntry::makeInvalid()
+{
+    m_path = "";
+    m_fileType = FileType::None;
+    m_isValid = false;
 }
 
 FileType IFileEntry::getType() const { return m_fileType; }
@@ -53,7 +56,7 @@ bool IFileEntry::deleteFromDisk()
 
     if (ec || deletedCount == 0) return false;
 
-    m_isValid = false;
+    makeInvalid();
     return true;
 #else
     LOG_WARNING(

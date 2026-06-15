@@ -1,12 +1,13 @@
 #include "core/file_management/FileManager.hpp"
+#include "stb/stb_image_write.h"
 #include <fstream>
 
 namespace Engine {
 
-bool FileManager::doesPathExist(fs::path path) { return fs::exists(path); }
-bool FileManager::isDirectory(fs::path path) { return fs::is_directory(path); }
+bool FileManager::doesPathExist(const fs::path& path) { return fs::exists(path); }
+bool FileManager::isDirectory(const fs::path& path) { return fs::is_directory(path); }
 
-bool FileManager::createFile(fs::path path)
+bool FileManager::createFile(const fs::path& path)
 {
     if (exists(path)) {
         LOG_WARNING("file with path {} already exists", path);
@@ -26,7 +27,7 @@ bool FileManager::createFile(fs::path path)
     return true;
 }
 
-bool FileManager::createFolder(fs::path path)
+bool FileManager::createFolder(const fs::path& path)
 {
     if (fs::exists(path)) {
         LOG_WARNING("folder with path {} already exists", path);
@@ -36,6 +37,17 @@ bool FileManager::createFolder(fs::path path)
     std::error_code ec;
     fs::create_directories(path, ec);
     return !ec;
+}
+
+bool FileManager::createImageFile(const fs::path& path, const ImageData& imgData)
+{
+    if (!createFile(path)) return false;
+    int success = stbi_write_png(
+        path.string().c_str(), static_cast<int>(imgData.width), static_cast<int>(imgData.height),
+        static_cast<int>(imgData.depth), imgData.pixels,
+        static_cast<int>(imgData.width * imgData.depth)
+    );
+    return success != 0;
 }
 
 fs::path FileManager::getCurrentFolder() { return fs::current_path(); }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/Singleton.hpp"
+#include "utils/ImageData.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include <filesystem>
 
@@ -13,11 +14,12 @@ class FileManager : public Singleton<FileManager>
     friend class Singleton<FileManager>;
 
   public:
-    bool doesPathExist(fs::path path);
-    bool isDirectory(fs::path path);
+    bool doesPathExist(const fs::path& path);
+    bool isDirectory(const fs::path& path);
 
-    bool createFile(fs::path path);
-    bool createFolder(fs::path path);
+    bool createFile(const fs::path& path);
+    bool createFolder(const fs::path& path);
+    bool createImageFile(const fs::path& path, const ImageData& imgData);
 
     fs::path getCurrentFolder();
 

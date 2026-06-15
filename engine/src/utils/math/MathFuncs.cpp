@@ -66,11 +66,13 @@ float moveTowardsAngle(float a, float b, float step)
 
 float perlin2D(float x, float y, int seed)
 {
-    return stb_perlin_noise3_seed(x, y, 0, 0, 0, 0, seed);
+    float raw = stb_perlin_noise3_seed(x, y, 0, 0, 0, 0, seed);
+    return (raw * 0.5f) + 0.5f;
 }
 float perlin3D(float x, float y, float z, int seed)
 {
-    return stb_perlin_noise3_seed(x, y, z, 0, 0, 0, seed);
+    float raw = stb_perlin_noise3_seed(x, y, z, 0, 0, 0, seed);
+    return (raw * 0.5f) + 0.5f;
 }
 
 float sin(float radians) { return std::sin(radians); }
