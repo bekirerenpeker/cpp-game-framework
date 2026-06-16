@@ -4,6 +4,7 @@
 #include "utils/IdIndexedVector.hpp"
 #include "core/resource_management/IResource.hpp"
 #include "core/logging/LoggerMacros.hpp"
+#include <cassert>
 
 namespace Engine {
 
@@ -29,7 +30,12 @@ class ResourceManager : public Singleton<ResourceManager>
 
 template<typename T, typename... Args> IdType ResourceManager::addResource(Args&&... args)
 {
-    return m_resources.add(new T(std::forward<Args>(args)...));
+    static_assert(
+        std::is_base_of<IResource, T>::value,
+        "Error: You can only add classes that inherit from IResource!"
+    );
+    T* res = new T(std::forward<Args>(args)...);
+    return m_resources.add(static_cast<IResource*>(res));
 }
 
 template<typename T> T* ResourceManager::getResource(IdType id)

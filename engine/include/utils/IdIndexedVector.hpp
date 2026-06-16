@@ -20,7 +20,10 @@ class IHasId
     virtual IdType getId() const { return m_id; }
 };
 
-template<typename T, bool inheritsId = std::is_base_of_v<IHasId, T>> class IdIndexedVector
+template<
+    typename T, bool inheritsId = std::is_base_of_v<IHasId, T>,
+    bool isPointer = std::is_pointer_v<T>>
+class IdIndexedVector
 {
   private:
     IdType m_nextId = START_ID;
@@ -88,10 +91,21 @@ template<typename T, bool inheritsId = std::is_base_of_v<IHasId, T>> class IdInd
     }
 
     bool contains(IdType id) const { return m_idToIndex.count(id); }
-    T* get(IdType id) { return contains(id) ? &m_data[m_idToIndex.at(id)].second : nullptr; }
-    const T* get(IdType id) const
+
+    using DerefType = std::conditional_t<isPointer, std::remove_pointer_t<T>, T>;
+    DerefType* get(IdType id)
     {
-        return contains(id) ? &m_data[m_idToIndex.at(id)].second : nullptr;
+        if (!contains(id)) return nullptr;
+        T& stored = m_data[m_idToIndex.at(id)].second;
+        if constexpr (isPointer) return stored;
+        else return &stored;
+    }
+    const DerefType* get(IdType id) const
+    {
+        if (!contains(id)) return nullptr;
+        T& stored = m_data[m_idToIndex.at(id)].second;
+        if constexpr (isPointer) return stored;
+        else return &stored;
     }
 };
 

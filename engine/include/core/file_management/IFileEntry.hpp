@@ -24,7 +24,7 @@ class IFileEntry : public IResource
 
   public:
     IFileEntry(const fs::path& path, FileType fileType);
-    virtual ~IFileEntry() = default;
+    virtual ~IFileEntry() override = default;
 
     FileType getType() const;
     bool isValid() const;
