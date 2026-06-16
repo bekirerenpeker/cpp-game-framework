@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/file_management/FileManager.hpp"
+#include "core/resource_management/IResource.hpp"
 
 namespace Engine {
 
@@ -14,7 +15,7 @@ enum class FileType
     ImageFile,
 };
 
-class IFileEntry
+class IFileEntry : public IResource
 {
   protected:
     FileType m_fileType = FileType::None;

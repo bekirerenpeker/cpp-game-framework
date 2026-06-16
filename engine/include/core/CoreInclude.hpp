@@ -4,4 +4,5 @@
 #include "window_management/WindowManagementInclude.hpp"
 #include "input/InputInclude.hpp"
 #include "file_management/FileManagementInclude.hpp"
+#include "resource_management/ResourceManagementInclude.hpp"
 #include "Time.hpp"
