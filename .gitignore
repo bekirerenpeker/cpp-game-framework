@@ -55,3 +55,6 @@ Thumbs.db
 # Output directories
 *.exe
 *.app
+
+# Outputted files by the game
+game/output/
