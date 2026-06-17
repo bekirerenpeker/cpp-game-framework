@@ -25,8 +25,9 @@ AudioManager::AudioManager()
 }
 AudioManager::~AudioManager()
 {
-    for (auto& [name, nodePtr] : m_busNodes) delete nodePtr;
     ma_device_uninit(&m_device);
+    m_instances.clear();
+    for (auto& [name, nodePtr] : m_busNodes) delete nodePtr;
 }
 
 void AudioManager::addBusNode(
@@ -120,6 +121,8 @@ void AudioManager::data_callback(
     for (auto& pair : instances) {
         IdType id = pair.first;
         AudioInstance& instance = pair.second;
+        if (instance.isPaused()) continue;
+
         std::memset(tempBuffer, 0, framesToMix * 2 * sizeof(float));
 
         if (instance.read(tempBuffer, framesToMix)) {
