@@ -1,8 +1,10 @@
 #pragma once
 
+#include "utils/IdIndexedVector.hpp"
+
 namespace Engine {
 
-class IResource
+class IResource : public IHasId
 {
   public:
     IResource() = default;
