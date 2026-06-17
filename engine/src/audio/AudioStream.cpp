@@ -3,7 +3,7 @@
 
 namespace Engine {
 
-AudioStream::AudioStream(fs::path filepath)
+AudioStream::AudioStream(const fs::path& filepath)
 {
     ma_decoder_config config = ma_decoder_config_init_default();
     config.format = ma_format_f32;

@@ -59,7 +59,7 @@ bool ImageFile::saveImage(ImageData& imgData)
         );
         break;
 
-    default: LOG_ERROR("unsopported image type {}", m_path.extension().string()); return;
+    default: LOG_ERROR("unsopported image type {}", m_path.extension().string()); return false;
     }
 
     m_imgData = std::move(imgData);

@@ -6,9 +6,8 @@ int main()
 {
     Logger::get().addSink<FileSink>("log.txt");
 
-    if (!FileManager::get().doesPathExist("test_image.png")) {
-        FileManager::get().createFile("test_image.png");
-    }
+    fs::path imgPath = "test_image.jpg";
+    if (!FileManager::get().doesPathExist(imgPath)) FileManager::get().createFile(imgPath);
 
     float freq = 6;
     ImageData imgData(1000, 1000, 3);
@@ -29,7 +28,7 @@ int main()
         }
     }
 
-    IdType imgId = ResourceManager::get().addResource<ImageFile>("test_image.png");
+    IdType imgId = ResourceManager::get().addResource<ImageFile>(imgPath);
     ImageFile* imgFile = ResourceManager::get().getResource<ImageFile>(imgId);
     imgFile->saveImage(imgData);
     ResourceManager::get().unloadResource(imgId);

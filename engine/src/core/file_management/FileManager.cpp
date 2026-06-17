@@ -62,7 +62,7 @@ bool FileManager::createImageFile(const fs::path& path, const ImageData& imgData
         );
         break;
 
-    default: LOG_ERROR("unsopported image type {}", path.extension().string()); return;
+    default: LOG_ERROR("unsopported image type {}", path.extension().string()); return false;
     }
 
     return success != 0;

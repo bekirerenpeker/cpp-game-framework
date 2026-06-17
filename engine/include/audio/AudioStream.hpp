@@ -12,7 +12,7 @@ class AudioStream : public IAudioSource
     ma_decoder m_decoder;
 
   public:
-    AudioStream(fs::path filepath);
+    AudioStream(const fs::path& filepath);
     ~AudioStream() override;
 
     bool read(float* pOutput, ma_uint64 frameCount, ma_uint64 startingFrame) override;

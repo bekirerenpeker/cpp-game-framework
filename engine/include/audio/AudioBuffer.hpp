@@ -11,7 +11,7 @@ class AudioBuffer : public IAudioSource
     float* m_pcmData = nullptr;
 
   public:
-    AudioBuffer(fs::path filepath);
+    AudioBuffer(const fs::path& filepath);
     ~AudioBuffer() override;
 
     bool read(float* pOutput, ma_uint64 frameCount, ma_uint64 startingFrame) override;

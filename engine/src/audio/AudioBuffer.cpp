@@ -6,7 +6,7 @@
 
 namespace Engine {
 
-AudioBuffer::AudioBuffer(fs::path filepath)
+AudioBuffer::AudioBuffer(const fs::path& filepath)
 {
     ma_decoder_config config = ma_decoder_config_init_default();
     config.format = ma_format_f32;
