@@ -15,10 +15,8 @@ class AudioBusNode
 
     AudioBusNode* m_parent = nullptr;
     std::vector<AudioBusNode*> m_children;
-    std::vector<IdType> m_instances;
 
   public:
-    AudioBusNode() = default;
     AudioBusNode(
         const std::string& name, AudioBusNode* parent = nullptr, PlaybackOptions options = {}
     );
@@ -31,7 +29,6 @@ class AudioBusNode
     void setOptions(const PlaybackOptions& options);
 
   private:
-    void updateInstanceOptions();
     void updateChildrenOptions();
 };
 

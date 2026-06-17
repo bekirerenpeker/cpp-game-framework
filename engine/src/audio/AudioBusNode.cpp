@@ -8,7 +8,7 @@ AudioBusNode::AudioBusNode(const std::string& name, AudioBusNode* parent, Playba
     : m_name(name), m_parent(parent), m_options(options)
 {
     m_options.clampToValidRange();
-    parent->m_children.push_back(this);
+    if (m_parent) m_parent->m_children.push_back(this);
 }
 
 AudioBusNode::~AudioBusNode()
@@ -31,19 +31,10 @@ void AudioBusNode::setOptions(const PlaybackOptions& options)
 
 void AudioBusNode::updateChildrenOptions()
 {
-    updateInstanceOptions();
-
     for (auto& child : m_children) {
         child->m_options.combine(m_options);
         child->updateChildrenOptions();
     }
-}
-
-void AudioBusNode::updateInstanceOptions()
-{
-    // loop over all instances to update their options
-    // this funcion may be left empty if we dont want the already existing instances options to not change to avoid performance costs
-    // or only change streamed audio's options since their are the only ones that are long
 }
 
 }   // namespace Engine

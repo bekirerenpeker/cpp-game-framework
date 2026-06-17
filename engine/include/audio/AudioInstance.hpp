@@ -2,11 +2,12 @@
 
 #include "audio/PlaybackOptions.hpp"
 #include "audio/IAudioSource.hpp"
+#include "utils/IdIndexedVector.hpp"
 #include "miniaudio/miniaudio.h"
 
 namespace Engine {
 
-struct AudioInstance
+struct AudioInstance : public IHasId
 {
   private:
     IAudioSource* m_source;
