@@ -1,14 +1,15 @@
 #include "core/file_management/ImageFile.hpp"
 #include "stb/stb_image_write.h"
 #include "stb/stb_image.h"
+#include "core/logging/LoggerMacros.hpp"
 
 namespace Engine {
 
-ImageFile::ImageFile(const fs::path& path) : File(path, FileType::ImageFile)
+ImageFile::ImageFile(const fs::path& path)
+    : File(path, FileType::ImageFile), m_imgType(FileManager::get().getImageTypeFromPath(path))
 {
-    std::string ext = m_path.extension().string();
-    if (ext != ".png") {
-        LOG_WARNING("unsupported extension for images {}", ext);
+    if (m_imgType == ImageType::None) {
+        LOG_WARNING("unsupported extension for images {}", path.extension().string());
         makeInvalid();
     }
 }
@@ -41,11 +42,26 @@ bool ImageFile::saveImage(ImageData& imgData)
 {
     if (!m_isValid) return false;
 
-    int success = stbi_write_png(
-        m_path.string().c_str(), static_cast<int>(imgData.width), static_cast<int>(imgData.height),
-        static_cast<int>(imgData.depth), imgData.pixels,
-        static_cast<int>(imgData.width * imgData.depth)
-    );
+    int success = 0;
+    switch (m_imgType) {
+    case ImageType::Png:
+        success = stbi_write_png(
+            m_path.string().c_str(), static_cast<int>(imgData.width),
+            static_cast<int>(imgData.height), static_cast<int>(imgData.depth), imgData.pixels,
+            static_cast<int>(imgData.width * imgData.depth)
+        );
+        break;
+
+    case ImageType::Jpeg:
+        success = stbi_write_jpg(
+            m_path.string().c_str(), static_cast<int>(imgData.width),
+            static_cast<int>(imgData.height), static_cast<int>(imgData.depth), imgData.pixels, 90
+        );
+        break;
+
+    default: LOG_ERROR("unsopported image type {}", m_path.extension().string()); return;
+    }
+
     m_imgData = std::move(imgData);
     return success != 0;
 }

@@ -9,6 +9,13 @@ namespace Engine {
 
 namespace fs = std::filesystem;
 
+enum class ImageType
+{
+    None,
+    Png,
+    Jpeg,
+};
+
 class FileManager : public Singleton<FileManager>
 {
     friend class Singleton<FileManager>;
@@ -20,6 +27,8 @@ class FileManager : public Singleton<FileManager>
     bool createFile(const fs::path& path);
     bool createFolder(const fs::path& path);
     bool createImageFile(const fs::path& path, const ImageData& imgData);
+
+    ImageType getImageTypeFromPath(const fs::path& path);
 
     fs::path getCurrentFolder();
 

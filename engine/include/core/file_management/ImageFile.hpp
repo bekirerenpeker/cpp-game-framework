@@ -8,6 +8,7 @@ namespace Engine {
 class ImageFile : public File
 {
   private:
+    ImageType m_imgType;
     ImageData m_imgData;
 
   public:

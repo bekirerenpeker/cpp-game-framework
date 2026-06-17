@@ -42,12 +42,38 @@ bool FileManager::createFolder(const fs::path& path)
 bool FileManager::createImageFile(const fs::path& path, const ImageData& imgData)
 {
     if (!createFile(path)) return false;
-    int success = stbi_write_png(
-        path.string().c_str(), static_cast<int>(imgData.width), static_cast<int>(imgData.height),
-        static_cast<int>(imgData.depth), imgData.pixels,
-        static_cast<int>(imgData.width * imgData.depth)
-    );
+
+    ImageType imgType = getImageTypeFromPath(path);
+    int success = 0;
+
+    switch (imgType) {
+    case ImageType::Png:
+        success = stbi_write_png(
+            path.string().c_str(), static_cast<int>(imgData.width),
+            static_cast<int>(imgData.height), static_cast<int>(imgData.depth), imgData.pixels,
+            static_cast<int>(imgData.width * imgData.depth)
+        );
+        break;
+
+    case ImageType::Jpeg:
+        success = stbi_write_jpg(
+            path.string().c_str(), static_cast<int>(imgData.width),
+            static_cast<int>(imgData.height), static_cast<int>(imgData.depth), imgData.pixels, 90
+        );
+        break;
+
+    default: LOG_ERROR("unsopported image type {}", path.extension().string()); return;
+    }
+
     return success != 0;
+}
+
+ImageType FileManager::getImageTypeFromPath(const fs::path& path)
+{
+    std::string ext = path.extension().string();
+    if (ext == ".png") return ImageType::Png;
+    if (ext == ".jpg" || ext == ".jpeg") return ImageType::Jpeg;
+    return ImageType::None;
 }
 
 fs::path FileManager::getCurrentFolder() { return fs::current_path(); }
