@@ -13,6 +13,8 @@ AudioBusNode::AudioBusNode(const std::string& name, AudioBusNode* parent, Playba
 
 AudioBusNode::~AudioBusNode()
 {
+    for (auto& child : m_children) child->m_parent = nullptr;
+
     if (!m_parent) return;
     auto it = std::find(m_parent->m_children.begin(), m_parent->m_children.end(), this);
     if (it != m_parent->m_children.end()) m_parent->m_children.erase(it);

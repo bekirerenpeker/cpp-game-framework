@@ -31,8 +31,8 @@ struct PlaybackOptions
     void clampToValidRange()
     {
         volume = Math::clamp(volume, 0.f, 1.f);
-        pitch = Math::clamp(volume, 0.f, 10.f);
-        pan = Math::clamp(volume, -1.f, 1.f);
+        pitch = Math::clamp(pitch, 0.001f, 10.f);
+        pan = Math::clamp(pan, -1.f, 1.f);
     }
 };
 

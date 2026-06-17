@@ -13,6 +13,7 @@ struct AudioInstance : public IHasId
     IAudioSource* m_source;
     PlaybackOptions m_options;
     ma_uint64 m_cursor;
+    float m_subFrameOffset = 0.0f;
     bool m_isPaused;
 
   public:
