@@ -11,6 +11,11 @@ AudioInstance::AudioInstance(IAudioSource* source, PlaybackOptions options, ma_u
     clampCursor();
 }
 
+bool AudioInstance::read(float* pOutput, ma_uint64 frameCount)
+{
+    return m_source->read(pOutput, frameCount, m_cursor);
+}
+
 const IAudioSource* AudioInstance::getSource() const { return m_source; }
 
 ma_uint64 AudioInstance::getCursorFrames() const { return m_cursor; }

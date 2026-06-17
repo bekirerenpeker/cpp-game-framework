@@ -19,6 +19,7 @@ struct AudioInstance : public IHasId
     AudioInstance(IAudioSource* source, PlaybackOptions options = {}, ma_uint64 cursor = 0);
     ~AudioInstance() = default;
 
+    bool read(float* pOutput, ma_uint64 frameCount);
     const IAudioSource* getSource() const;
 
     ma_uint64 getCursorFrames() const;

@@ -5,6 +5,7 @@
 #include "audio/AudioInstance.hpp"
 #include "audio/AudioBusNode.hpp"
 #include <unordered_map>
+#include <mutex>
 
 namespace Engine {
 
@@ -13,8 +14,10 @@ class AudioManager : public Singleton<AudioManager>
     friend class Singleton<AudioManager>;
 
   private:
+    ma_device m_device;
     std::unordered_map<std::string, AudioBusNode*> m_busNodes;
     IdIndexedVector<AudioInstance> m_instances;
+    std::mutex m_audioMutex;
 
   public:
     void addBusNode(
@@ -35,6 +38,9 @@ class AudioManager : public Singleton<AudioManager>
   private:
     AudioManager();
     ~AudioManager();
+
+    static void
+    data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount);
 };
 
 };   // namespace Engine
