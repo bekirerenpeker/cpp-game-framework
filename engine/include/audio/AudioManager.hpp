@@ -20,6 +20,8 @@ class AudioManager : public Singleton<AudioManager>
     std::mutex m_audioMutex;
 
   public:
+    void shutdown();
+
     void addBusNode(
         const std::string& name, const std::string& parentName = "Master",
         const PlaybackOptions& initalOptions = {}
@@ -33,7 +35,8 @@ class AudioManager : public Singleton<AudioManager>
     );
     void stopAudioInstance(IdType id);
     AudioInstance* getAudioInstance(IdType id);
-    const std::vector<std::pair<IdType, AudioInstance>>& getAllInstances() const;
+
+    void setInstancePaused(IdType id, bool isPaused);
 
   private:
     AudioManager();

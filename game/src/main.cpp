@@ -11,13 +11,12 @@ int main()
 
     IdType windowId = WindowManager::get().createWindow({1000, 800, "test window"});
 
-    AudioManager::get();
+    AudioManager::get();   // initalize the audio engine
     IdType soundId =
         ResourceManager::get().addResource<AudioBuffer>("game/assets/audio/CoinPickup.wav");
-    IdType musicId = ResourceManager::get().addResource<AudioStream>("game/assets/audio/Music.mp3");
-    AudioBuffer* audio = ResourceManager::get().getResource<AudioBuffer>(soundId);
-    AudioStream* music = ResourceManager::get().getResource<AudioStream>(musicId);
-
+    IdType musicId = ResourceManager::get().addResource<AudioBuffer>("game/assets/audio/Music.mp3");
+    auto* sound = ResourceManager::get().getResource<AudioBuffer>(soundId);
+    auto* music = ResourceManager::get().getResource<AudioBuffer>(musicId);
     IdType musicInstanceId = AudioManager::get().playAudio(music);
 
     Window* mainWindow = WindowManager::get().getMainWindow();
@@ -25,9 +24,7 @@ int main()
         Input::get().update(windowId);
 
         if (Input::get().keyPressed(KeyCode::Q)) break;
-
-        if (Input::get().keyPressed(KeyCode::S)) AudioManager::get().playAudio(audio);
-
+        if (Input::get().keyPressed(KeyCode::S)) AudioManager::get().playAudio(sound);
         if (Input::get().keyPressed(KeyCode::C)) {
             AudioManager::get().stopAudioInstance(musicInstanceId);
         }
@@ -35,13 +32,17 @@ int main()
         AudioInstance* inst = AudioManager::get().getAudioInstance(musicInstanceId);
         if (inst) {
             if (Input::get().keyPressed(KeyCode::Space)) inst->setIsPaused(!inst->isPaused());
-            if (Input::get().keyPressed(KeyCode::Up)) inst->setOptions({2, 1, 0, false});
-            if (Input::get().keyPressed(KeyCode::Down)) inst->setOptions({1, 1, 0, false});
+
+            if (Input::get().keyPressed(KeyCode::Right))
+                inst->setCursorSeconds(inst->getCursorSeconds() + 10);
+            if (Input::get().keyPressed(KeyCode::Left))
+                inst->setCursorSeconds(inst->getCursorSeconds() - 10);
         }
 
         mainWindow->swapBuffers();
         GlfwContext::pollEvents();
     }
 
+    AudioManager::get().shutdown();   // terminate it before the resource manager terminates
     return 0;
 }

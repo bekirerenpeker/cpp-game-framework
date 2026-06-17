@@ -23,11 +23,15 @@ AudioManager::AudioManager()
 
     m_busNodes["Master"] = new AudioBusNode("Master");
 }
-AudioManager::~AudioManager()
+AudioManager::~AudioManager() { shutdown(); }
+void AudioManager::shutdown()
 {
     ma_device_uninit(&m_device);
+
     m_instances.clear();
+
     for (auto& [name, nodePtr] : m_busNodes) delete nodePtr;
+    m_busNodes.clear();
 }
 
 void AudioManager::addBusNode(
@@ -85,9 +89,11 @@ void AudioManager::stopAudioInstance(IdType id)
     m_instances.remove(id);
 }
 AudioInstance* AudioManager::getAudioInstance(IdType id) { return m_instances.get(id); }
-const std::vector<std::pair<IdType, AudioInstance>>& AudioManager::getAllInstances() const
+void AudioManager::setInstancePaused(IdType id, bool isPaused)
 {
-    return m_instances.getAll();
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* instance = m_instances.get(id);
+    if (instance) instance->setIsPaused(isPaused);
 }
 
 // the function miniaudio calls to get the current frames values ran every few milliseconds
