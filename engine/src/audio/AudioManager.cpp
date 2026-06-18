@@ -146,4 +146,67 @@ void AudioManager::data_callback(
     for (int i = 0; i < finishedCount; ++i) manager->m_instances.remove(finishedIds[i]);
 }
 
+ma_uint64 AudioManager::getCursorFrames(IdType id)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    return inst ? inst->getCursorFrames() : 0;
+}
+float AudioManager::getCursorSeconds(IdType id)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    return inst ? inst->getCursorSeconds() : 0.0f;
+}
+void AudioManager::setCursorFrames(IdType id, ma_uint64 cursor)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    if (inst) { inst->setCursorFrames(cursor); }
+}
+void AudioManager::setCursorSeconds(IdType id, float seconds)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    if (inst) { inst->setCursorSeconds(seconds); }
+}
+ma_uint64 AudioManager::getDurationFrames(IdType id)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    if (inst && inst->getSource()) { return inst->getSource()->getDurationFrames(); }
+    return 0;
+}
+float AudioManager::getDurationSeconds(IdType id)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    if (inst && inst->getSource()) { return inst->getSource()->getDurationSeconds(); }
+    return 0.0f;
+}
+bool AudioManager::isPaused(IdType id)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    return inst ? inst->isPaused() : false;
+}
+void AudioManager::setIsPaused(IdType id, bool isPaused)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    if (inst) { inst->setIsPaused(isPaused); }
+}
+PlaybackOptions AudioManager::getOptions(IdType id)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    return inst ? inst->getOptions() : PlaybackOptions {};
+}
+void AudioManager::setOptions(IdType id, const PlaybackOptions& options)
+{
+    std::lock_guard<std::mutex> lock(m_audioMutex);
+    AudioInstance* inst = m_instances.get(id);
+    if (inst) { inst->setOptions(options); }
+}
+
 }   // namespace Engine

@@ -9,6 +9,8 @@ namespace Engine {
 
 struct AudioInstance : public IHasId
 {
+    friend class AudioManager;
+
   private:
     IAudioSource* m_source;
     PlaybackOptions m_options;
@@ -29,19 +31,17 @@ struct AudioInstance : public IHasId
     bool read(float* pOutput, ma_uint64 frameCount);
     const IAudioSource* getSource() const;
 
+  private:
+    // these are not thread safe change from AudioManager
     ma_uint64 getCursorFrames() const;
     float getCursorSeconds() const;
-
     void setCursorFrames(ma_uint64 cursor);
     void setCursorSeconds(float cursor);
-
     PlaybackOptions getOptions() const;
     bool isPaused() const;
-
     void setOptions(const PlaybackOptions& options);
     void setIsPaused(bool isPaused);
 
-  private:
     void clampCursor();
     void updateStreamCursor();
 

@@ -27,18 +27,25 @@ int main()
             AudioManager::get().stopAudioInstance(musicInstanceId);
         }
 
-        AudioInstance* inst = AudioManager::get().getAudioInstance(musicInstanceId);
-        if (inst) {
-            LOG_INFO("{}/{}", inst->getCursorSeconds(), inst->getSource()->getDurationSeconds());
-            if (Input::get().keyPressed(KeyCode::Space)) inst->setIsPaused(!inst->isPaused());
+        if (AudioManager::get().getAudioInstance(musicInstanceId)) {
+            LOG_INFO(
+                "{}/{}", AudioManager::get().getCursorSeconds(musicInstanceId),
+                AudioManager::get().getDurationSeconds(musicInstanceId)
+            );
 
-            if (Input::get().keyPressed(KeyCode::Up)) inst->setOptions({1, 1, 0, false});
-            if (Input::get().keyPressed(KeyCode::Down)) inst->setOptions({1, 1, 0, false});
+            if (Input::get().keyPressed(KeyCode::Space)) {
+                bool paused = AudioManager::get().isPaused(musicInstanceId);
+                AudioManager::get().setIsPaused(musicInstanceId, !paused);
+            }
 
-            if (Input::get().keyPressed(KeyCode::Right))
-                inst->setCursorSeconds(inst->getCursorSeconds() + 10);
-            if (Input::get().keyPressed(KeyCode::Left))
-                inst->setCursorSeconds(inst->getCursorSeconds() - 10);
+            if (Input::get().keyPressed(KeyCode::Right)) {
+                float current = AudioManager::get().getCursorSeconds(musicInstanceId);
+                AudioManager::get().setCursorSeconds(musicInstanceId, current + 10.0f);
+            }
+            if (Input::get().keyPressed(KeyCode::Left)) {
+                float current = AudioManager::get().getCursorSeconds(musicInstanceId);
+                AudioManager::get().setCursorSeconds(musicInstanceId, current - 10.0f);
+            }
         }
 
         mainWindow->swapBuffers();
