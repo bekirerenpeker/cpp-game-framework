@@ -9,14 +9,16 @@ namespace Engine {
 class AudioStream : public IAudioSource
 {
   private:
-    ma_decoder m_decoder;
+    fs::path m_filepath;
 
   public:
     AudioStream(const fs::path& filepath);
-    ~AudioStream() override;
+    ~AudioStream() override = default;
 
     bool read(float* pOutput, ma_uint64 frameCount, ma_uint64 startingFrame) override;
     bool isStreamed() const override;
+
+    bool initializeDecoder(ma_decoder* decoder);
 };
 
 }   // namespace Engine

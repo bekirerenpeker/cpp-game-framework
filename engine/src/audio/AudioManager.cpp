@@ -89,12 +89,6 @@ void AudioManager::stopAudioInstance(IdType id)
     m_instances.remove(id);
 }
 AudioInstance* AudioManager::getAudioInstance(IdType id) { return m_instances.get(id); }
-void AudioManager::setInstancePaused(IdType id, bool isPaused)
-{
-    std::lock_guard<std::mutex> lock(m_audioMutex);
-    AudioInstance* instance = m_instances.get(id);
-    if (instance) instance->setIsPaused(isPaused);
-}
 
 // the function miniaudio calls to get the current frames values ran every few milliseconds
 void AudioManager::data_callback(
@@ -151,4 +145,5 @@ void AudioManager::data_callback(
 
     for (int i = 0; i < finishedCount; ++i) manager->m_instances.remove(finishedIds[i]);
 }
+
 }   // namespace Engine

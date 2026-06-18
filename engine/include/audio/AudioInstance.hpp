@@ -12,13 +12,19 @@ struct AudioInstance : public IHasId
   private:
     IAudioSource* m_source;
     PlaybackOptions m_options;
+    bool m_isPaused = false;
+
     ma_uint64 m_cursor;
     float m_subFrameOffset = 0.0f;
-    bool m_isPaused = false;
+
+    ma_decoder* m_streamDecoder = nullptr;
 
   public:
     AudioInstance(IAudioSource* source, PlaybackOptions options = {}, ma_uint64 cursor = 0);
-    ~AudioInstance() = default;
+    ~AudioInstance();
+
+    AudioInstance(AudioInstance&& other) noexcept;
+    AudioInstance& operator=(AudioInstance&& other) noexcept;
 
     bool read(float* pOutput, ma_uint64 frameCount);
     const IAudioSource* getSource() const;
@@ -37,6 +43,11 @@ struct AudioInstance : public IHasId
 
   private:
     void clampCursor();
+    void updateStreamCursor();
+
+    bool readFrames(float* pOutput, ma_uint64 framesToRead);
+    bool
+    processFrames(float* pOutput, ma_uint64 frameCount, float* sourceBuffer, ma_uint64 framesRead);
 };
 
 }   // namespace Engine

@@ -36,8 +36,6 @@ class AudioManager : public Singleton<AudioManager>
     void stopAudioInstance(IdType id);
     AudioInstance* getAudioInstance(IdType id);
 
-    void setInstancePaused(IdType id, bool isPaused);
-
   private:
     AudioManager();
     ~AudioManager();
