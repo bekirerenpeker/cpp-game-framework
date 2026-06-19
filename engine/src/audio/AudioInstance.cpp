@@ -1,5 +1,6 @@
 #include "audio/AudioInstance.hpp"
 #include "audio/AudioStream.hpp"
+#include "audio/AudioManager.hpp"
 #include <cassert>
 
 namespace Engine {
@@ -165,12 +166,6 @@ bool AudioInstance::processFrames(
 
 const IAudioSource* AudioInstance::getSource() const { return m_source; }
 
-ma_uint64 AudioInstance::getCursorFrames() const { return m_cursor; }
-float AudioInstance::getCursorSeconds() const
-{
-    return static_cast<double>(m_cursor) / static_cast<double>(m_source->getSampleRate());
-}
-
 void AudioInstance::clampCursor()
 {
     if (m_cursor > m_source->getDurationFrames()) m_cursor = m_source->getDurationFrames() - 1;
@@ -181,6 +176,12 @@ void AudioInstance::updateStreamCursor()
     ma_result result = ma_decoder_seek_to_pcm_frame(m_streamDecoder, m_cursor);
     if (result == MA_SUCCESS) m_subFrameOffset = 0.0f;
     else LOG_ERROR("couldn't set the cursor for streamed audio instance");
+}
+ma_uint64 AudioInstance::getCursorFrames() const { return m_cursor; }
+
+float AudioInstance::getCursorSeconds() const
+{
+    return static_cast<double>(m_cursor) / static_cast<double>(m_source->getSampleRate());
 }
 void AudioInstance::setCursorFrames(ma_uint64 cursor)
 {
@@ -194,10 +195,8 @@ void AudioInstance::setCursorSeconds(float cursor)
     clampCursor();
     updateStreamCursor();
 }
-
 PlaybackOptions AudioInstance::getOptions() const { return m_options; }
 bool AudioInstance::isPaused() const { return m_isPaused; }
-
 void AudioInstance::setOptions(const PlaybackOptions& options)
 {
     m_options = options;

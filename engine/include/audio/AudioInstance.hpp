@@ -34,15 +34,6 @@ struct AudioInstance : public IHasId
     bool read(float* pOutput, ma_uint64 frameCount);
     const IAudioSource* getSource() const;
 
-  private:
-    void clampCursor();
-    void updateStreamCursor();
-
-    bool readFrames(float* pOutput, ma_uint64 framesToRead);
-    bool
-    processFrames(float* pOutput, ma_uint64 frameCount, float* sourceBuffer, ma_uint64 framesRead);
-
-    // these are not thread safe change from AudioManager
     ma_uint64 getCursorFrames() const;
     float getCursorSeconds() const;
     void setCursorFrames(ma_uint64 cursor);
@@ -51,6 +42,14 @@ struct AudioInstance : public IHasId
     bool isPaused() const;
     void setOptions(const PlaybackOptions& options);
     void setIsPaused(bool isPaused);
+
+  private:
+    void clampCursor();
+    void updateStreamCursor();
+
+    bool readFrames(float* pOutput, ma_uint64 framesToRead);
+    bool
+    processFrames(float* pOutput, ma_uint64 frameCount, float* sourceBuffer, ma_uint64 framesRead);
 };
 
 }   // namespace Engine

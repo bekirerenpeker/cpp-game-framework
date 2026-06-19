@@ -38,22 +38,6 @@ class AudioManager : public Singleton<AudioManager>
     void stopAudioInstance(IdType id);
     AudioInstance* getAudioInstance(IdType id);
 
-    // thread safe set and get functions
-    ma_uint64 getCursorFrames(IdType id);
-    float getCursorSeconds(IdType id);
-
-    void setCursorFrames(IdType id, ma_uint64 cursor);
-    void setCursorSeconds(IdType id, float seconds);
-
-    ma_uint64 getDurationFrames(IdType id);
-    float getDurationSeconds(IdType id);
-
-    bool isPaused(IdType id);
-    void setIsPaused(IdType id, bool isPaused);
-
-    PlaybackOptions getOptions(IdType id);
-    void setOptions(IdType id, const PlaybackOptions& options);
-
   private:
     AudioManager();
     ~AudioManager();
