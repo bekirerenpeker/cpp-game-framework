@@ -16,7 +16,9 @@ int main()
     IdType streamSoundId =
         ResourceManager::get().addResource<AudioStream>("game/assets/audio/Music.mp3");
     auto* streamSound = ResourceManager::get().getResource<AudioStream>(streamSoundId);
+
     IdType musicInstId = AudioManager::get().playAudio(streamSound, "Menu Music");
+    AudioManager::get().getAudioInstance(musicInstId)->fadeIn(5);
 
     Window* mainWindow = WindowManager::get().getMainWindow();
     while (mainWindow->isOpen()) {
@@ -24,6 +26,9 @@ int main()
         Input::get().update(windowId);
 
         if (Input::get().keyPressed(KeyCode::Q)) break;
+
+        AudioInstance* inst = AudioManager::get().getAudioInstance(musicInstId);
+        if (inst && Input::get().keyPressed(KeyCode::F)) inst->fadeOut();
 
         auto busNode = AudioManager::get().getBusNode("Music");
         if (busNode) {

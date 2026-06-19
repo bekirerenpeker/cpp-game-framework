@@ -8,7 +8,12 @@ namespace Engine {
 AudioInstance::AudioInstance(
     IAudioSource* source, int busNodeIndex, PlaybackOptions options, ma_uint64 cursor
 )
-    : m_source(source), m_busNodeIndex(busNodeIndex), m_options(options), m_cursor(cursor)
+    : m_source(source),
+      m_busNodeIndex(busNodeIndex),
+      m_options(options),
+      m_cursor(cursor),
+      m_fade(1),
+      m_fadeSpeed(0)
 {
     assert(m_source != nullptr && "source of an audio instance can not be nullptr");
     m_options.clampToValidRange();
@@ -32,15 +37,7 @@ AudioInstance::~AudioInstance()
     }
 }
 
-AudioInstance::AudioInstance(AudioInstance&& other) noexcept
-    : m_source(other.m_source),
-      m_busNodeIndex(other.m_busNodeIndex),
-      m_options(other.m_options),
-      m_cursor(other.m_cursor),
-      m_streamDecoder(other.m_streamDecoder)
-{
-    other.m_streamDecoder = nullptr;
-}
+AudioInstance::AudioInstance(AudioInstance&& other) noexcept { *this = std::move(other); }
 AudioInstance& AudioInstance::operator=(AudioInstance&& other) noexcept
 {
     if (this == &other) return *this;
@@ -53,12 +50,28 @@ AudioInstance& AudioInstance::operator=(AudioInstance&& other) noexcept
     m_options = other.m_options;
     m_cursor = other.m_cursor;
     m_streamDecoder = other.m_streamDecoder;
+    m_fade = other.m_fade;
+    m_fadeSpeed = other.m_fadeSpeed;
     other.m_streamDecoder = nullptr;
     return *this;
 }
 
 bool AudioInstance::read(float* pOutput, ma_uint64 frameCount)
 {
+    if (m_fadeSpeed != 0) {
+        float dt = static_cast<float>(frameCount) / static_cast<float>(m_source->getSampleRate());
+        m_fade += dt * m_fadeSpeed;
+
+        if (m_fadeSpeed > 0 && m_fade >= 1.0f) {
+            m_fade = 1.0f;
+            m_fadeSpeed = 0;
+        } else if (m_fadeSpeed < 0 && m_fade <= 0.0f) {
+            m_fade = 0.0f;
+            m_fadeSpeed = 0;
+            return false;
+        }
+    }
+
     float pitch = m_options.pitch;
 
     // --- FAST PATH (No Pitch Shifting) ---
@@ -165,6 +178,16 @@ bool AudioInstance::processFrames(
 }
 
 const IAudioSource* AudioInstance::getSource() const { return m_source; }
+
+void AudioInstance::fadeIn(float duration)
+{
+    if (!isFading()) m_fade = 0, m_fadeSpeed = 1.f / duration;
+}
+void AudioInstance::fadeOut(float duration)
+{
+    if (!isFading()) m_fade = 1, m_fadeSpeed = -1.f / duration;
+}
+bool AudioInstance::isFading() { return m_fadeSpeed != 0; }
 
 void AudioInstance::clampCursor()
 {

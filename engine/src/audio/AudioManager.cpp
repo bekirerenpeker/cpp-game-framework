@@ -107,7 +107,7 @@ void AudioManager::data_callback(
             PlaybackOptions opts = instance.getOptions().combined(
                 manager->m_busNodes[instance.m_busNodeIndex].getCombinedOptions()
             );
-            float volume = opts.volume;
+            float volume = opts.volume * instance.m_fade;
             float pan = opts.pan;
 
             float leftMultiplier = (pan <= 0.0f) ? 1.0f : (1.0f - pan);

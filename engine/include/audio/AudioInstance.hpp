@@ -16,6 +16,7 @@ struct AudioInstance : public IHasId
     PlaybackOptions m_options;
     int m_busNodeIndex;   // int is enough since there wont be many bus nodes
     bool m_isPaused = false;
+    float m_fade, m_fadeSpeed;
 
     ma_uint64 m_cursor;
     float m_subFrameOffset = 0.0f;
@@ -33,6 +34,10 @@ struct AudioInstance : public IHasId
 
     bool read(float* pOutput, ma_uint64 frameCount);
     const IAudioSource* getSource() const;
+
+    void fadeIn(float duration = 1.f);
+    void fadeOut(float duration = 1.f);
+    bool isFading();
 
     ma_uint64 getCursorFrames() const;
     float getCursorSeconds() const;
