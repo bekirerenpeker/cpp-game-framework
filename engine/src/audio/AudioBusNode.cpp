@@ -4,37 +4,39 @@
 
 namespace Engine {
 
-AudioBusNode::AudioBusNode(const std::string& name, AudioBusNode* parent, PlaybackOptions options)
-    : m_name(name), m_parent(parent), m_options(options)
+AudioBusNode::AudioBusNode(
+    const std::string& name, size_t index, size_t parentIndex, const PlaybackOptions& options
+)
+    : m_name(name), m_index(index), m_parentIndex(parentIndex)
 {
-    m_options.clampToValidRange();
-    if (m_parent) m_parent->m_children.push_back(this);
+    AudioBusNode* parent =
+        (m_parentIndex != -1) ? AudioManager::get().getBusNode(m_parentIndex) : nullptr;
+    if (parent) parent->m_childIndices.push_back(index);
+    setOptions(options);
 }
 
-AudioBusNode::~AudioBusNode()
-{
-    for (auto& child : m_children) child->m_parent = nullptr;
-
-    if (!m_parent) return;
-    auto it = std::find(m_parent->m_children.begin(), m_parent->m_children.end(), this);
-    if (it != m_parent->m_children.end()) m_parent->m_children.erase(it);
-}
-
-PlaybackOptions AudioBusNode::getOptions() const { return m_options; }
-const std::vector<AudioBusNode*>& AudioBusNode::getChildren() const { return m_children; }
+PlaybackOptions AudioBusNode::getOptions() const { return m_coreOptions; }
+PlaybackOptions AudioBusNode::getCombinedOptions() const { return m_combinedOptions; }
 const std::string& AudioBusNode::getName() const { return m_name; }
 
 void AudioBusNode::setOptions(const PlaybackOptions& options)
 {
-    m_options = options;
-    m_options.clampToValidRange();
+    AudioBusNode* parent =
+        (m_parentIndex != -1) ? AudioManager::get().getBusNode(m_parentIndex) : nullptr;
+
+    m_coreOptions = options;
+    m_coreOptions.clampToValidRange();
+
+    m_combinedOptions = parent ? options.combined(parent->m_combinedOptions) : options;
+    m_combinedOptions.clampToValidRange();
+
     updateChildrenOptions();
 }
-
 void AudioBusNode::updateChildrenOptions()
 {
-    for (auto& child : m_children) {
-        child->m_options.combine(m_options);
+    for (auto& childIndex : m_childIndices) {
+        AudioBusNode* child = AudioManager::get().getBusNode(childIndex);
+        child->m_combinedOptions = child->m_coreOptions.combined(m_combinedOptions);
         child->updateChildrenOptions();
     }
 }

@@ -5,6 +5,7 @@
 #include "audio/AudioInstance.hpp"
 #include "audio/AudioBusNode.hpp"
 #include <unordered_map>
+#include <vector>
 #include <mutex>
 
 namespace Engine {
@@ -15,7 +16,8 @@ class AudioManager : public Singleton<AudioManager>
 
   private:
     ma_device m_device;
-    std::unordered_map<std::string, AudioBusNode*> m_busNodes;
+    std::unordered_map<std::string, size_t> m_busNodeIndices;
+    std::vector<AudioBusNode> m_busNodes;
     IdIndexedVector<AudioInstance> m_instances;
     std::mutex m_audioMutex;
 
@@ -26,8 +28,8 @@ class AudioManager : public Singleton<AudioManager>
         const std::string& name, const std::string& parentName = "Master",
         const PlaybackOptions& initalOptions = {}
     );
-    bool removeBusNode(const std::string& name);
     AudioBusNode* getBusNode(const std::string& name);
+    AudioBusNode* getBusNode(size_t index);
 
     IdType playAudio(
         IAudioSource* source, const std::string& busName = "Master",

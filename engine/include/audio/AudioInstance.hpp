@@ -14,6 +14,7 @@ struct AudioInstance : public IHasId
   private:
     IAudioSource* m_source;
     PlaybackOptions m_options;
+    int m_busNodeIndex;   // int is enough since there wont be many bus nodes
     bool m_isPaused = false;
 
     ma_uint64 m_cursor;
@@ -22,7 +23,9 @@ struct AudioInstance : public IHasId
     ma_decoder* m_streamDecoder = nullptr;
 
   public:
-    AudioInstance(IAudioSource* source, PlaybackOptions options = {}, ma_uint64 cursor = 0);
+    AudioInstance(
+        IAudioSource* source, int busNodeIndex, PlaybackOptions options = {}, ma_uint64 cursor = 0
+    );
     ~AudioInstance();
 
     AudioInstance(AudioInstance&& other) noexcept;
@@ -32,6 +35,13 @@ struct AudioInstance : public IHasId
     const IAudioSource* getSource() const;
 
   private:
+    void clampCursor();
+    void updateStreamCursor();
+
+    bool readFrames(float* pOutput, ma_uint64 framesToRead);
+    bool
+    processFrames(float* pOutput, ma_uint64 frameCount, float* sourceBuffer, ma_uint64 framesRead);
+
     // these are not thread safe change from AudioManager
     ma_uint64 getCursorFrames() const;
     float getCursorSeconds() const;
@@ -41,13 +51,6 @@ struct AudioInstance : public IHasId
     bool isPaused() const;
     void setOptions(const PlaybackOptions& options);
     void setIsPaused(bool isPaused);
-
-    void clampCursor();
-    void updateStreamCursor();
-
-    bool readFrames(float* pOutput, ma_uint64 framesToRead);
-    bool
-    processFrames(float* pOutput, ma_uint64 frameCount, float* sourceBuffer, ma_uint64 framesRead);
 };
 
 }   // namespace Engine

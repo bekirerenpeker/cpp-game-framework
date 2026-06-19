@@ -4,8 +4,10 @@
 
 namespace Engine {
 
-AudioInstance::AudioInstance(IAudioSource* source, PlaybackOptions options, ma_uint64 cursor)
-    : m_source(source), m_options(options), m_cursor(cursor)
+AudioInstance::AudioInstance(
+    IAudioSource* source, int busNodeIndex, PlaybackOptions options, ma_uint64 cursor
+)
+    : m_source(source), m_busNodeIndex(busNodeIndex), m_options(options), m_cursor(cursor)
 {
     assert(m_source != nullptr && "source of an audio instance can not be nullptr");
     m_options.clampToValidRange();
@@ -31,6 +33,7 @@ AudioInstance::~AudioInstance()
 
 AudioInstance::AudioInstance(AudioInstance&& other) noexcept
     : m_source(other.m_source),
+      m_busNodeIndex(other.m_busNodeIndex),
       m_options(other.m_options),
       m_cursor(other.m_cursor),
       m_streamDecoder(other.m_streamDecoder)
@@ -45,6 +48,7 @@ AudioInstance& AudioInstance::operator=(AudioInstance&& other) noexcept
         delete m_streamDecoder;
     }
     m_source = other.m_source;
+    m_busNodeIndex = other.m_busNodeIndex;
     m_options = other.m_options;
     m_cursor = other.m_cursor;
     m_streamDecoder = other.m_streamDecoder;

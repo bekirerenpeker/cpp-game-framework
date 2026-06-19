@@ -21,16 +21,15 @@ AudioManager::AudioManager()
     }
     ma_device_start(&m_device);
 
-    m_busNodes["Master"] = new AudioBusNode("Master");
+    m_busNodes.reserve(128);   // so that reallocations happen very rarely
+    m_busNodes.emplace_back("Master", 0, -1);
+    m_busNodeIndices["Master"] = 0;
 }
 AudioManager::~AudioManager() { shutdown(); }
 void AudioManager::shutdown()
 {
     ma_device_uninit(&m_device);
-
     m_instances.clear();
-
-    for (auto& [name, nodePtr] : m_busNodes) delete nodePtr;
     m_busNodes.clear();
 }
 
@@ -38,50 +37,29 @@ void AudioManager::addBusNode(
     const std::string& name, const std::string& parentName, const PlaybackOptions& initalOptions
 )
 {
-    if (!m_busNodes.count(parentName)) {
+    if (!m_busNodeIndices.count(parentName)) {
         LOG_ERROR("trying to insert a new bus node under {} but it doesn't exist", parentName);
         return;
     }
-    AudioBusNode* parent = m_busNodes[parentName];
-    m_busNodes[name] = new AudioBusNode(name, parent, initalOptions);
+    m_busNodes.emplace_back(name, m_busNodes.size(), m_busNodeIndices[parentName], initalOptions);
+    m_busNodeIndices[name] = m_busNodes.size() - 1;
 }
 AudioBusNode* AudioManager::getBusNode(const std::string& name)
 {
-    return m_busNodes.count(name) ? m_busNodes[name] : nullptr;
+    return m_busNodeIndices.count(name) ? &m_busNodes[m_busNodeIndices[name]] : nullptr;
 }
-bool AudioManager::removeBusNode(const std::string& name)
-{
-    if (!m_busNodes.count(name)) return false;
-
-    std::queue<std::string> queue;
-    queue.push(name);
-
-    while (!queue.empty()) {
-        std::string currName = queue.front();
-        queue.pop();
-
-        AudioBusNode* currNode = m_busNodes[currName];
-        for (AudioBusNode* child : currNode->getChildren()) { queue.push(child->getName()); }
-
-        m_busNodes.erase(currName);
-        delete currNode;
-    }
-
-    return true;
-}
+AudioBusNode* AudioManager::getBusNode(size_t index) { return &m_busNodes[index]; }
 
 IdType AudioManager::playAudio(
     IAudioSource* source, const std::string& busName, const PlaybackOptions& options
 )
 {
-    if (!m_busNodes.count(busName)) {
+    if (!m_busNodeIndices.count(busName)) {
         LOG_ERROR("trying to play audio under bus {} but it doesn't exist", busName);
         return INVALID_ID;
     }
-    AudioBusNode* busNode = m_busNodes[busName];
-
     std::lock_guard<std::mutex> lock(m_audioMutex);
-    return m_instances.add(AudioInstance(source, options.combined(busNode->getOptions())));
+    return m_instances.add(AudioInstance(source, m_busNodeIndices[busName], options));
 }
 void AudioManager::stopAudioInstance(IdType id)
 {
@@ -126,8 +104,11 @@ void AudioManager::data_callback(
         std::memset(tempBuffer, 0, framesToMix * 2 * sizeof(float));
 
         if (instance.read(tempBuffer, framesToMix)) {
-            float volume = instance.getOptions().volume;
-            float pan = instance.getOptions().pan;
+            PlaybackOptions opts = instance.getOptions().combined(
+                manager->m_busNodes[instance.m_busNodeIndex].getCombinedOptions()
+            );
+            float volume = opts.volume;
+            float pan = opts.pan;
 
             float leftMultiplier = (pan <= 0.0f) ? 1.0f : (1.0f - pan);
             float rightMultiplier = (pan >= 0.0f) ? 1.0f : (1.0f + pan);
