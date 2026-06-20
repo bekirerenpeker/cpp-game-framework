@@ -5,10 +5,11 @@
 #include "utils/TypeAliases.hpp"
 #include "utils/TypeRegistery.hpp"
 #include <unordered_map>
-#include <utility>
 #include <vector>
 
 namespace Engine {
+
+class EntityHandle;
 
 class Registry
 {
@@ -23,13 +24,12 @@ class Registry
     ~Registry();
 
     bool isValid(Entity e);
-    EntityGen currGen(EntityId entityId);
-
-    void clear();
     void clear(Entity e);
+    void clear();
 
-    Entity create();
+    EntityHandle create();
     void destroy(Entity e);
+    void destroy(EntityHandle handle);
 
     template<typename T> SparseSet<T>& getPool()
     {
@@ -38,14 +38,6 @@ class Registry
         return *static_cast<SparseSet<T>*>(m_pools[typeId]);
     }
     template<typename T> void clearPool() { return getPool<T>().clear(); }
-    template<typename T, typename... Args> T& emplace(Entity e, Args&&... args)
-    {
-        getPool<T>().insert(e, T {std::forward<Args>(args)...});
-    }
-    template<typename T> void remove(Entity e) { return getPool<T>().remove(e); }
-    template<typename T> bool contains(Entity e) { return getPool<T>().contains(e); }
-    template<typename T> T& get(Entity e) { return getPool<T>().get(e); }
-    template<typename T> const T& get(Entity e) const { return getPool<T>().get(e); }
 
   private:
     EntityId findFreeSlot();

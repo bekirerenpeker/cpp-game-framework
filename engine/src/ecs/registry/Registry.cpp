@@ -1,4 +1,5 @@
 #include "ecs/registry/Registry.hpp"
+#include "ecs/registry/EntityHandle.hpp"
 #include <bit>
 
 namespace Engine {
@@ -26,16 +27,12 @@ bool Registry::isValid(Entity e)
     if (id >= m_generations.size()) return false;
     return m_generations[id] == getEntityGen(e);
 }
-EntityGen Registry::currGen(EntityId entityId)
-{
-    return m_generations.size() > entityId ? m_generations[entityId] : 0;
-}
 
-Entity Registry::create()
+EntityHandle Registry::create()
 {
     EntityId index = findFreeSlot();
     if (index >= m_generations.size()) m_generations.resize(index + 1, 0);
-    return constructEntity(index, m_generations[index]++);
+    return EntityHandle(constructEntity(index, m_generations[index]++), *this);
 }
 
 void Registry::destroy(Entity e)
