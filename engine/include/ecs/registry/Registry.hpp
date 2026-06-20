@@ -65,6 +65,10 @@ class Registry
         return *static_cast<T*>(m_contexes.at(typeId));
     }
 
+    template<typename T> Sink<void(Entity)> onCreate() { return getPool<T>().onCreate(); }
+    template<typename T> Sink<void(Entity)> onDestroy() { return getPool<T>().onDestroy(); }
+    template<typename T> Sink<void(Entity)> onSet() { return getPool<T>().onSet(); }
+
   private:
     EntityId findFreeSlot();
 };

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Entity.hpp"
+#include "ecs/signals/Signal.hpp"
+#include "ecs/signals/Sink.hpp"
 #include <vector>
 
 namespace Engine {
@@ -18,6 +20,10 @@ template<typename T> class SparseSet : ISparseSet
     std::vector<Entity> m_entities;
     std::vector<size_t> m_sparse;
 
+    Signal<void(Entity)> m_onCreate;
+    Signal<void(Entity)> m_onSet;
+    Signal<void(Entity)> m_onDestroy;
+
   public:
     SparseSet() = default;
     ~SparseSet() override = default;
@@ -26,6 +32,10 @@ template<typename T> class SparseSet : ISparseSet
     SparseSet& operator=(const SparseSet&) = delete;
     SparseSet(SparseSet&&) = default;
     SparseSet& operator=(SparseSet&&) = default;
+
+    Sink<void(Entity)> onCreate() { return Sink<void(Entity)> {m_onCreate}; }
+    Sink<void(Entity)> onDestroy() { return Sink<void(Entity)> {m_onDestroy}; }
+    Sink<void(Entity)> onSet() { return Sink<void(Entity)> {m_onSet}; }
 
     const std::vector<Entity>& getEntities() const { return m_entities; }
     const std::vector<T>& getComponents() const { return m_dense; }
@@ -36,6 +46,7 @@ template<typename T> class SparseSet : ISparseSet
 
     void clear()
     {
+        for (Entity e : m_entities) m_onDestroy.publish(e);
         m_dense.clear();
         m_entities.clear();
         m_sparse.clear();
@@ -44,7 +55,7 @@ template<typename T> class SparseSet : ISparseSet
     bool contains(Entity e) const
     {
         size_t id = getEntityId(e);
-        return e != NULL_ENTITY && id < m_sparse.size() && m_sparse[id] == e;
+        return e != NULL_ENTITY && id < m_sparse.size() && m_entities[m_sparse[id]] == e;
     }
     T& get(Entity e)
     {
@@ -67,9 +78,11 @@ template<typename T> class SparseSet : ISparseSet
             m_sparse[id] = idx;
             m_dense.push_back(std::move(comp));
             m_entities.push_back(e);
+            m_onCreate.publish(e);
             return m_dense[idx];
         } else {
             m_dense[m_sparse[id]] = std::move(comp);
+            m_onSet.publish(e);
             return m_dense[m_sparse[id]];
         }
     }
@@ -79,6 +92,8 @@ template<typename T> class SparseSet : ISparseSet
         assert(contains(e) && "Entity doesn't have this component");
         uint32_t id = getEntityId(e);
         size_t idx = m_sparse[e], last = m_dense.size() - 1;
+
+        m_onDestroy.publish(e);
 
         if (idx != last) {
             m_dense[idx] = std::move(m_dense[last]);
