@@ -6,6 +6,12 @@
 
 namespace Engine {
 
+// TODO: improve the view class:
+// add view chaining (combined = view1 | view2)
+// currently we cant add a view function to registry since it leads to dependency injection but adding it allows for single line execution
+// optimize the single type views (just use registry.getPool())
+// optimize the multi type views (make the smallest pool the driving pool)
+// add ability to specify excluded types
 template<typename... Components> class View
 {
   private:

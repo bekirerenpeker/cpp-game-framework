@@ -66,7 +66,6 @@ template<typename Ret, typename... Args> class Delegate<Ret(Args...)>
     {
         return m_instance == other.m_instance && m_stub == other.m_stub;
     }
-
     bool operator!=(const Delegate& other) const { return !(*this == other); }
 };
 
