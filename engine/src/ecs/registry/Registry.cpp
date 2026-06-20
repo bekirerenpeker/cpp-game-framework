@@ -1,5 +1,4 @@
-#include "ecs/Registry.hpp"
-#include "ecs/Entity.hpp"
+#include "ecs/registry/Registry.hpp"
 #include <bit>
 
 namespace Engine {
