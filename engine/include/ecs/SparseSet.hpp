@@ -34,6 +34,13 @@ template<typename T> class SparseSet : ISparseSet
     size_t size() const { return m_dense.size(); }
     size_t capacity() const { return m_sparse.size(); }
 
+    void clear()
+    {
+        m_dense.clear();
+        m_entities.clear();
+        m_sparse.clear();
+    }
+
     bool contains(Entity e) const
     {
         size_t id = getEntityId(e);

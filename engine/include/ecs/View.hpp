@@ -11,8 +11,62 @@ template<typename... Components> class View
   private:
     Registry& m_registry;
 
+    class Iterator
+    {
+        Registry& reg;
+        size_t index;
+        const std::vector<Entity>& entities;
+
+      public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = std::tuple<Entity, Components&...>;
+        using difference_type = std::ptrdiff_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
+        Iterator(Registry& r, size_t idx, const std::vector<Entity>& ents)
+            : reg(r), index(idx), entities(ents)
+        {
+            // If the current element doesn't match, skip to the next valid one
+            if (index < entities.size() && !match(entities[index])) { operator++(); }
+        }
+
+        bool match(Entity e) const { return (reg.getPool<Components>().contains(e) && ...); }
+
+        bool operator!=(const Iterator& other) const { return index != other.index; }
+
+        Iterator& operator++()
+        {
+            do {
+                index++;
+            } while (index < entities.size() && !match(entities[index]));
+            return *this;
+        }
+
+        // Returns a tuple of references for structured binding: auto [e, c1, c2] = it;
+        auto operator*() const
+        {
+            Entity e = entities[index];
+            return std::tie(e, reg.getPool<Components>().get(e)...);
+        }
+    };
+
   public:
     View(Registry& registry) : m_registry(registry) {}
+
+    auto begin()
+    {
+        auto& pool =
+            m_registry.getPool<typename std::tuple_element<0, std::tuple<Components...>>::type>();
+        return Iterator(m_registry, 0, pool.getEntities());
+    }
+
+    auto end()
+    {
+        auto& pool =
+            m_registry.getPool<typename std::tuple_element<0, std::tuple<Components...>>::type>();
+        return Iterator(m_registry, pool.getEntities().size(), pool.getEntities());
+    }
 
     template<typename Func> void each(Func&& func)
     {

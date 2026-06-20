@@ -277,6 +277,12 @@
 },
 {
   "directory": "C:/Users/bekir/Desktop/projects/cpp projects/terraria_clone/build",
+  "command": "C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1444~1.352\\bin\\Hostx86\\x64\\cl.exe  /nologo /TP -DDEBUG -DOS_LINUX=3 -DOS_MACOS=2 -DOS_NAME=1 -DOS_WINDOWS=1 -I\"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\engine\\include\" -I\"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\game\\include\" -I\"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\lib\\glfw\\include\" -I\"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\lib\" /DWIN32 /D_WINDOWS /GR /EHsc /Zi /Ob0 /Od /RTC1 -std:c++20 -MDd /Foengine\\CMakeFiles\\engine.dir\\src\\ecs\\Registry.cpp.obj /Fdengine\\CMakeFiles\\engine.dir\\engine.pdb /FS -c \"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\engine\\src\\ecs\\Registry.cpp\"",
+  "file": "C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\engine\\src\\ecs\\Registry.cpp",
+  "output": "engine\\CMakeFiles\\engine.dir\\src\\ecs\\Registry.cpp.obj"
+},
+{
+  "directory": "C:/Users/bekir/Desktop/projects/cpp projects/terraria_clone/build",
   "command": "C:\\PROGRA~2\\MICROS~2\\2022\\BUILDT~1\\VC\\Tools\\MSVC\\1444~1.352\\bin\\Hostx86\\x64\\cl.exe  /nologo /TP -DDEBUG -DOS_LINUX=3 -DOS_MACOS=2 -DOS_NAME=1 -DOS_WINDOWS=1 -I\"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\engine\\include\" -I\"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\game\\include\" -I\"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\lib\\glfw\\include\" -I\"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\lib\" /DWIN32 /D_WINDOWS /GR /EHsc /Zi /Ob0 /Od /RTC1 -std:c++20 -MDd /Foengine\\CMakeFiles\\engine.dir\\src\\utils\\math\\Mat4.cpp.obj /Fdengine\\CMakeFiles\\engine.dir\\engine.pdb /FS -c \"C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\engine\\src\\utils\\math\\Mat4.cpp\"",
   "file": "C:\\Users\\bekir\\Desktop\\projects\\cpp projects\\terraria_clone\\engine\\src\\utils\\math\\Mat4.cpp",
   "output": "engine\\CMakeFiles\\engine.dir\\src\\utils\\math\\Mat4.cpp.obj"
