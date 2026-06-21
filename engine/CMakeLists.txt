@@ -15,4 +15,7 @@ target_link_libraries(engine PUBLIC
     miniaudio
     miniaudio_impl
     nlohmann_json::nlohmann_json
+    glad
 )
+
+target_compile_definitions(engine PUBLIC GLFW_INCLUDE_NONE)

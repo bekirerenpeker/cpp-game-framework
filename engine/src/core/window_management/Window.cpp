@@ -1,5 +1,7 @@
 #include "core/window_management/Window.hpp"
+#include "context/GladContext.hpp"
 #include "context/GlfwContext.hpp"
+#include "glad/glad.h"
 
 namespace Engine {
 
@@ -33,10 +35,11 @@ Window::Window(const WindowCreationOptions& opts, GLFWmonitor* monitor, GLFWwind
     glfwGetWindowPos(m_glfwHandle, &m_xPos, &m_yPos);
     m_title = opts.title;
 
-    // glViewport(0, 0, m_width, m_height);
-
     // the window doesn't appear default so we have to do this
     glfwSwapBuffers(m_glfwHandle);
+
+    GladContext::init();
+    glViewport(0, 0, m_width, m_height);
 }
 
 Window::~Window()
@@ -120,7 +123,7 @@ void Window::sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height)
     window->m_width = width;
     window->m_height = height;
 
-    // glViewport(0, 0, width, height);
+    glViewport(0, 0, width, height);
 }
 void Window::positionUpdateCallback(GLFWwindow* glfwHandle, int x, int y)
 {
