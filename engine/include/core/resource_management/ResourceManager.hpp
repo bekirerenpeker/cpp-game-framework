@@ -20,6 +20,7 @@ class ResourceManager : public Singleton<ResourceManager>
     void unloadResource(IdType id);
 
     template<typename T, typename... Args> IdType addResource(Args&&... args);
+    template<typename T, typename... Args> void setResource(IdType id, Args&&... args);
     template<typename T> T* getResource(IdType id);
     template<typename T> const T* getResource(IdType id) const;
 
@@ -36,6 +37,15 @@ template<typename T, typename... Args> IdType ResourceManager::addResource(Args&
     );
     T* res = new T(std::forward<Args>(args)...);
     return m_resources.add(static_cast<IResource*>(res));
+}
+template<typename T, typename... Args> void ResourceManager::setResource(IdType id, Args&&... args)
+{
+    T* curr = getResource<T>(id);
+    if (!curr) return;
+    delete curr;
+
+    T* res = new T(std::forward<Args>(args)...);
+    m_resources.set(id, static_cast<IResource*>(res));
 }
 
 template<typename T> T* ResourceManager::getResource(IdType id)

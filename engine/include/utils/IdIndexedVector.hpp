@@ -68,8 +68,33 @@ class IdIndexedVector
         IdType id = m_nextId++;
         m_idToIndex[id] = m_data.size();
         m_data.emplace_back(id, std::forward<Args>(args)...);
-        if constexpr (inheritsId) m_data.back().second.setId(id);
+
+        if constexpr (inheritsId) {
+            if constexpr (isPointer) {
+                if (m_data.back().second) m_data.back().second->setId(id);
+            } else {
+                m_data.back().second.setId(id);
+            }
+        }
+
         return id;
+    }
+
+    template<typename U> bool set(IdType id, U&& value)
+    {
+        auto it = m_idToIndex.find(id);
+        if (it == m_idToIndex.end()) return false;
+
+        m_data[it->second].second = std::forward<U>(value);
+
+        if constexpr (inheritsId) {
+            if constexpr (isPointer) {
+                if (m_data[it->second].second) m_data[it->second].second->setId(id);
+            } else {
+                m_data[it->second].second.setId(id);
+            }
+        }
+        return true;
     }
 
     void remove(IdType id)
@@ -103,7 +128,7 @@ class IdIndexedVector
     const DerefType* get(IdType id) const
     {
         if (!contains(id)) return nullptr;
-        T& stored = m_data[m_idToIndex.at(id)].second;
+        const T& stored = m_data[m_idToIndex.at(id)].second;
         if constexpr (isPointer) return stored;
         else return &stored;
     }
