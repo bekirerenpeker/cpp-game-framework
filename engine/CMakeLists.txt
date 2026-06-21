@@ -14,4 +14,5 @@ target_link_libraries(engine PUBLIC
     stb_impl
     miniaudio
     miniaudio_impl
+    nlohmann_json::nlohmann_json
 )

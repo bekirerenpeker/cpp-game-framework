@@ -26,3 +26,12 @@ target_include_directories(miniaudio INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_library(miniaudio_impl "${CMAKE_CURRENT_SOURCE_DIR}/miniaudio/miniaudio.c")
 target_link_libraries(miniaudio_impl PUBLIC miniaudio)
+
+# add the nlohmann_json directory
+set(JSON_BuildTests OFF CACHE INTERNAL "")
+
+if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/nlohmann_json")
+    add_subdirectory(nlohmann_json)
+else()
+    message(FATAL_ERROR "nlohmann/json submodule is missing! Run: git submodule update --init --recursive")
+endif()

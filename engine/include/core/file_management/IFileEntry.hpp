@@ -13,6 +13,7 @@ enum class FileType
     BinaryFile,
     TextFile,
     ImageFile,
+    JsonFile,
 };
 
 class IFileEntry : public IResource

@@ -35,6 +35,7 @@ bool ImageFile::loadImage()
 
     m_imgData.width = width, m_imgData.height = height, m_imgData.depth = channels;
     m_imgData.pixels = rawPixels;
+    m_imgData.isStbiAllocated = true;
     return true;
 }
 

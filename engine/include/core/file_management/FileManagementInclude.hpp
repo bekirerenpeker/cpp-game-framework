@@ -7,3 +7,4 @@
 #include "BinaryFile.hpp"
 #include "TextFile.hpp"
 #include "ImageFile.hpp"
+#include "JsonFile.hpp"
