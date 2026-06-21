@@ -2,7 +2,6 @@
 
 #include "EngineInclude.hpp"
 #include <chrono>
-#include <iostream>
 
 using namespace Engine;
 
@@ -49,10 +48,10 @@ inline int ecs_test()
         func();
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        std::cout << "[ECS] " << name << " took " << (duration / 1000.0f) << " ms\n";
+        LOG_INFO("[ECS] {} took {} ms", name, duration / 1000.0f);
     };
 
-    std::cout << "============= ECS FEATURE & PERFORMANCE TESTS =============\n";
+    LOG_INFO("============= ECS FEATURE & PERFORMANCE TESTS =============");
 
     Registry registry;
     constexpr int ENTITY_COUNT = 1'000'000;
@@ -83,7 +82,7 @@ inline int ecs_test()
         for (int i = 1; i < ENTITY_COUNT; i += 4) { entities[i].emplace<Static>(); }
     });
 
-    std::cout << "-----------------------------------------------------------\n";
+    LOG_INFO("-----------------------------------------------------------");
 
     // 5. Iterate Single Type
     size_t countSingle = 0;
@@ -95,9 +94,8 @@ inline int ecs_test()
             countSingle++;
         });
     });
-    if (countSingle == 1'000'000)
-        std::cout << "      SUCCESS: Counted exactly 1,000,000 entities.\n";
-    else std::cout << "      ERROR: Expected 1,000,000 but got " << countSingle << "\n";
+    if (countSingle == 1'000'000) LOG_INFO("      SUCCESS: Counted exactly 1,000,000 entities.");
+    else LOG_ERROR("      ERROR: Expected 1,000,000 but got {}", countSingle);
 
     // 6. Iterate Multi Type (Testing driver pool optimization)
     size_t countMulti = 0;
@@ -109,8 +107,8 @@ inline int ecs_test()
             countMulti++;
         });
     });
-    if (countMulti == 500'000) std::cout << "      SUCCESS: Counted exactly 500,000 entities.\n";
-    else std::cout << "      ERROR: Expected 500,000 but got " << countMulti << "\n";
+    if (countMulti == 500'000) LOG_INFO("      SUCCESS: Counted exactly 500,000 entities.");
+    else LOG_ERROR("      ERROR: Expected 500,000 but got {}", countMulti);
 
     // 7. Iterate Multi Type with Tags
     size_t countTag = 0;
@@ -121,8 +119,8 @@ inline int ecs_test()
             countTag++;
         });
     });
-    if (countTag == 250'000) std::cout << "      SUCCESS: Counted exactly 250,000 entities.\n";
-    else std::cout << "      ERROR: Expected 250,000 but got " << countTag << "\n";
+    if (countTag == 250'000) LOG_INFO("      SUCCESS: Counted exactly 250,000 entities.");
+    else LOG_ERROR("      ERROR: Expected 250,000 but got {}", countTag);
 
     // 8. Iterate Multi Type with Exclusions!
     size_t countExcl = 0;
@@ -134,10 +132,10 @@ inline int ecs_test()
         });
     });
     // Static is on indices 1, 5, 9... Velocity is on 0, 2, 4... They never overlap! So all 500K should remain.
-    if (countExcl == 500'000) std::cout << "      SUCCESS: Counted exactly 500,000 entities.\n";
-    else std::cout << "      ERROR: Expected 500,000 but got " << countExcl << "\n";
+    if (countExcl == 500'000) LOG_INFO("      SUCCESS: Counted exactly 500,000 entities.");
+    else LOG_ERROR("      ERROR: Expected 500,000 but got {}", countExcl);
 
-    std::cout << "-----------------------------------------------------------\n";
+    LOG_INFO("-----------------------------------------------------------");
 
     // 9. Test Component Signals
     measure("Test Component Signals (onCreate, onSet, onDestroy)", [&]() {
@@ -156,11 +154,12 @@ inline int ecs_test()
         sigEntity.destroy();                       // Should trigger onDestroy
 
         if (tracker.created == 1 && tracker.set == 1 && tracker.destroyed == 1) {
-            std::cout
-                << "      SUCCESS: Signals triggered perfectly (1 Create, 1 Set, 1 Destroy).\n";
+            LOG_INFO("      SUCCESS: Signals triggered perfectly (1 Create, 1 Set, 1 Destroy).");
         } else {
-            std::cout << "      ERROR: Signals failed! Created: " << tracker.created
-                      << " Set: " << tracker.set << " Destroyed: " << tracker.destroyed << "\n";
+            LOG_ERROR(
+                "      ERROR: Signals failed! Created: {} Set: {} Destroyed: {}", tracker.created,
+                tracker.set, tracker.destroyed
+            );
         }
 
         // CRITICAL: Disconnect listeners before tracker goes out of scope,
@@ -179,9 +178,9 @@ inline int ecs_test()
 
         EntityHandle cloned = source.clone();
         if (cloned.containsAll<Position, Health, PlayerTag>()) {
-            std::cout << "      SUCCESS: Cloned entity successfully inherited all components.\n";
+            LOG_INFO("      SUCCESS: Cloned entity successfully inherited all components.");
         } else {
-            std::cout << "      ERROR: Clone feature failed!\n";
+            LOG_ERROR("      ERROR: Clone feature failed!");
         }
     });
 
@@ -194,9 +193,9 @@ inline int ecs_test()
         Velocity* vel = source.tryGet<Velocity>();
 
         if (hp != nullptr && hp->hp == 50 && vel == nullptr) {
-            std::cout << "      SUCCESS: tryGet returns pointers correctly.\n";
+            LOG_INFO("      SUCCESS: tryGet returns pointers correctly.");
         } else {
-            std::cout << "      ERROR: tryGet feature failed!\n";
+            LOG_ERROR("      ERROR: tryGet feature failed!");
         }
     });
 
@@ -208,19 +207,19 @@ inline int ecs_test()
         registry.destroyDeferred(entities[1].getEntity());
 
         if (registry.getPool<Position>().size() == initialSize) {
-            std::cout << "      SUCCESS: Entities safely deferred. (Size unchanged)\n";
+            LOG_INFO("      SUCCESS: Entities safely deferred. (Size unchanged)");
         }
 
         registry.flush();
 
         if (registry.getPool<Position>().size() == initialSize - 2) {
-            std::cout << "      SUCCESS: Flush executed destructions. (Size -2)\n";
+            LOG_INFO("      SUCCESS: Flush executed destructions. (Size -2)");
         } else {
-            std::cout << "      ERROR: Deferred destruction flush failed!\n";
+            LOG_ERROR("      ERROR: Deferred destruction flush failed!");
         }
     });
 
-    std::cout << "-----------------------------------------------------------\n";
+    LOG_INFO("-----------------------------------------------------------");
 
     // 13. Mass Destruction
     measure("Destroy remaining ~1,000,000 Entities", [&]() {
@@ -229,7 +228,7 @@ inline int ecs_test()
         }
     });
 
-    std::cout << "===========================================================\n\n";
+    LOG_INFO("===========================================================\n");
 
     return 0;
 }

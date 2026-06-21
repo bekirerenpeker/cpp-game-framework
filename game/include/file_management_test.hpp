@@ -3,8 +3,8 @@
 #include "EngineInclude.hpp"
 
 #include <chrono>
-#include <iostream>
 #include <cstdint>
+#include <filesystem>
 
 using namespace Engine;
 namespace fs = std::filesystem;
@@ -24,10 +24,10 @@ inline int file_management_test()
         func();
         auto end = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
-        std::cout << "[FILE] " << name << " took " << (duration / 1000.0f) << " ms\n";
+        LOG_INFO("[FILE] {} took {} ms", name, duration / 1000.0f);
     };
 
-    std::cout << "============= FILE SYSTEM FEATURE & PERFORMANCE TESTS =============\n";
+    LOG_INFO("============= FILE SYSTEM FEATURE & PERFORMANCE TESTS =============");
 
     fs::path outDir = fs::current_path() / "game" / "output";
 
@@ -35,13 +35,13 @@ inline int file_management_test()
     measure("Create Output Directory", [&]() {
         FileManager::get().createFolder(outDir);
         if (FileManager::get().isDirectory(outDir)) {
-            std::cout << "      SUCCESS: Folder game/output created/verified.\n";
+            LOG_INFO("      SUCCESS: Folder game/output created/verified.");
         } else {
-            std::cout << "      ERROR: Failed to create game/output folder!\n";
+            LOG_ERROR("      ERROR: Failed to create game/output folder!");
         }
     });
 
-    std::cout << "-----------------------------------------------------------\n";
+    LOG_INFO("-----------------------------------------------------------");
 
     // 2. TextFile Test
     measure("TextFile: Write, Read, and Append", [&]() {
@@ -54,9 +54,9 @@ inline int file_management_test()
 
         std::vector<std::string> lines = txt.readLines();
         if (lines.size() == 3 && lines[2] == "Line 3") {
-            std::cout << "      SUCCESS: Text written, appended, and read correctly.\n";
+            LOG_INFO("      SUCCESS: Text written, appended, and read correctly.");
         } else {
-            std::cout << "      ERROR: TextFile operations failed!\n";
+            LOG_ERROR("      ERROR: TextFile operations failed!");
         }
     });
 
@@ -82,9 +82,9 @@ inline int file_management_test()
         bin.close();
 
         if (inData.level == 42 && inData.health == 99.5f && inData.position[2] == 30.0f) {
-            std::cout << "      SUCCESS: Binary POD struct matched expectations.\n";
+            LOG_INFO("      SUCCESS: Binary POD struct matched expectations.");
         } else {
-            std::cout << "      ERROR: Binary struct data corrupted or failed to read!\n";
+            LOG_ERROR("      ERROR: Binary struct data corrupted or failed to read!");
         }
     });
 
@@ -103,9 +103,9 @@ inline int file_management_test()
         JsonFile jsonIn(jsonPath);   // Should auto-load in constructor based on your implementation
         if (jsonIn.getValue<int>("ResolutionX", 0) == 1920 &&
             jsonIn.getValue<bool>("Fullscreen", false) == true) {
-            std::cout << "      SUCCESS: JSON File saved and loaded properties accurately.\n";
+            LOG_INFO("      SUCCESS: JSON File saved and loaded properties accurately.");
         } else {
-            std::cout << "      ERROR: JSON load/save mismatch!\n";
+            LOG_ERROR("      ERROR: JSON load/save mismatch!");
         }
     });
 
@@ -128,13 +128,13 @@ inline int file_management_test()
         bool saved = imgFile.saveImage(img);
 
         if (saved && FileManager::get().doesPathExist(imgPath)) {
-            std::cout << "      SUCCESS: Procedural PNG created and saved.\n";
+            LOG_INFO("      SUCCESS: Procedural PNG created and saved.");
         } else {
-            std::cout << "      ERROR: Image file failed to save!\n";
+            LOG_ERROR("      ERROR: Image file failed to save!");
         }
     });
 
-    std::cout << "-----------------------------------------------------------\n";
+    LOG_INFO("-----------------------------------------------------------");
 
     // 6. Base File Operations Test (Rename, Move)
     measure("IFileEntry: Rename and Move operations", [&]() {
@@ -151,9 +151,9 @@ inline int file_management_test()
 
         if (renamed && moved && FileManager::get().doesPathExist(outDir / "settings.json") &&
             FileManager::get().doesPathExist(subFolderPath / "test_log.txt")) {
-            std::cout << "      SUCCESS: Files successfully renamed and moved.\n";
+            LOG_INFO("      SUCCESS: Files successfully renamed and moved.");
         } else {
-            std::cout << "      ERROR: Rename or Move operations failed!\n";
+            LOG_ERROR("      ERROR: Rename or Move operations failed!");
         }
     });
 
@@ -173,11 +173,13 @@ inline int file_management_test()
         // We expect 3 files in root (player_save.bin, settings.json, texture.png)
         // and 1 folder (subfolder)
         if (fileCount == 3 && folderCount == 1) {
-            std::cout << "      SUCCESS: Folder child iteration detected expected layout.\n";
-            std::cout << "      Total Size in Output: " << rootFolder.getSize() << " bytes.\n";
+            LOG_INFO("      SUCCESS: Folder child iteration detected expected layout.");
+            LOG_INFO("      Total Size in Output: {} bytes.", rootFolder.getSize());
         } else {
-            std::cout << "      ERROR: Folder child count mismatch! Files: " << fileCount
-                      << " Folders: " << folderCount << "\n";
+            LOG_ERROR(
+                "      ERROR: Folder child count mismatch! Files: {} Folders: {}", fileCount,
+                folderCount
+            );
         }
     });
 
@@ -191,16 +193,16 @@ inline int file_management_test()
 #ifdef ALLOW_DELETE_FROM_DISK
         bool deleted = tempFile.deleteFromDisk();
         if (deleted && !FileManager::get().doesPathExist(tempPath) && !tempFile.isValid()) {
-            std::cout << "      SUCCESS: File properly deleted from disk and invalidated.\n";
+            LOG_INFO("      SUCCESS: File properly deleted from disk and invalidated.");
         } else {
-            std::cout << "      ERROR: Deletion failed!\n";
+            LOG_ERROR("      ERROR: Deletion failed!");
         }
 #else
-            std::cout << "      SKIPPED: ALLOW_DELETE_FROM_DISK is not defined.\n";
+        LOG_WARNING("      SKIPPED: ALLOW_DELETE_FROM_DISK is not defined.");
 #endif
     });
 
-    std::cout << "===========================================================\n\n";
+    LOG_INFO("===========================================================\n");
 
     return 0;
 }
