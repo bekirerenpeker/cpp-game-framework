@@ -17,6 +17,7 @@ class Registry
   private:
     std::vector<uint32_t> m_freeList;   // 1 means open 0 means occupied
     std::vector<EntityGen> m_generations;
+    std::vector<Entity> m_entitiesToDestroy;
 
     std::unordered_map<IdType, ISparseSet*> m_pools;
     std::unordered_map<IdType, void*> m_contexes;
@@ -30,7 +31,10 @@ class Registry
     void clear();
 
     EntityHandle create();
+    EntityHandle clone(Entity e);
     void destroy(Entity e);
+    void destroyDeferred(Entity e);
+    void flush();
 
     template<typename T> SparseSet<T>& getPool()
     {

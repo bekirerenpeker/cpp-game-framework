@@ -3,6 +3,7 @@
 #include "Entity.hpp"
 #include "ecs/signals/Signal.hpp"
 #include "ecs/signals/Sink.hpp"
+#include <type_traits>
 #include <vector>
 
 namespace Engine {
@@ -12,9 +13,10 @@ class ISparseSet
   public:
     virtual ~ISparseSet() = default;
     virtual void remove(Entity e) = 0;
+    virtual void clone(Entity from, Entity to) = 0;
 };
 
-template<typename T> class SparseSet : ISparseSet
+template<typename T, bool isEmpty = std::is_empty_v<T>> class SparseSet : ISparseSet
 {
     std::vector<T> m_dense;
     std::vector<Entity> m_entities;
@@ -41,13 +43,13 @@ template<typename T> class SparseSet : ISparseSet
     const std::vector<T>& getComponents() const { return m_dense; }
     std::vector<T>& getComponents() { return m_dense; }
 
-    size_t size() const { return m_dense.size(); }
+    size_t size() const { return m_entities.size(); }
     size_t capacity() const { return m_sparse.size(); }
 
     void clear()
     {
         for (Entity e : m_entities) m_onDestroy.publish(e);
-        m_dense.clear();
+        if constexpr (!isEmpty) m_dense.clear();
         m_entities.clear();
         m_sparse.clear();
     }
@@ -60,12 +62,22 @@ template<typename T> class SparseSet : ISparseSet
     T& get(Entity e)
     {
         assert(contains(e) && "Entity doesn't have this component");
-        return m_dense[m_sparse[getEntityId(e)]];
+        if constexpr (isEmpty) {
+            static T dummy {};
+            return dummy;
+        } else {
+            return m_dense[m_sparse[getEntityId(e)]];
+        }
     }
     const T& get(Entity e) const
     {
         assert(contains(e) && "Entity doesn't have this component");
-        return m_dense[m_sparse[getEntityId(e)]];
+        if constexpr (isEmpty) {
+            static T dummy {};
+            return dummy;
+        } else {
+            return m_dense[m_sparse[getEntityId(e)]];
+        }
     }
 
     T& insert(Entity e, T&& comp)
@@ -74,16 +86,26 @@ template<typename T> class SparseSet : ISparseSet
         if (id >= m_sparse.size()) m_sparse.resize(id + 1, NULL_ENTITY);
 
         if (!contains(e)) {
-            size_t idx = m_dense.size();
+            size_t idx = m_entities.size();
             m_sparse[id] = idx;
-            m_dense.push_back(std::move(comp));
+            if constexpr (!isEmpty) m_dense.push_back(std::move(comp));
             m_entities.push_back(e);
             m_onCreate.publish(e);
-            return m_dense[idx];
+            if constexpr (isEmpty) {
+                static T dummy {};
+                return dummy;
+            } else {
+                return m_dense[idx];
+            }
         } else {
-            m_dense[m_sparse[id]] = std::move(comp);
+            if constexpr (!isEmpty) { m_dense[m_sparse[id]] = std::move(comp); }
             m_onSet.publish(e);
-            return m_dense[m_sparse[id]];
+            if constexpr (isEmpty) {
+                static T dummy {};
+                return dummy;
+            } else {
+                return m_dense[m_sparse[id]];
+            }
         }
     }
 
@@ -91,19 +113,27 @@ template<typename T> class SparseSet : ISparseSet
     {
         assert(contains(e) && "Entity doesn't have this component");
         uint32_t id = getEntityId(e);
-        size_t idx = m_sparse[e], last = m_dense.size() - 1;
+        size_t idx = m_sparse[id], last = m_entities.size() - 1;
 
         m_onDestroy.publish(e);
 
         if (idx != last) {
-            m_dense[idx] = std::move(m_dense[last]);
+            if constexpr (!isEmpty) m_dense[idx] = std::move(m_dense[last]);
             m_entities[idx] = m_entities[last];
             m_sparse[getEntityId(m_entities[idx])] = idx;
         }
 
         m_sparse[id] = NULL_ENTITY;
-        m_dense.pop_back();
+        if constexpr (!isEmpty) { m_dense.pop_back(); }
         m_entities.pop_back();
+    }
+
+    void clone(Entity from, Entity to) override
+    {
+        if (contains(from)) {
+            if constexpr (isEmpty) insert(to, T {});
+            else insert(to, T(get(from)));
+        }
     }
 };
 

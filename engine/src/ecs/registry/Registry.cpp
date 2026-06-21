@@ -34,6 +34,12 @@ EntityHandle Registry::create()
     if (index >= m_generations.size()) m_generations.resize(index + 1, 0);
     return EntityHandle(constructEntity(index, m_generations[index]++), *this);
 }
+EntityHandle Registry::clone(Entity e)
+{
+    EntityHandle newEnt = create();
+    for (auto& [id, pool] : m_pools) pool->clone(e, newEnt.getEntity());
+    return newEnt;
+}
 
 void Registry::destroy(Entity e)
 {
@@ -41,6 +47,12 @@ void Registry::destroy(Entity e)
     EntityId index = getEntityId(e);
     int offset = index & (0b11111);
     m_freeList[index >> 5] |= (1u << offset);
+}
+void Registry::destroyDeferred(Entity e) { m_entitiesToDestroy.push_back(e); }
+void Registry::flush()
+{
+    for (Entity e : m_entitiesToDestroy) destroy(e);
+    m_entitiesToDestroy.clear();
 }
 
 EntityId Registry::findFreeSlot()

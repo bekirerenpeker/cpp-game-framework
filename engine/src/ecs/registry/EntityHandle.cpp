@@ -19,5 +19,6 @@ void EntityHandle::destroy()
     m_registry.destroy(m_entity);
     m_entity = NULL_ENTITY;
 }
+EntityHandle EntityHandle::clone() { return m_registry.clone(m_entity); }
 
 }   // namespace Engine
