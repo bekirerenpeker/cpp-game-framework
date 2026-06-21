@@ -3,19 +3,85 @@
 #include "Registry.hpp"
 #include <tuple>
 #include <algorithm>
+#include <type_traits>
 
 namespace Engine {
 
-// TODO: improve the view class:
-// add view chaining (combined = view1 | view2)
-// currently we cant add a view function to registry since it leads to dependency injection but adding it allows for single line execution
-// optimize the single type views (just use registry.getPool())
-// optimize the multi type views (make the smallest pool the driving pool)
-// add ability to specify excluded types
-template<typename... Components> class View
+// Tag used to specify components that should be excluded from the view
+template<typename... Types> struct Exclude
+{
+};
+
+namespace detail {
+// ---------------------------------------------------------------------------------
+// Metaprogramming helpers to extract `Exclude<...>` from variadic template arguments
+// so that the user can seamlessly write `View<Position, Velocity, Exclude<Static>>`
+// ---------------------------------------------------------------------------------
+
+template<typename T> struct is_exclude : std::false_type
+{
+};
+template<typename... Ts> struct is_exclude<Exclude<Ts...>> : std::true_type
+{
+};
+
+// Extract Exclude<...>
+template<typename... Args> struct get_exclude
+{
+    using type = Exclude<>;
+};
+template<typename T, typename... Rest> struct get_exclude<T, Rest...>
+{
+    using type = std::conditional_t<is_exclude<T>::value, T, typename get_exclude<Rest...>::type>;
+};
+
+// Extract Includes (Everything that is not Exclude<...>)
+template<typename... Ts> struct type_list
+{
+};
+
+template<typename List, typename... Args> struct get_includes;
+
+template<typename... Includes> struct get_includes<type_list<Includes...>>
+{
+    using type = std::tuple<Includes...>;
+};
+
+template<typename... Includes, typename T, typename... Rest>
+struct get_includes<type_list<Includes...>, T, Rest...>
+{
+    using type = std::conditional_t<
+        is_exclude<T>::value, typename get_includes<type_list<Includes...>, Rest...>::type,
+        typename get_includes<type_list<Includes..., T>, Rest...>::type>;
+};
+}   // namespace detail
+
+template<typename Includes, typename Excludes> class ViewImpl;
+
+template<typename... Includes, typename... Excludes>
+class ViewImpl<std::tuple<Includes...>, Exclude<Excludes...>>
 {
   private:
     Registry& m_registry;
+
+    // Dynamically finds the smallest pool to act as the driving iterator array
+    const std::vector<Entity>& getDrivingEntities()
+    {
+        size_t minSize = static_cast<size_t>(-1);
+        const std::vector<Entity>* drivingPool = nullptr;
+
+        auto checkPool = [&](auto* pool) {
+            if (pool->size() < minSize) {
+                minSize = pool->size();
+                drivingPool = &pool->getEntities();
+            }
+        };
+
+        // Fold expression evaluates shortest pool across all include types
+        (checkPool(&m_registry.getPool<Includes>()), ...);
+
+        return *drivingPool;
+    }
 
     class Iterator
     {
@@ -25,7 +91,7 @@ template<typename... Components> class View
 
       public:
         using iterator_category = std::forward_iterator_tag;
-        using value_type = std::tuple<Entity, Components&...>;
+        using value_type = std::tuple<Entity, Includes&...>;
         using difference_type = std::ptrdiff_t;
         using pointer = value_type*;
         using reference = value_type&;
@@ -33,11 +99,16 @@ template<typename... Components> class View
         Iterator(Registry& r, size_t idx, const std::vector<Entity>& ents)
             : reg(r), index(idx), entities(ents)
         {
-            // If the current element doesn't match, skip to the next valid one
+            // Advance to first matching entity
             if (index < entities.size() && !match(entities[index])) { operator++(); }
         }
 
-        bool match(Entity e) const { return (reg.getPool<Components>().contains(e) && ...); }
+        bool match(Entity e) const
+        {
+            bool hasIncludes = ((reg.getPool<Includes>().contains(e)) && ... && true);
+            bool hasExcludes = ((reg.getPool<Excludes>().contains(e)) || ... || false);
+            return hasIncludes && !hasExcludes;
+        }
 
         bool operator!=(const Iterator& other) const { return index != other.index; }
 
@@ -49,73 +120,68 @@ template<typename... Components> class View
             return *this;
         }
 
-        // Returns a tuple of references for structured binding: auto [e, c1, c2] = it;
         auto operator*() const
         {
             Entity e = entities[index];
-            return std::tie(e, reg.getPool<Components>().get(e)...);
+            return std::tie(e, reg.getPool<Includes>().get(e)...);
         }
     };
 
   public:
-    View(Registry& registry) : m_registry(registry) {}
+    ViewImpl(Registry& registry) : m_registry(registry) {}
 
     auto begin()
     {
-        auto& pool =
-            m_registry.getPool<typename std::tuple_element<0, std::tuple<Components...>>::type>();
-        return Iterator(m_registry, 0, pool.getEntities());
+        const auto& entities = getDrivingEntities();
+        return Iterator(m_registry, 0, entities);
     }
 
     auto end()
     {
-        auto& pool =
-            m_registry.getPool<typename std::tuple_element<0, std::tuple<Components...>>::type>();
-        return Iterator(m_registry, pool.getEntities().size(), pool.getEntities());
+        const auto& entities = getDrivingEntities();
+        return Iterator(m_registry, entities.size(), entities);
     }
 
     template<typename Func> void each(Func&& func)
     {
-        // 1. Get all pools as a tuple
-        auto pools = std::forward_as_tuple(m_registry.getPool<Components>()...);
-
-        // 2. Find the pool with the minimum size to act as our driver
-        size_t sizes[] = {m_registry.getPool<Components>().size()...};
-        size_t minIdx =
-            std::distance(std::begin(sizes), std::min_element(std::begin(sizes), std::end(sizes)));
-
-        // 3. Helper lambda to retrieve a pool by index from the tuple
-        auto getPoolByIndex = [&](auto i) { return std::get<i.value>(pools); };
-
-        // 4. Use the smallest pool as the driving pool
-        switch (minIdx) {
-        case 0: iterate<0>(func); break;
-        case 1: iterate<1>(func); break;
-        // ... for a small number of components this is fine,
-        // but for a generic variadic solution, we use a visitor:
-        default: iterate_any(minIdx, func); break;
+        // 1. Hyper-optimized path for single-type views without exclusions
+        if constexpr (sizeof...(Includes) == 1 && sizeof...(Excludes) == 0) {
+            using T = std::tuple_element_t<0, std::tuple<Includes...>>;
+            auto& pool = m_registry.getPool<T>();
+            for (Entity e : pool.getEntities()) { func(e, pool.get(e)); }
         }
-    }
+        // 2. Multi-type or excluded-type view
+        else {
+            const auto& drivingEntities = getDrivingEntities();
+            for (Entity e : drivingEntities) {
+                bool hasIncludes = ((m_registry.getPool<Includes>().contains(e)) && ... && true);
+                bool hasExcludes = ((m_registry.getPool<Excludes>().contains(e)) || ... || false);
 
-  private:
-    // This iterates using a specific component pool as the driver
-    template<size_t DriverIdx, typename Func> void iterate(Func&& func)
-    {
-        auto& drivingPool =
-            std::get<DriverIdx>(std::forward_as_tuple(m_registry.getPool<Components>()...));
-        for (Entity e : drivingPool.getEntities()) {
-            if ((m_registry.getPool<Components>().contains(e) && ...)) {
-                func(e, m_registry.getPool<Components>().get(e)...);
+                if (hasIncludes && !hasExcludes) {
+                    func(e, m_registry.getPool<Includes>().get(e)...);
+                }
             }
         }
     }
+};
 
-    // Generic visitor for variadic indices
-    template<typename Func> void iterate_any(size_t index, Func&& func)
-    {
-        auto expand = [&](auto... i) { ((index == i ? iterate<i>(func) : (void)0), ...); };
-        expand(std::make_index_sequence<sizeof...(Components)> {});
-    }
+// ---------------------------------------------------------------------------------
+// Primary View class wrapper.
+// This allows the user to write: `View<Position, Velocity, Exclude<Static>>`
+// seamlessly, and handles type extraction automatically.
+// ---------------------------------------------------------------------------------
+template<typename... Args>
+class View :
+    public ViewImpl<
+        typename detail::get_includes<detail::type_list<>, Args...>::type,
+        typename detail::get_exclude<Args...>::type>
+{
+  public:
+    using Base = ViewImpl<
+        typename detail::get_includes<detail::type_list<>, Args...>::type,
+        typename detail::get_exclude<Args...>::type>;
+
+    View(Registry& registry) : Base(registry) {}
 };
 
 }   // namespace Engine
