@@ -2,7 +2,6 @@
 
 #include "Registry.hpp"
 #include <tuple>
-#include <algorithm>
 #include <type_traits>
 
 namespace Engine {

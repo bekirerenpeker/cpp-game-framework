@@ -16,6 +16,8 @@ class Registry
 {
   private:
     std::vector<uint32_t> m_freeList;   // 1 means open 0 means occupied
+    EntityId m_nextFreeWordIdx = 0;
+
     std::vector<EntityGen> m_generations;
     std::vector<Entity> m_entitiesToDestroy;
 
@@ -34,7 +36,7 @@ class Registry
     EntityHandle clone(Entity e);
     void destroy(Entity e);
     void destroyDeferred(Entity e);
-    void flush();
+    void flush(size_t countToRemove = 0);
 
     template<typename T> SparseSet<T>& getPool()
     {

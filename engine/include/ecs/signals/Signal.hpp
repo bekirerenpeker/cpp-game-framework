@@ -66,7 +66,7 @@ template<typename Ret, typename... Args> class Signal<Ret(Args...)>
     // Publish the event to all connected listeners
     void publish(Args... args) const
     {
-        for (size_t i = m_listeners.size() - 1; i >= 0; --i) m_listeners[i](args...);
+        for (size_t i = m_listeners.size(); i > 0; --i) m_listeners[i - 1](args...);
     }
 
     // Remove all listeners

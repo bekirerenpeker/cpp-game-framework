@@ -14,9 +14,10 @@ class ISparseSet
     virtual ~ISparseSet() = default;
     virtual void remove(Entity e) = 0;
     virtual void clone(Entity from, Entity to) = 0;
+    virtual bool contains(Entity e) const = 0;
 };
 
-template<typename T, bool isEmpty = std::is_empty_v<T>> class SparseSet : ISparseSet
+template<typename T, bool isEmpty = std::is_empty_v<T>> class SparseSet : public ISparseSet
 {
     std::vector<T> m_dense;
     std::vector<Entity> m_entities;
@@ -54,10 +55,11 @@ template<typename T, bool isEmpty = std::is_empty_v<T>> class SparseSet : ISpars
         m_sparse.clear();
     }
 
-    bool contains(Entity e) const
+    bool contains(Entity e) const override
     {
         size_t id = getEntityId(e);
-        return e != NULL_ENTITY && id < m_sparse.size() && m_entities[m_sparse[id]] == e;
+        return e != NULL_ENTITY && id < m_sparse.size() && m_sparse[id] != NULL_ENTITY &&
+               m_entities[m_sparse[id]] == e;
     }
     T& get(Entity e)
     {
