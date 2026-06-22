@@ -3,6 +3,8 @@
 #include <ctime>
 #include <random>
 
+namespace Engine {
+
 namespace Random {
 
 void setSeed(unsigned int seed) { srand(seed ? seed : (unsigned int)time(nullptr)); }
@@ -39,3 +41,5 @@ Vec3 pointInSphere(float radius)
 }
 
 }   // namespace Random
+
+}   // namespace Engine

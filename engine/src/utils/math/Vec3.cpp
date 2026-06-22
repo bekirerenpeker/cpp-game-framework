@@ -3,6 +3,8 @@
 #include "utils/math/Vec4.hpp"
 #include "utils/math/MathFuncs.hpp"
 
+namespace Engine {
+
 Vec3::Vec3(float x, float y, float z) : x(x), y(y), z(z) {}
 Vec3::Vec3(float s) : x(s), y(s), z(s) {}
 Vec3::Vec3() : x(0), y(0), z(0) {}
@@ -132,3 +134,5 @@ Vec3 Vec3::moveTowards(const Vec3& from, const Vec3& to, float step)
     if (from.sqrDistanceTo(to) > step * step) return from + from.directionTo(to) * step;
     else return to;
 }
+
+}   // namespace Engine

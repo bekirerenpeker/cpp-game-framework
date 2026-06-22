@@ -1,5 +1,7 @@
 #pragma once
 
+namespace Engine {
+
 class Vec3;
 class Vec4;
 
@@ -91,3 +93,5 @@ class Vec2
 #define VEC2_DOWN  Vec2(0, -1)
 #define VEC2_ZERO  Vec2(0, 0)
 #define VEC2_ONE   Vec2(1, 1)
+
+}   // namespace Engine

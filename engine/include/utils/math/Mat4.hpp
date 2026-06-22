@@ -3,6 +3,8 @@
 #include "utils/math/Vec3.hpp"
 #include "utils/math/Vec4.hpp"
 
+namespace Engine {
+
 class Mat4
 {
   public:
@@ -32,3 +34,5 @@ class Mat4
     const float* operator[](int row) const { return vals[row]; }
     float* operator[](int row) { return vals[row]; }
 };
+
+}   // namespace Engine

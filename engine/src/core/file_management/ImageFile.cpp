@@ -19,13 +19,15 @@ size_t ImageFile::getHeight() const { return m_imgData.height; }
 size_t ImageFile::getDepth() const { return m_imgData.depth; }
 size_t ImageFile::getBufferSize() const { return getWidth() * getHeight() * getDepth(); }
 byte* ImageFile::getPixels() const { return m_imgData.pixels; }
+const ImageData& ImageFile::getImageData() const { return m_imgData; }
 
-bool ImageFile::loadImage()
+bool ImageFile::loadImage(int desiredChannels)
 {
     if (!m_isValid) return false;
 
     int width, height, channels;
-    unsigned char* rawPixels = stbi_load(m_path.string().c_str(), &width, &height, &channels, 0);
+    unsigned char* rawPixels =
+        stbi_load(m_path.string().c_str(), &width, &height, &channels, desiredChannels);
 
     if (!rawPixels) {
         LOG_WARNING("couldn't read image data from {}", m_path);

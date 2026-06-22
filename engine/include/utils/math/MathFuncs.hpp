@@ -1,5 +1,7 @@
 #pragma once
 
+namespace Engine {
+
 namespace Math {
 
 #define PI      3.14159265359
@@ -53,3 +55,5 @@ float atan(float radians);
 float atan2(float y, float x);
 
 }   // namespace Math
+
+}   // namespace Engine

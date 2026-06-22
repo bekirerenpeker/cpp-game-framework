@@ -2,6 +2,8 @@
 #include "stb/stb_perlin.h"
 #include <cmath>
 
+namespace Engine {
+
 namespace Math {
 
 float abs(float x) { return x > 0 ? x : -x; }
@@ -85,3 +87,5 @@ float atan(float radians) { return std::atan(radians); }
 float atan2(float y, float x) { return std::atan2(y, x); }
 
 }   // namespace Math
+
+}   // namespace Engine

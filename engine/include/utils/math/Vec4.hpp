@@ -1,7 +1,10 @@
 #pragma once
 
+namespace Engine {
+
 class Vec2;
 class Vec3;
+class Color;
 
 class Vec4
 {
@@ -24,7 +27,7 @@ class Vec4
 
     operator Vec2() const;
     operator Vec3() const;
-    // operator Color() const;
+    operator Color() const;
 
     Vec4 operator-() const;
 
@@ -48,3 +51,5 @@ class Vec4
     bool operator==(const Vec4& other) const;
     bool operator!=(const Vec4& other) const;
 };
+
+}   // namespace Engine

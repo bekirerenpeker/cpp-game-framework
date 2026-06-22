@@ -3,6 +3,8 @@
 #include "utils/math/Vec2.hpp"
 #include "utils/math/Vec3.hpp"
 
+namespace Engine {
+
 namespace Random {
 
 void setSeed(unsigned int seed = 0);
@@ -17,3 +19,5 @@ Vec2 pointInCircle(float radius);
 Vec3 pointInSphere(float radius);
 
 }   // namespace Random
+
+}   // namespace Engine

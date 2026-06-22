@@ -1,6 +1,9 @@
 #include "utils/math/Vec4.hpp"
 #include "utils/math/Vec2.hpp"
 #include "utils/math/Vec3.hpp"
+#include "graphics/Color.hpp"
+
+namespace Engine {
 
 Vec4::Vec4(float x, float y, float z, float w) : x(x), y(y), z(z), w(w) {}
 Vec4::Vec4(float s) : x(s), y(s), z(s), w(s) {}
@@ -8,7 +11,7 @@ Vec4::Vec4() : x(0), y(0), z(0), w(0) {}
 
 Vec4::operator Vec2() const { return Vec2(x, y); }
 Vec4::operator Vec3() const { return Vec3(x, y, z); }
-// Vec4::operator Color() const { return Color(r, g, b, a); }
+Vec4::operator Color() const { return Color(r, g, b, a); }
 
 Vec4 Vec4::operator-() const { return Vec4(-x, -y, -z, -w); }
 
@@ -73,3 +76,5 @@ bool Vec4::operator==(const Vec4& other) const
     return x == other.x && y == other.y && z == other.z && w == other.w;
 }
 bool Vec4::operator!=(const Vec4& other) const { return !(*this == other); }
+
+}   // namespace Engine

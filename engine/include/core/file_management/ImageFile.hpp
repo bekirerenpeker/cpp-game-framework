@@ -20,8 +20,9 @@ class ImageFile : public File
     size_t getDepth() const;
     size_t getBufferSize() const;
     byte* getPixels() const;
+    const ImageData& getImageData() const;
 
-    bool loadImage();
+    bool loadImage(int desiredChannels = 0);
     bool saveImage(ImageData& imgData);
 };
 

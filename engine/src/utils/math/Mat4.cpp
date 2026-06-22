@@ -1,6 +1,8 @@
 #include "utils/math/Mat4.hpp"
 #include "utils/math/MathFuncs.hpp"
 
+namespace Engine {
+
 Mat4::Mat4() { identity(); }
 Mat4::Mat4(float v)
 {
@@ -105,3 +107,5 @@ Mat4& Mat4::operator*=(const Mat4& other)
     *this = *this * other;
     return *this;
 }
+
+}   // namespace Engine
