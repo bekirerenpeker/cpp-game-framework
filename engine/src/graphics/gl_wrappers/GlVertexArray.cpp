@@ -1,5 +1,6 @@
 #include "graphics/gl_wrappers/GlVertexArray.hpp"
 #include "glad/glad.h"
+#include "graphics/gl_wrappers/GlLayout.hpp"
 
 namespace Engine {
 
@@ -27,22 +28,23 @@ void GlVertexArray::setLayout(const GlLayout& layout)
     for (const auto& element : layout) {
         glEnableVertexAttribArray(index);
 
-        if (element.dataType == GlDataType::Int || element.dataType == GlDataType::UnsignedInt)
+        if ((int)element.dataType < (int)GlDataType::Float) {
             glVertexAttribIPointer(
-                index, element.count, (unsigned int)element.dataType, stride, (const void*)offset
+                index, element.count, glDataTypeVal(element.dataType), stride, (const void*)offset
             );
-        else
+        } else {
             glVertexAttribPointer(
-                index, element.count, (unsigned int)element.dataType, GL_FALSE, stride,
+                index, element.count, glDataTypeVal(element.dataType), GL_FALSE, stride,
                 (const void*)offset
             );
+        }
 
         offset += dataTypeSize(element.dataType) * element.count;
         index++;
     }
 }
 
-unsigned int GlVertexArray::dataTypeSize(GlDataType dataType)
+unsigned int GlVertexArray::dataTypeSize(GlDataType dataType) const
 {
     switch (dataType) {
     case GlDataType::Byte         : return 1;
@@ -55,7 +57,22 @@ unsigned int GlVertexArray::dataTypeSize(GlDataType dataType)
     case GlDataType::Double       : return 4;
     case GlDataType::HalfFloat    : return 2;
     case GlDataType::Fixed        : return 4;
-    default                       : return 0;
+    }
+}
+
+unsigned int GlVertexArray::glDataTypeVal(GlDataType dataType) const
+{
+    switch (dataType) {
+    case GlDataType::Byte         : return GL_BYTE;
+    case GlDataType::UnsignedByte : return GL_UNSIGNED_BYTE;
+    case GlDataType::Short        : return GL_SHORT;
+    case GlDataType::UnsignedShort: return GL_UNSIGNED_SHORT;
+    case GlDataType::Int          : return GL_INT;
+    case GlDataType::UnsignedInt  : return GL_UNSIGNED_INT;
+    case GlDataType::Float        : return GL_FLOAT;
+    case GlDataType::Double       : return GL_DOUBLE;
+    case GlDataType::HalfFloat    : return GL_HALF_FLOAT;
+    case GlDataType::Fixed        : return GL_FIXED;
     }
 }
 

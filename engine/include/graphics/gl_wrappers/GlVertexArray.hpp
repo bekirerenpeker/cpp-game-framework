@@ -17,7 +17,8 @@ class GlVertexArray : public IGlObject
     void setLayout(const GlLayout& layout);
 
   private:
-    unsigned int dataTypeSize(GlDataType dataType);
+    unsigned int dataTypeSize(GlDataType dataType) const;
+    unsigned int glDataTypeVal(GlDataType dataType) const;
 };
 
 }   // namespace Engine

@@ -6,14 +6,14 @@ namespace Engine {
 
 enum class GlBufferType
 {
-    VertexBuffer = 34962,
-    IndexBuffer = 34963,
+    VertexBuffer,
+    IndexBuffer,
 };
 
 enum class GlBufferUsage
 {
-    StaticDraw = 35044,
-    DynamicDraw = 35048,
+    StaticDraw,
+    DynamicDraw,
 };
 
 class GlBuffer : public IGlObject
@@ -29,6 +29,10 @@ class GlBuffer : public IGlObject
     void unbind() const override;
 
     void setData(long size, const void* data, GlBufferUsage usage);
+
+  private:
+    unsigned int glBufferTypeVal(GlBufferType type) const;
+    unsigned int glBufferUsageVal(GlBufferUsage usage) const;
 };
 
 }   // namespace Engine
