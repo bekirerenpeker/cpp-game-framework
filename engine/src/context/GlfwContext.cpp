@@ -8,6 +8,8 @@ namespace GlfwContext {
 
 static bool initialized = false;
 
+static void glfwDebugOutput(int error, const char* description);
+
 void init()
 {
     if (initialized) return;
@@ -16,7 +18,7 @@ void init()
         LOG_ERROR("couldn't initialize glfw");
         return;
     }
-    glfwSetErrorCallback(Logger::logGlfwMessage);
+    glfwSetErrorCallback(glfwDebugOutput);
 
     initialized = true;
 }
@@ -31,6 +33,11 @@ void quit()
 void pollEvents()
 {
     if (initialized) glfwPollEvents();
+}
+
+static void glfwDebugOutput(int error, const char* description)
+{
+    LOG_ERROR("[GLFW]: {}, {}", error, description);
 }
 
 };   // namespace GlfwContext

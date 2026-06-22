@@ -42,8 +42,6 @@ class Logger : public Singleton<Logger>
     Log(LogLevel level, const std::string& file, const std::string& function,
         const std::string& time, const std::string_view& message, Args&&... args);
 
-    static void logGlfwMessage(int error, const char* description);
-
   private:
     Logger();
     ~Logger();

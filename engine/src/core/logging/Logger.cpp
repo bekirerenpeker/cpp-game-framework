@@ -80,9 +80,4 @@ void Logger::workerLoop()
     }
 }
 
-void Logger::logGlfwMessage(int error, const char* description)
-{
-    Logger::get().Log(LogLevel::Error, "", "", "", "glfw error: {}: {}", error, description);
-}
-
 }   // namespace Engine
