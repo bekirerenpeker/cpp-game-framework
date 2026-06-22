@@ -37,7 +37,7 @@ void Logger::clearSinks()
 void Logger::writeToSinks(const LogMessage& message)
 {
     std::lock_guard<std::mutex> lock(m_sinkMutex);
-    for (ILogSink* sink : m_sinks) sink->Log(message);
+    for (ILogSink* sink : m_sinks) sink->log(message);
 }
 
 void Logger::startWorker()

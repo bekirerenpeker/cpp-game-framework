@@ -4,8 +4,9 @@
 
 namespace Engine {
 
-void ConsoleSink::Log(const LogMessage& message)
+void ConsoleSink::log(const LogMessage& message)
 {
+    if ((int)message.level < (int)m_minLogLevel) return;
     std::cout << message.toString(true) << std::flush;
 }
 

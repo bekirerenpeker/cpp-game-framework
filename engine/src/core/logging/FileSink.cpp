@@ -2,7 +2,8 @@
 
 namespace Engine {
 
-FileSink::FileSink(const std::filesystem::path& filePath) : m_logFile("")
+FileSink::FileSink(const std::filesystem::path& filePath, LogLevel minLogLevel)
+    : ILogSink(minLogLevel), m_logFile("")
 {
     if (!FileManager::get().doesPathExist(filePath)) FileManager::get().createFile(filePath);
     m_logFile = TextFile(filePath);
@@ -11,8 +12,9 @@ FileSink::FileSink(const std::filesystem::path& filePath) : m_logFile("")
 
 FileSink::~FileSink() { flush(); }
 
-void FileSink::Log(const LogMessage& message)
+void FileSink::log(const LogMessage& message)
 {
+    if ((int)message.level < (int)m_minLogLevel) return;
     m_buffer.push_back(message.toString(false));
     if (m_buffer.size() >= m_flushThreshold) { flush(); }
 }

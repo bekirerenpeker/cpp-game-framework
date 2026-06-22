@@ -1,7 +1,4 @@
 #include "EngineInclude.hpp"
-#include "ecs_test.hpp"
-#include "file_management_test.hpp"
-#include "piano_demo.hpp"
 #include "glad/glad.h"
 
 using namespace Engine;

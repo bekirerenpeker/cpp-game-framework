@@ -7,7 +7,8 @@ namespace Engine {
 class ConsoleSink : public ILogSink
 {
   public:
-    void Log(const LogMessage& message) override;
+    ConsoleSink(LogLevel minLogLevel = LogLevel::Info) : ILogSink(minLogLevel) {}
+    void log(const LogMessage& message) override;
 };
 
 }   // namespace Engine

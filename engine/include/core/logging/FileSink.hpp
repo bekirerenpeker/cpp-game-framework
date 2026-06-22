@@ -13,10 +13,10 @@ class FileSink : public ILogSink
     const size_t m_flushThreshold = 50;
 
   public:
-    FileSink(const fs::path& path);
+    FileSink(const fs::path& path, LogLevel minLogLevel = LogLevel::Info);
     ~FileSink();
 
-    void Log(const LogMessage& message) override;
+    void log(const LogMessage& message) override;
 
   private:
     void flush();

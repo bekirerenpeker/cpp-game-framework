@@ -62,9 +62,17 @@ struct LogMessage
 
 class ILogSink
 {
+  protected:
+    LogLevel m_minLogLevel;
+
   public:
+    ILogSink(LogLevel minLogLevel) : m_minLogLevel(minLogLevel) {}
     virtual ~ILogSink() = default;
-    virtual void Log(const LogMessage& message) = 0;
+
+    virtual void log(const LogMessage& message) = 0;
+
+    virtual LogLevel getMinLogLevel() const { return m_minLogLevel; }
+    virtual void getMinLogLevel(LogLevel minLogLevel) { m_minLogLevel = minLogLevel; }
 };
 
 }   // namespace Engine
