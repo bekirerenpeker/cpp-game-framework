@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/logging/LoggerMacros.hpp"
+
 namespace Engine {
 
 class Vec2;
@@ -95,3 +97,5 @@ class Vec3
 #define VEC3_ONE     Vec3(1, 1, 1)
 
 }   // namespace Engine
+
+DEFINE_TYPE_FORMATTER(Engine::Vec3, "Vec3({}, {}, {})", obj.x, obj.y, obj.z);

@@ -5,7 +5,10 @@ namespace Engine {
 
 File::File(fs::path path, FileType fileType) : IFileEntry(path, fileType)
 {
-    if (FileManager::get().isDirectory(path)) makeInvalid();
+    if (FileManager::get().isDirectory(path)) {
+        LOG_WARNING("the path {} is a folder not a file", path);
+        makeInvalid();
+    }
 }
 
 std::string File::getNameWithoutExt() const { return m_path.stem().string(); }

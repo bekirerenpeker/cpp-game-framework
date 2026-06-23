@@ -1,6 +1,7 @@
 #include "graphics/gl_wrappers/GlTexture.hpp"
 #include "core/file_management/ImageFile.hpp"
 #include "glad/glad.h"
+#include <iostream>
 
 namespace Engine {
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/logging/LoggerMacros.hpp"
+
 namespace Engine {
 
 class Vec2;
@@ -53,3 +55,5 @@ class Vec4
 };
 
 }   // namespace Engine
+
+DEFINE_TYPE_FORMATTER(Engine::Vec4, "Vec4({}, {}, {})", obj.x, obj.y, obj.z, obj.w);

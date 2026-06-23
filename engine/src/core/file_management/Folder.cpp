@@ -5,7 +5,10 @@ namespace Engine {
 
 Folder::Folder(fs::path path, FileType fileType) : IFileEntry(path, fileType)
 {
-    if (!FileManager::get().isDirectory(path)) makeInvalid();
+    if (!FileManager::get().isDirectory(path)) {
+        LOG_WARNING("the path {} is a file not a folder", path);
+        makeInvalid();
+    }
 }
 
 std::vector<std::unique_ptr<IFileEntry>> Folder::getChildren() const

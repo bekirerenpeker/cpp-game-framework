@@ -6,7 +6,10 @@ namespace Engine {
 IFileEntry::IFileEntry(const fs::path& path, FileType fileType)
     : m_path(path), m_fileType(fileType), m_isValid(true)
 {
-    if (!FileManager::get().doesPathExist(path)) makeInvalid();
+    if (!FileManager::get().doesPathExist(path)) {
+        LOG_WARNING("the path {} doesnt exist", path);
+        makeInvalid();
+    }
 }
 
 void IFileEntry::makeInvalid()

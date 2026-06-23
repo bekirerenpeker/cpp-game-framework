@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/logging/LoggerMacros.hpp"
+
 namespace Engine {
 
 class Vec4;
@@ -30,3 +32,5 @@ class Color
 #define COLOR_GREY    COLOR_GRAY
 
 }   // namespace Engine
+
+DEFINE_TYPE_FORMATTER(Engine::Color, "Color({}, {}, {}, {})", obj.r, obj.g, obj.b, obj.a);

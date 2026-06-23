@@ -3,10 +3,12 @@
 namespace Engine {
 
 FileSink::FileSink(const std::filesystem::path& filePath, LogLevel minLogLevel)
-    : ILogSink(minLogLevel), m_logFile("")
+    : ILogSink(minLogLevel), m_logFile(filePath)
 {
-    if (!FileManager::get().doesPathExist(filePath)) FileManager::get().createFile(filePath);
-    m_logFile = TextFile(filePath);
+    if (!FileManager::get().doesPathExist(filePath)) {
+        FileManager::get().createFile(filePath);
+        m_logFile = TextFile(filePath);
+    }
     m_logFile.clear();
 }
 
