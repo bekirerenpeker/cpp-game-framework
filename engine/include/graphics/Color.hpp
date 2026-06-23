@@ -10,7 +10,7 @@ class Color
     float r, g, b, a;
 
   public:
-    Color(float r, float g, float b, float a);
+    Color(float r, float g, float b, float a = 1);
     Color(float c, float a = 1);
     Color();
 

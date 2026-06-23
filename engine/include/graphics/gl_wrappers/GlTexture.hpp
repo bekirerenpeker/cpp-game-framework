@@ -9,7 +9,7 @@
 
 namespace Engine {
 
-class Texture : public IGlObject, public IResource
+class GlTexture : public IGlObject, public IResource
 {
   private:
     int m_width, m_height, m_depth;
@@ -29,15 +29,15 @@ class Texture : public IGlObject, public IResource
     };
 
   public:
-    Texture(
+    GlTexture(
         const fs::path& imgPath, int desiredChannels = 0, FilterMode filterMode = FilterMode::Point,
         WrapMode wrapMode = WrapMode::Repeat
     );
-    Texture(
+    GlTexture(
         const ImageData& imageData, FilterMode filterMode = FilterMode::Point,
         WrapMode wrapMode = WrapMode::Repeat
     );
-    Texture(Color color);
+    GlTexture(Color color);
 
     void bind() const override { bind(0); }
     void bind(int slot) const;

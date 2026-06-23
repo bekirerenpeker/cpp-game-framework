@@ -4,7 +4,7 @@
 
 namespace Engine {
 
-Texture::Texture(
+GlTexture::GlTexture(
     const fs::path& imgPath, int desiredChannels, FilterMode filterMode, WrapMode wrapMode
 )
 {
@@ -14,13 +14,13 @@ Texture::Texture(
     bind();
 }
 
-Texture::Texture(const ImageData& imageData, FilterMode filterMode, WrapMode wrapMode)
+GlTexture::GlTexture(const ImageData& imageData, FilterMode filterMode, WrapMode wrapMode)
 {
     m_GlId = createTexture(imageData, filterMode, wrapMode);
     bind();
 }
 
-Texture::Texture(Color color)
+GlTexture::GlTexture(Color color)
 {
     ImageData imageData(1, 1, 4, new unsigned char[4]);
     imageData.pixels[0] = (unsigned int)(color.r * 255);
@@ -34,7 +34,7 @@ Texture::Texture(Color color)
 }
 
 unsigned int
-Texture::createTexture(const ImageData& imageData, FilterMode filterMode, WrapMode wrapMode)
+GlTexture::createTexture(const ImageData& imageData, FilterMode filterMode, WrapMode wrapMode)
 {
     m_width = imageData.width;
     m_height = imageData.height;
@@ -76,12 +76,12 @@ Texture::createTexture(const ImageData& imageData, FilterMode filterMode, WrapMo
     return m_GlId;
 }
 
-void Texture::bind(int slot) const
+void GlTexture::bind(int slot) const
 {
     glActiveTexture(GL_TEXTURE0 + slot);
     glBindTexture(GL_TEXTURE_2D, m_GlId);
 }
 
-void Texture::unbind() const { glBindTexture(GL_TEXTURE_2D, 0); }
+void GlTexture::unbind() const { glBindTexture(GL_TEXTURE_2D, 0); }
 
 }   // namespace Engine

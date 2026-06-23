@@ -26,6 +26,7 @@ bool ImageFile::loadImage(int desiredChannels)
     if (!m_isValid) return false;
 
     int width, height, channels;
+    stbi_set_flip_vertically_on_load(1);
     unsigned char* rawPixels =
         stbi_load(m_path.string().c_str(), &width, &height, &channels, desiredChannels);
 
@@ -44,6 +45,8 @@ bool ImageFile::loadImage(int desiredChannels)
 bool ImageFile::saveImage(ImageData& imgData)
 {
     if (!m_isValid) return false;
+
+    stbi_flip_vertically_on_write(1);
 
     int success = 0;
     switch (m_imgType) {

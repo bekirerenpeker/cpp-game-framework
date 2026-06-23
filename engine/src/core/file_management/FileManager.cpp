@@ -46,6 +46,8 @@ bool FileManager::createImageFile(const fs::path& path, const ImageData& imgData
     ImageType imgType = getImageTypeFromPath(path);
     int success = 0;
 
+    stbi_flip_vertically_on_write(1);
+
     switch (imgType) {
     case ImageType::Png:
         success = stbi_write_png(

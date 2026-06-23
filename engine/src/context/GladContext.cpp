@@ -30,6 +30,9 @@ void init()
     glDebugMessageCallback(glDebugOutput, nullptr);
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
 
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     initialized = true;
 }
 
@@ -48,7 +51,7 @@ static void glDebugOutput(
 )
 {
     // Ignore non-significant error codes
-    if (id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
+    // if (id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
 
     std::string msg = "[OpenGL Error] " + std::string(message);
 
