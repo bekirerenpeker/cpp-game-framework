@@ -45,6 +45,10 @@ class Renderer : public Singleton<Renderer>
     void setRenderWindowId(IdType id);
     const IdType getRenderWindowId() const;
 
+    void beginPass();
+    void drawToBuffer();
+    void drawToWindow();
+
     void clear();
     void clearColor(Color color);
 

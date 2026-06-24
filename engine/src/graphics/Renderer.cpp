@@ -1,6 +1,9 @@
 #include "graphics/Renderer.hpp"
+#include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/WindowManager.hpp"
+#include "graphics/Color.hpp"
 #include "graphics/IRenderContext.hpp"
+#include "graphics/gl_wrappers/GlFrameBuffer.hpp"
 #include "graphics/gl_wrappers/GlShader.hpp"
 #include "glad/glad.h"
 #include "graphics/gl_wrappers/GlTexture.hpp"
@@ -79,11 +82,51 @@ void Renderer::setRenderWindowId(IdType id)
     if (currContext) currContext->unbindRenderContext();
     newContext->bindRenderContext();
 
+    if (newContext->m_buffers[0] == nullptr) {
+        newContext->m_buffers[0] = new GlFrameBuffer(
+            newContext->getRenderContextWidth(), newContext->getRenderContextHeight()
+        );
+        newContext->m_buffers[1] = new GlFrameBuffer(
+            newContext->getRenderContextWidth(), newContext->getRenderContextHeight()
+        );
+    }
+
     m_renderWindowId = id;
 }
 const IdType Renderer::getRenderWindowId() const { return m_renderWindowId; }
 
-void Renderer::beginScene() { endScene(); }
+void Renderer::beginPass()
+{
+    if (m_renderWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_renderWindowId);
+
+    endScene();
+    context->switchBuffers();
+    context->srcBuffer()->unbind();
+    context->destBuffer()->bind();
+    Renderer::clearColor(Color(0, 0, 0, 0));
+    beginScene();
+}
+void Renderer::drawToBuffer()
+{
+    if (m_renderWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_renderWindowId);
+    addQuad(VEC2_ZERO, VEC2_ONE * 2, COLOR_WHITE, context->srcBuffer()->getTexture());
+}
+void Renderer::drawToWindow()
+{
+    if (m_renderWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_renderWindowId);
+
+    endScene();
+    beginScene();
+    context->destBuffer()->unbind();
+    Renderer::clearColor(Color(0, 0, 0, 0));
+    addQuad(VEC2_ZERO, VEC2_ONE * 2, COLOR_WHITE, context->srcBuffer()->getTexture());
+    endScene();
+}
+
+void Renderer::beginScene() {}
 void Renderer::endScene() { flush(); }
 void Renderer::flush()
 {
