@@ -1,4 +1,5 @@
 #include "graphics/gl_wrappers/GlTexture.hpp"
+#include "context/GladContext.hpp"
 #include "core/file_management/ImageFile.hpp"
 #include "glad/glad.h"
 #include <iostream>
@@ -37,6 +38,8 @@ GlTexture::GlTexture(Color color)
 unsigned int
 GlTexture::createTexture(const ImageData& imageData, FilterMode filterMode, WrapMode wrapMode)
 {
+    GladContext::init();
+
     m_width = imageData.width;
     m_height = imageData.height;
     m_depth = imageData.depth;

@@ -1,4 +1,5 @@
 #include "graphics/gl_wrappers/GlVertexArray.hpp"
+#include "context/GladContext.hpp"
 #include "glad/glad.h"
 #include "graphics/gl_wrappers/GlLayout.hpp"
 
@@ -6,6 +7,7 @@ namespace Engine {
 
 GlVertexArray::GlVertexArray()
 {
+    GladContext::init();
     glGenVertexArrays(1, &m_GlId);
     bind();
 }

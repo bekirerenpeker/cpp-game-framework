@@ -1,7 +1,9 @@
 #include "core/window_management/Window.hpp"
+#include "GLFW/glfw3.h"
 #include "context/GladContext.hpp"
 #include "context/GlfwContext.hpp"
 #include "glad/glad.h"
+#include "graphics/Renderer.hpp"
 
 namespace Engine {
 
@@ -11,21 +13,24 @@ Window::Window(const WindowCreationOptions& opts, GLFWmonitor* monitor, GLFWwind
 
     glfwDefaultWindowHints();
     // clang-format off
-    if (opts.creationHints & WindowFlags::NotResizable) glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    if (opts.creationHints & WindowFlags::NotVisible) glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    if (opts.creationHints & WindowFlags::NotDecorated) glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-    if (opts.creationHints & WindowFlags::NotFocused) glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
-    if (opts.creationHints & WindowFlags::DontAutoIconify) glfwWindowHint(GLFW_AUTO_ICONIFY, GLFW_FALSE);
-    if (opts.creationHints & WindowFlags::AlwaysOnTop) glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
-    if (opts.creationHints & WindowFlags::Maximized) glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
+    if (opts.creationHints & WindowFlags::NotResizable)     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    if (opts.creationHints & WindowFlags::NotVisible)       glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    if (opts.creationHints & WindowFlags::NotDecorated)     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+    if (opts.creationHints & WindowFlags::NotFocused)       glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE);
+    if (opts.creationHints & WindowFlags::DontAutoIconify)  glfwWindowHint(GLFW_AUTO_ICONIFY, GLFW_FALSE);
+    if (opts.creationHints & WindowFlags::AlwaysOnTop)      glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
+    if (opts.creationHints & WindowFlags::Maximized)        glfwWindowHint(GLFW_MAXIMIZED, GLFW_TRUE);
     if (opts.creationHints & WindowFlags::DontCenterCursor) glfwWindowHint(GLFW_CENTER_CURSOR, GLFW_FALSE);
-    if (opts.creationHints & WindowFlags::Transparent) glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
-    if (opts.creationHints & WindowFlags::DontFocusOnShow) glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE);
-    if (opts.creationHints & WindowFlags::ScaleToMonitor) glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
+    if (opts.creationHints & WindowFlags::Transparent)      glfwWindowHint(GLFW_TRANSPARENT_FRAMEBUFFER, GLFW_TRUE);
+    if (opts.creationHints & WindowFlags::DontFocusOnShow)  glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE);
+    if (opts.creationHints & WindowFlags::ScaleToMonitor)   glfwWindowHint(GLFW_SCALE_TO_MONITOR, GLFW_TRUE);
     // clang-format on
 
+    glfwWindowHint(GLFW_RED_BITS, 8);
+    glfwWindowHint(GLFW_GREEN_BITS, 8);
+    glfwWindowHint(GLFW_BLUE_BITS, 8);
+    glfwWindowHint(GLFW_ALPHA_BITS, 8);
     m_glfwHandle = glfwCreateWindow(opts.width, opts.height, opts.title.c_str(), monitor, share);
-    glfwMakeContextCurrent(m_glfwHandle);
 
     glfwSetWindowUserPointer(m_glfwHandle, this);
     glfwSetWindowSizeCallback(m_glfwHandle, Window::sizeUpdateCallback);
@@ -35,11 +40,8 @@ Window::Window(const WindowCreationOptions& opts, GLFWmonitor* monitor, GLFWwind
     glfwGetWindowPos(m_glfwHandle, &m_xPos, &m_yPos);
     m_title = opts.title;
 
-    // the window doesn't appear default so we have to do this
+    // the window doesn't appear by default so we have to do this
     glfwSwapBuffers(m_glfwHandle);
-
-    GladContext::init();
-    glViewport(0, 0, m_width, m_height);
 }
 
 Window::~Window()
@@ -123,7 +125,7 @@ void Window::sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height)
     window->m_width = width;
     window->m_height = height;
 
-    glViewport(0, 0, width, height);
+    if (Renderer::get().getRenderWindowId() == window->getId()) glViewport(0, 0, width, height);
 }
 void Window::positionUpdateCallback(GLFWwindow* glfwHandle, int x, int y)
 {
@@ -132,5 +134,21 @@ void Window::positionUpdateCallback(GLFWwindow* glfwHandle, int x, int y)
     window->m_xPos = x;
     window->m_yPos = y;
 }
+
+void Window::bindRenderContext()
+{
+    glfwMakeContextCurrent(m_glfwHandle);
+
+    GladContext::init();
+    GladContext::applyContextOptions();
+    glViewport(0, 0, m_width, m_height);
+}
+void Window::unbindRenderContext()
+{
+    // swapping buffers here leads to double swap and is misleading
+    // swapBuffers();
+}
+int Window::getRenderContextWidth() { return m_width; }
+int Window::getRenderContextHeight() { return m_height; }
 
 }   // namespace Engine

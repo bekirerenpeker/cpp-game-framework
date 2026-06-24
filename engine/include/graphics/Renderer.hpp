@@ -1,10 +1,10 @@
 #pragma once
 
+#include "IRenderContext.hpp"
 #include "graphics/Color.hpp"
 #include "graphics/gl_wrappers/GlBuffer.hpp"
 #include "graphics/gl_wrappers/GlShader.hpp"
 #include "graphics/gl_wrappers/GlTexture.hpp"
-#include "graphics/gl_wrappers/GlVertexArray.hpp"
 #include "utils/Singleton.hpp"
 #include "utils/math/Vec2.hpp"
 
@@ -26,9 +26,10 @@ class Renderer : public Singleton<Renderer>
     const static int MAX_TEX_COUNT = 32;
     size_t m_maxQuadCount, m_maxVertexCount, m_maxIndexCount;
 
+    IdType m_renderWindowId = INVALID_ID;
+
     GlBuffer m_vertexBuffer, m_indexBuffer;
-    GlVertexArray m_vertexArray;
-    GlShader* m_shader;
+    GlShader* m_shader = nullptr;
 
     GlTexture* m_textures[MAX_TEX_COUNT];
     int m_textureCount;
@@ -40,7 +41,9 @@ class Renderer : public Singleton<Renderer>
     void init(size_t maxQuadCount, GlShader* shader);
 
     void setShader(GlShader* shader);
-    void setTarget();
+
+    void setRenderWindowId(IdType id);
+    const IdType getRenderWindowId() const;
 
     void clear();
     void clearColor(Color color);
@@ -49,6 +52,7 @@ class Renderer : public Singleton<Renderer>
     void endScene();
 
     void addQuad(Vec2 pos, Vec2 size, Color color, GlTexture* texture);
+    void addQuad(Vec2 pos, Vec2 size, float angleRad, Color color, GlTexture* texture);
 
   private:
     void flush();

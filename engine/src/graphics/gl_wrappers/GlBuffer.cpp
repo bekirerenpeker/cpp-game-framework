@@ -1,11 +1,12 @@
 #include "graphics/gl_wrappers/GlBuffer.hpp"
+#include "context/GladContext.hpp"
 #include "glad/glad.h"
-#include "utils/TypeAliases.hpp"
 
 namespace Engine {
 
 GlBuffer::GlBuffer(GlBufferType type) : m_type(type)
 {
+    GladContext::init();
     glGenBuffers(1, &m_GlId);
     bind();
 }
@@ -18,6 +19,11 @@ void GlBuffer::setData(long size, const void* data, GlBufferUsage usage)
 {
     bind();
     glBufferData(glBufferTypeVal(m_type), size, data, glBufferUsageVal(usage));
+}
+void GlBuffer::setSubData(long size, const void* data)
+{
+    bind();
+    glBufferSubData(glBufferTypeVal(m_type), 0, size, data);
 }
 
 unsigned int GlBuffer::glBufferTypeVal(GlBufferType type) const

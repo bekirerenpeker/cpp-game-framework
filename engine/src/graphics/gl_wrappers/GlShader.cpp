@@ -1,4 +1,5 @@
 #include "graphics/gl_wrappers/GlShader.hpp"
+#include "context/GladContext.hpp"
 #include "core/file_management/TextFile.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "glad/glad.h"
@@ -7,6 +8,7 @@ namespace Engine {
 
 GlShader::GlShader(const fs::path& sourceFileDir)
 {
+    GladContext::init();
     ShaderSource source = parseSourceFile(sourceFileDir);
     m_GlId = createProgram(source);
     bind();

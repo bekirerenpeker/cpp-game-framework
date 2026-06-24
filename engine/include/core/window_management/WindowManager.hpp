@@ -11,7 +11,8 @@ class WindowManager : public Singleton<WindowManager>
     friend class Singleton<WindowManager>;
 
   private:
-    IdIndexedVector<Window> m_windows;
+    Window m_contextWindow;
+    IdIndexedVector<Window*> m_windows;
     IdType m_mainWindowId = INVALID_ID;
     size_t m_maxWindowCount = 100;
 
@@ -19,7 +20,7 @@ class WindowManager : public Singleton<WindowManager>
     IdType createWindow(WindowCreationOptions opts, bool setAsMain = false);
     void closeWindow(IdType windowId);
 
-    std::vector<std::pair<IdType, Window>>& getAllWindows();
+    std::vector<std::pair<IdType, Window*>>& getAllWindows();
     Window* getWindow(IdType windowId);
 
     void setMainWindowId(IdType windowId);
@@ -32,8 +33,8 @@ class WindowManager : public Singleton<WindowManager>
     void setMaxWindowCount(size_t maxWinCount);
 
   private:
-    WindowManager() = default;
-    ~WindowManager() = default;
+    WindowManager();
+    ~WindowManager();
 };
 
 }   // namespace Engine

@@ -1,7 +1,11 @@
 #include "graphics/Renderer.hpp"
+#include "core/window_management/WindowManager.hpp"
+#include "graphics/IRenderContext.hpp"
 #include "graphics/gl_wrappers/GlShader.hpp"
 #include "glad/glad.h"
 #include "graphics/gl_wrappers/GlTexture.hpp"
+#include "utils/TypeAliases.hpp"
+#include "utils/math/Vec2.hpp"
 
 namespace Engine {
 
@@ -17,19 +21,7 @@ void Renderer::init(size_t maxQuadCount, GlShader* shader)
     m_maxQuadCount = maxQuadCount;
     m_maxVertexCount = maxQuadCount * 4;
     m_maxIndexCount = maxQuadCount * 6;
-
     m_shader = shader;
-
-    m_vertexArray.bind();
-    m_vertexBuffer.setData(
-        m_maxVertexCount * sizeof(VertexData), nullptr, GlBufferUsage::DynamicDraw
-    );
-    m_vertexArray.setLayout({
-        {GlDataType::Float, 2},
-        {GlDataType::Float, 2},
-        {GlDataType::Float, 4},
-        {  GlDataType::Int, 1},
-    });
 
     unsigned int* indices = new unsigned int[m_maxIndexCount];
     size_t offset = 0;
@@ -50,8 +42,11 @@ void Renderer::init(size_t maxQuadCount, GlShader* shader)
     delete[] indices;
 
     m_vertices = new VertexData[m_maxVertexCount];
-    m_quadCount = 0;
+    m_vertexBuffer.setData(
+        m_maxVertexCount * sizeof(VertexData), nullptr, GlBufferUsage::DynamicDraw
+    );
 
+    m_quadCount = 0;
     m_textureCount = 0;
 }
 
@@ -64,17 +59,53 @@ void Renderer::clearColor(Color color)
 
 void Renderer::setShader(GlShader* shader)
 {
+    endScene();
     if (shader) m_shader = shader;
 }
-void Renderer::setTarget()
+void Renderer::setRenderWindowId(IdType id)
 {
-    // set target to either a window or a frame buffer
-}
+    endScene();
 
-void Renderer::beginScene() { m_quadCount = 0; }
+    IRenderContext* currContext = WindowManager::get().getWindow(m_renderWindowId);
+    IRenderContext* newContext = WindowManager::get().getWindow(id);
+
+    if (id == INVALID_ID) {
+        if (currContext) currContext->unbindRenderContext();
+        m_renderWindowId = INVALID_ID;
+        return;
+    }
+
+    if (!newContext || newContext == currContext) return;
+    if (currContext) currContext->unbindRenderContext();
+    newContext->bindRenderContext();
+
+    m_renderWindowId = id;
+}
+const IdType Renderer::getRenderWindowId() const { return m_renderWindowId; }
+
+void Renderer::beginScene() { endScene(); }
 void Renderer::endScene() { flush(); }
 void Renderer::flush()
 {
+    // if called before init
+    if (m_renderWindowId == INVALID_ID || !m_shader || !m_vertices) {
+        m_quadCount = 0;
+        m_textureCount = 0;
+        return;
+    }
+
+    IRenderContext* renderContext = WindowManager::get().getWindow(m_renderWindowId);
+    if (!renderContext->m_vertexArray) {
+        renderContext->m_vertexArray = new GlVertexArray();
+        m_vertexBuffer.bind();
+        renderContext->m_vertexArray->setLayout({
+            {GlDataType::Float, 2},
+            {GlDataType::Float, 2},
+            {GlDataType::Float, 4},
+            {  GlDataType::Int, 1},
+        });
+    }
+
     int texIndices[MAX_TEX_COUNT] = {0};
     for (int i = 0; i < m_textureCount; i++) {
         m_textures[i]->bind(i);
@@ -85,11 +116,9 @@ void Renderer::flush()
     m_shader->setUniform<Mat4>("uMVP", Mat4());
     m_shader->setUniformArr("uTextures", m_textureCount, texIndices);
 
-    m_vertexArray.bind();
+    renderContext->m_vertexArray->bind();
     m_indexBuffer.bind();
-    m_vertexBuffer.setData(
-        m_quadCount * 4 * sizeof(VertexData), m_vertices, GlBufferUsage::DynamicDraw
-    );
+    m_vertexBuffer.setSubData(m_quadCount * 4 * sizeof(VertexData), m_vertices);
     glDrawElements(GL_TRIANGLES, m_quadCount * 6, GL_UNSIGNED_INT, 0);
 
     m_quadCount = 0;
@@ -118,6 +147,34 @@ void Renderer::addQuad(Vec2 pos, Vec2 size, Color color, GlTexture* texture)
     curr[1] = {pos + Vec2(+1, -1) * size / 2.f, Vec2(1, 0), color, texIndex};
     curr[2] = {pos + Vec2(+1, +1) * size / 2.f, Vec2(1, 1), color, texIndex};
     curr[3] = {pos + Vec2(-1, +1) * size / 2.f, Vec2(0, 1), color, texIndex};
+
+    m_quadCount++;
+}
+void Renderer::addQuad(Vec2 pos, Vec2 size, float angleRad, Color color, GlTexture* texture)
+{
+    // remove this angle == 0 check if it leads to performance issues
+    if (angleRad == 0) return addQuad(pos, size, color, texture);
+    if (m_quadCount >= m_maxQuadCount) flush();
+
+    int texIndex = getTextureIndex(texture);
+    VertexData* curr = m_vertices + m_quadCount * 4;
+
+    curr[0] = {
+        pos + Vec2(-1, -1).rotatedAround(VEC2_ZERO, angleRad) * size / 2.f, Vec2(0, 0), color,
+        texIndex
+    };
+    curr[1] = {
+        pos + Vec2(+1, -1).rotatedAround(VEC2_ZERO, angleRad) * size / 2.f, Vec2(1, 0), color,
+        texIndex
+    };
+    curr[2] = {
+        pos + Vec2(+1, +1).rotatedAround(VEC2_ZERO, angleRad) * size / 2.f, Vec2(1, 1), color,
+        texIndex
+    };
+    curr[3] = {
+        pos + Vec2(-1, +1).rotatedAround(VEC2_ZERO, angleRad) * size / 2.f, Vec2(0, 1), color,
+        texIndex
+    };
 
     m_quadCount++;
 }

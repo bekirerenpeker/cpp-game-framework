@@ -29,6 +29,7 @@ class GlBuffer : public IGlObject
     void unbind() const override;
 
     void setData(long size, const void* data, GlBufferUsage usage);
+    void setSubData(long size, const void* data);
 
   private:
     unsigned int glBufferTypeVal(GlBufferType type) const;

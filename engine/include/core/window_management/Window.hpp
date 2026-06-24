@@ -2,6 +2,7 @@
 
 #include "utils/math/Vec2.hpp"
 #include "utils/IdIndexedVector.hpp"
+#include "graphics/IRenderContext.hpp"
 #include <GLFW/glfw3.h>
 #include <cstdint>
 #include <string>
@@ -13,7 +14,7 @@ enum Type : uint16_t
 {
     None = 0,
     NotResizable = 1 << 0,       // disbale resizing of window
-    NotVisible = 1 << 1,         // make the window unvisible
+    NotVisible = 1 << 1,         // make the window invisible
     NotDecorated = 1 << 2,       // remove the border and the topbar
     NotFocused = 1 << 3,         // dont focus on the window upon creation
     DontAutoIconify = 1 << 4,    // full screen window will not iconify
@@ -33,7 +34,7 @@ struct WindowCreationOptions
     uint16_t creationHints = WindowFlags::None;
 };
 
-class Window : public IHasId
+class Window : public IRenderContext, public IHasId
 {
   private:
     GLFWwindow* m_glfwHandle = nullptr;
@@ -89,6 +90,13 @@ class Window : public IHasId
     int getXPos() const { return m_xPos; }
     int getYPos() const { return m_yPos; }
     std::string getTitle() const { return m_title; }
+
+  protected:
+    // render context overrides
+    void bindRenderContext() override;
+    void unbindRenderContext() override;
+    int getRenderContextWidth() override;
+    int getRenderContextHeight() override;
 
   private:
     static void sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height);

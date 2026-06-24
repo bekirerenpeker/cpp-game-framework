@@ -67,7 +67,12 @@ class IdIndexedVector
     {
         IdType id = m_nextId++;
         m_idToIndex[id] = m_data.size();
-        m_data.emplace_back(id, std::forward<Args>(args)...);
+
+        // safe against objects that have deleted copy constructors
+        m_data.emplace_back(
+            std::piecewise_construct, std::forward_as_tuple(id),
+            std::forward_as_tuple(std::forward<Args>(args)...)
+        );
 
         if constexpr (inheritsId) {
             if constexpr (isPointer) {

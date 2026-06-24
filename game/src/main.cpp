@@ -1,5 +1,4 @@
 #include "EngineInclude.hpp"
-#include "glad/glad.h"
 
 using namespace Engine;
 
@@ -7,26 +6,39 @@ int main()
 {
     Logger::get().addSink<FileSink>("game/output/log.txt");
 
-    IdType windowId = WindowManager::get().createWindow({800, 800, "Graphics Test Window"});
-    Window* window = WindowManager::get().getWindow(windowId);
+    WindowManager::get().createWindow({600, 600, "Graphics Test Window 1"});
+    WindowManager::get().createWindow({600, 600, "Graphics Test Window 2"});
+    WindowManager::get().createWindow({600, 600, "Graphics Test Window 3"});
+    WindowManager::get().createWindow({600, 600, "Graphics Test Window 4"});
 
     GlTexture tex("game/assets/images/mario.png");
     GlShader shader("game/assets/shaders/QuadShader.glsl");
     Renderer::get().init(10000, &shader);
 
-    while (window->isOpen()) {
-        Input::get().update(windowId);
+    std::vector<IdType> windowsToClose;
+    while (WindowManager::get().anyWindowOpen()) {
+        windowsToClose.clear();
         Time::get().update();
 
-        if (Input::get().keyPressed(KeyCode::Q)) break;
+        for (auto& [windowId, window] : WindowManager::get().getAllWindows()) {
+            Input::get().update(windowId);
 
-        Renderer::get().clearColor(Color(0.5f, 0.5f, 1.f, 1.f));
-        Renderer::get().beginScene();
-        Renderer::get().addQuad(VEC2_ZERO, VEC2_ONE * 0.7f, Color(1), &tex);
-        Renderer::get().endScene();
+            if (Input::get().keyPressed(KeyCode::Q) || !window->isOpen())
+                windowsToClose.push_back(windowId);
 
-        window->swapBuffers();
+            Renderer::get().setRenderWindowId(windowId);
+            Renderer::get().beginScene();
+            Renderer::get().clearColor(Color(0.5f, 0.5f, 1.f, 1.f));
+            Renderer::get().addQuad(
+                VEC2_ZERO, VEC2_ONE * 0.7f, Time::get().currTime() + windowId * PI2, Color(1), &tex
+            );
+            Renderer::get().endScene();
+
+            window->swapBuffers();
+        }
+
         GlfwContext::pollEvents();
+        for (const auto& windowId : windowsToClose) WindowManager::get().closeWindow(windowId);
     }
 
     return 0;

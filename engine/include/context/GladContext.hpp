@@ -6,6 +6,7 @@ namespace GladContext {
 
 void init();
 void quit();
+void applyContextOptions();
 
 }   // namespace GladContext
 

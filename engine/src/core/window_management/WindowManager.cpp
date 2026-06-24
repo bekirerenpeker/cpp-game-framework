@@ -1,7 +1,21 @@
 #include "core/window_management/WindowManager.hpp"
+#include "GLFW/glfw3.h"
+#include "context/GladContext.hpp"
 #include "core/logging/LoggerMacros.hpp"
+#include "core/window_management/Window.hpp"
+#include "graphics/Renderer.hpp"
 
 namespace Engine {
+
+WindowManager::WindowManager() : m_contextWindow({1, 1, "Context Window", WindowFlags::NotVisible})
+{
+    glfwMakeContextCurrent(m_contextWindow.getGlfwHandle());
+    GladContext::init();
+}
+WindowManager::~WindowManager()
+{
+    for (auto& [id, window] : m_windows.getAll()) delete window;
+}
 
 IdType WindowManager::createWindow(WindowCreationOptions opts, bool setAsMain)
 {
@@ -12,20 +26,36 @@ IdType WindowManager::createWindow(WindowCreationOptions opts, bool setAsMain)
         );
         return INVALID_ID;
     }
-    IdType id = m_windows.add(opts);
-    if (setAsMain || m_mainWindowId == INVALID_ID) m_mainWindowId = id;
+
+    IdType id = m_windows.add(new Window(opts, nullptr, m_contextWindow.getGlfwHandle()));
+    if (setAsMain || m_mainWindowId == INVALID_ID) {
+        m_mainWindowId = id;
+        Renderer::get().setRenderWindowId(m_mainWindowId);
+    }
+
     return id;
 }
 
 void WindowManager::closeWindow(IdType windowId)
 {
+    // change the current context to the deleted window so every opengl id
+    // that was created in this context points to the right object
+    Window* win = m_windows.get(windowId);
+    Renderer::get().setRenderWindowId(INVALID_ID);
+    glfwMakeContextCurrent(win->getGlfwHandle());
+
     m_windows.remove(windowId);
     if (windowId == m_mainWindowId) {
         m_mainWindowId = m_windows.isEmpty() ? INVALID_ID : m_windows.getAll()[0].first;
     }
+
+    delete win;
+
+    // set the context to the null window to avoid errors
+    glfwMakeContextCurrent(m_contextWindow.getGlfwHandle());
 }
 
-std::vector<std::pair<IdType, Window>>& WindowManager::getAllWindows()
+std::vector<std::pair<IdType, Window*>>& WindowManager::getAllWindows()
 {
     return m_windows.getAll();
 }
