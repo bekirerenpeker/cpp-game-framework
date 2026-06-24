@@ -22,6 +22,12 @@ GlTexture::GlTexture(const ImageData& imageData, FilterMode filterMode, WrapMode
     bind();
 }
 
+GlTexture::GlTexture(unsigned int glId, int width, int height, int depth)
+    : m_width(width), m_height(height), m_depth(depth)
+{
+    m_GlId = glId;
+}
+
 GlTexture::GlTexture(Color color)
 {
     ImageData imageData(1, 1, 4, new unsigned char[4]);

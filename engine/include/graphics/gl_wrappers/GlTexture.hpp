@@ -37,6 +37,7 @@ class GlTexture : public IGlObject, public IResource
         const ImageData& imageData, FilterMode filterMode = FilterMode::Point,
         WrapMode wrapMode = WrapMode::Repeat
     );
+    GlTexture(unsigned int glId, int width, int height, int depth);
     GlTexture(Color color);
 
     void bind() const override { bind(0); }
