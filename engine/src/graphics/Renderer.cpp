@@ -1,6 +1,9 @@
 #include "graphics/Renderer.hpp"
+#include "components/TransformComponent.hpp"
+#include "components/CameraComponent.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/WindowManager.hpp"
+#include "ecs/registry/View.hpp"
 #include "graphics/Color.hpp"
 #include "graphics/IRenderContext.hpp"
 #include "graphics/gl_wrappers/GlFrameBuffer.hpp"
@@ -65,6 +68,31 @@ void Renderer::setShader(GlShader* shader)
     endScene();
     if (shader) m_shader = shader;
 }
+void Renderer::setViewProjMat(Registry& registry)
+{
+    m_viewProjMat = Mat4();
+
+    Window* window = WindowManager::get().getWindow(m_renderWindowId);
+    if (!window) return;
+    float aspectRatio = window->getAspectRatio();
+
+    View<TransformComponent, CameraComponent> view(registry);
+    for (const auto& [entity, transform, cam] : view) {
+        if (cam.windowId != m_renderWindowId || !cam.isPrimary) continue;
+
+        float left = -cam.orthoSize * aspectRatio * 0.5f;
+        float right = cam.orthoSize * aspectRatio * 0.5f;
+        float bottom = -cam.orthoSize * 0.5f;
+        float top = cam.orthoSize * 0.5f;
+
+        Mat4 viewMat = Mat4::view(transform.position, transform.rotation);
+        Mat4 projMat = Mat4::ortho(left, right, bottom, top, cam.nearClip, cam.farClip);
+        LOG_INFO("pos: {}, aspect: {}, size: {}", transform.position, aspectRatio, cam.orthoSize);
+
+        m_viewProjMat = projMat * viewMat;
+        break;
+    }
+}
 void Renderer::setRenderWindowId(IdType id)
 {
     endScene();
@@ -82,11 +110,11 @@ void Renderer::setRenderWindowId(IdType id)
     if (currContext) currContext->unbindRenderContext();
     newContext->bindRenderContext();
 
-    if (newContext->m_buffers[0] == nullptr) {
-        newContext->m_buffers[0] = new GlFrameBuffer(
+    if (newContext->m_contextBuffers[0] == nullptr) {
+        newContext->m_contextBuffers[0] = new GlFrameBuffer(
             newContext->getRenderContextWidth(), newContext->getRenderContextHeight()
         );
-        newContext->m_buffers[1] = new GlFrameBuffer(
+        newContext->m_contextBuffers[1] = new GlFrameBuffer(
             newContext->getRenderContextWidth(), newContext->getRenderContextHeight()
         );
     }
@@ -111,19 +139,29 @@ void Renderer::drawToBuffer()
 {
     if (m_renderWindowId == INVALID_ID) return;
     IRenderContext* context = WindowManager::get().getWindow(m_renderWindowId);
+
+    Mat4 viewProjMat = m_viewProjMat;
+    m_viewProjMat.identity();
+
     addQuad(VEC2_ZERO, VEC2_ONE * 2, COLOR_WHITE, context->srcBuffer()->getTexture());
+    endScene();
+
+    m_viewProjMat = viewProjMat;
 }
 void Renderer::drawToWindow()
 {
     if (m_renderWindowId == INVALID_ID) return;
     IRenderContext* context = WindowManager::get().getWindow(m_renderWindowId);
 
-    endScene();
-    beginScene();
+    Mat4 viewProjMat = m_viewProjMat;
+    m_viewProjMat.identity();
+
     context->destBuffer()->unbind();
     Renderer::clearColor(Color(0, 0, 0, 0));
     addQuad(VEC2_ZERO, VEC2_ONE * 2, COLOR_WHITE, context->srcBuffer()->getTexture());
     endScene();
+
+    m_viewProjMat = viewProjMat;
 }
 
 void Renderer::beginScene() {}
@@ -156,7 +194,7 @@ void Renderer::flush()
     }
 
     m_shader->bind();
-    m_shader->setUniform<Mat4>("uMVP", Mat4());
+    m_shader->setUniform<Mat4>("uMVP", m_viewProjMat);
     m_shader->setUniformArr("uTextures", m_textureCount, texIndices);
 
     renderContext->m_vertexArray->bind();

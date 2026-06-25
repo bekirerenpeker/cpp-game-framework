@@ -69,5 +69,5 @@ void main()
     case 31: texColor = texture(uTextures[31], vTexCoords); break;
     }     
 
-    oColor = vColor * texColor * vec4(1,1,0,0.8);
+    oColor = vColor * texColor * vec4(1,1,1,0.9);
 }

@@ -6,3 +6,4 @@
 #include "audio/AudioInclude.hpp"
 #include "ecs/EcsInclude.hpp"
 #include "graphics/GraphicsInclude.hpp"
+#include "components/ComponentsInclude.hpp"

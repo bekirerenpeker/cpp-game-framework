@@ -17,12 +17,12 @@ Mat4& Mat4::identity()
     return *this;
 }
 
-Mat4& Mat4::translate(Vec3 offset)
+Mat4& Mat4::translate(const Vec3& offset)
 {
     *this *= translateMat(offset);
     return *this;
 }
-Mat4& Mat4::scale(Vec3 scale)
+Mat4& Mat4::scale(const Vec3& scale)
 {
     *this *= scaleMat(scale);
     return *this;
@@ -33,7 +33,7 @@ Mat4& Mat4::rotate(float radians)
     return *this;
 }
 
-Mat4 Mat4::translateMat(Vec3 offset)
+Mat4 Mat4::translateMat(const Vec3& offset)
 {
     Mat4 mat;
     mat[3][0] += offset.x;
@@ -41,7 +41,7 @@ Mat4 Mat4::translateMat(Vec3 offset)
     mat[3][2] += offset.z;
     return mat;
 }
-Mat4 Mat4::scaleMat(Vec3 scale)
+Mat4 Mat4::scaleMat(const Vec3& scale)
 {
     Mat4 mat;
     mat[0][0] *= scale.x;
@@ -57,6 +57,7 @@ Mat4 Mat4::rotateMat(float radians)
     mat[1][1] = Math::cos(radians);
     return mat;
 }
+
 Mat4 Mat4::ortho(float left, float right, float bottom, float top, float zNear, float zFar)
 {
     Mat4 mat;
@@ -67,6 +68,27 @@ Mat4 Mat4::ortho(float left, float right, float bottom, float top, float zNear, 
     mat[3][1] = -(top + bottom) / (top - bottom);
     mat[3][2] = -(zFar + zNear) / (zFar - zNear);
     return mat;
+}
+Mat4 Mat4::view(const Vec3& position, float rotation)
+{
+    Mat4 rot = rotateMat(rotation);
+    Mat4 trans = translateMat(position);
+
+    // View Matrix is the inverse: (Rotation^T * Translation^-1)
+    // Because matrices are column-major (vals[col][row]) we can optimize this without full inversion:
+
+    Mat4 view;
+    // Transpose the rotation (inverse of ortho-matrix)
+    view[0][0] = rot[0][0];
+    view[1][0] = rot[0][1];
+    view[0][1] = rot[1][0];
+    view[1][1] = rot[1][1];
+
+    // Inverse the translation part
+    view[3][0] = -(view[0][0] * position.x + view[1][0] * position.y);
+    view[3][1] = -(view[0][1] * position.x + view[1][1] * position.y);
+
+    return view;
 }
 
 Mat4 Mat4::operator*(float other) const

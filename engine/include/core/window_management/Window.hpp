@@ -86,7 +86,7 @@ class Window : public IRenderContext, public IHasId
     int getWidth() const { return m_width; }
     int getHeight() const { return m_height; }
     Vec2 getSize() const { return Vec2(m_width, m_height); }
-    float getAspectRatio() const { return m_height == 0 ? 0.f : m_width / (float)m_height; }
+    float getAspectRatio() const { return m_height > 0 ? m_width / (float)m_height : 0.f; }
     int getXPos() const { return m_xPos; }
     int getYPos() const { return m_yPos; }
     std::string getTitle() const { return m_title; }
@@ -97,6 +97,7 @@ class Window : public IRenderContext, public IHasId
     void unbindRenderContext() override;
     int getRenderContextWidth() override;
     int getRenderContextHeight() override;
+    float getRenderContextAspectRatio() override;
 
   private:
     static void sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height);

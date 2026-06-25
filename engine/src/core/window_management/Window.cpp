@@ -4,6 +4,7 @@
 #include "context/GlfwContext.hpp"
 #include "glad/glad.h"
 #include "graphics/Renderer.hpp"
+#include "graphics/gl_wrappers/GlFrameBuffer.hpp"
 
 namespace Engine {
 
@@ -125,6 +126,13 @@ void Window::sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height)
     window->m_width = width;
     window->m_height = height;
 
+    // delete the old frame buffers and replace with the newly scaled ones
+    if (window->m_contextBuffers[0] && window->m_contextBuffers[1]) {
+        delete window->m_contextBuffers[0], delete window->m_contextBuffers[1];
+        window->m_contextBuffers[0] = new GlFrameBuffer(width, height);
+        window->m_contextBuffers[1] = new GlFrameBuffer(width, height);
+    }
+
     if (Renderer::get().getRenderWindowId() == window->getId()) glViewport(0, 0, width, height);
 }
 void Window::positionUpdateCallback(GLFWwindow* glfwHandle, int x, int y)
@@ -150,5 +158,6 @@ void Window::unbindRenderContext()
 }
 int Window::getRenderContextWidth() { return m_width; }
 int Window::getRenderContextHeight() { return m_height; }
+float Window::getRenderContextAspectRatio() { return getAspectRatio(); }
 
 }   // namespace Engine

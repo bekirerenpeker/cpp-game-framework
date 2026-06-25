@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IRenderContext.hpp"
+#include "ecs/registry/Registry.hpp"
 #include "graphics/Color.hpp"
 #include "graphics/gl_wrappers/GlBuffer.hpp"
 #include "graphics/gl_wrappers/GlShader.hpp"
@@ -27,6 +28,7 @@ class Renderer : public Singleton<Renderer>
     size_t m_maxQuadCount, m_maxVertexCount, m_maxIndexCount;
 
     IdType m_renderWindowId = INVALID_ID;
+    Mat4 m_viewProjMat = Mat4();
 
     GlBuffer m_vertexBuffer, m_indexBuffer;
     GlShader* m_shader = nullptr;
@@ -41,6 +43,7 @@ class Renderer : public Singleton<Renderer>
     void init(size_t maxQuadCount, GlShader* shader);
 
     void setShader(GlShader* shader);
+    void setViewProjMat(Registry& registry);
 
     void setRenderWindowId(IdType id);
     const IdType getRenderWindowId() const;
