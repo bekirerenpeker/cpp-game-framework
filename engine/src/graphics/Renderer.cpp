@@ -106,7 +106,7 @@ void Renderer::setRenderWindowId(IdType id)
         return;
     }
 
-    if (!newContext || newContext == currContext) return;
+    if (!newContext || (newContext == currContext && !currContext->m_isRenderContextDirty)) return;
     if (currContext) currContext->unbindRenderContext();
     newContext->bindRenderContext();
 
@@ -119,6 +119,8 @@ void Renderer::setRenderWindowId(IdType id)
         );
     }
 
+    glViewport(0, 0, newContext->getRenderContextWidth(), newContext->getRenderContextHeight());
+    newContext->m_isRenderContextDirty = false;
     m_renderWindowId = id;
 }
 const IdType Renderer::getRenderWindowId() const { return m_renderWindowId; }

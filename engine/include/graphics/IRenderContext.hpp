@@ -12,6 +12,7 @@ class IRenderContext
     friend class Renderer;
 
   protected:
+    bool m_isRenderContextDirty = false;
     GlVertexArray* m_vertexArray = nullptr;
     GlFrameBuffer* m_contextBuffers[2] = {nullptr, nullptr};
     int m_currWriteIndex = 0;

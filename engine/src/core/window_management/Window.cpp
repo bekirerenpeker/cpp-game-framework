@@ -133,7 +133,7 @@ void Window::sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height)
         window->m_contextBuffers[1] = new GlFrameBuffer(width, height);
     }
 
-    if (Renderer::get().getRenderWindowId() == window->getId()) glViewport(0, 0, width, height);
+    window->m_isRenderContextDirty = true;
 }
 void Window::positionUpdateCallback(GLFWwindow* glfwHandle, int x, int y)
 {
