@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EngineInclude.hpp"
+#include "test_funcs.hpp"
 
 #include <chrono>
 #include <cstdint>
@@ -17,7 +18,7 @@ struct PlayerSaveData
     float position[3];
 };
 
-inline int file_management_test()
+int file_management_test()
 {
     auto measure = [](const char* name, auto&& func) {
         auto start = std::chrono::high_resolution_clock::now();

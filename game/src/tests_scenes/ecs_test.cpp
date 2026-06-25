@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EngineInclude.hpp"
+#include "test_funcs.hpp"
 #include <chrono>
 
 using namespace Engine;
@@ -40,7 +41,7 @@ struct SignalTracker
     void onDestroyed(Entity e) { destroyed++; }
 };
 
-inline int ecs_test()
+int ecs_test()
 {
     // Helper lambda to measure block execution time accurately using std::chrono
     auto measure = [](const char* name, auto&& func) {

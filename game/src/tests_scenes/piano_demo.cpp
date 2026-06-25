@@ -1,4 +1,6 @@
 #include "EngineInclude.hpp"
+#include "test_funcs.hpp"
+
 using namespace Engine;
 
 int piano_demo()

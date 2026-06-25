@@ -3,7 +3,6 @@
 #include "context/GladContext.hpp"
 #include "context/GlfwContext.hpp"
 #include "glad/glad.h"
-#include "graphics/Renderer.hpp"
 #include "graphics/gl_wrappers/GlFrameBuffer.hpp"
 
 namespace Engine {

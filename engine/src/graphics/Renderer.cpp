@@ -65,7 +65,6 @@ void Renderer::clearColor(Color color)
 
 void Renderer::setShader(GlShader* shader)
 {
-    endScene();
     if (shader) m_shader = shader;
 }
 void Renderer::setViewProjMat(Registry& registry)
@@ -87,7 +86,6 @@ void Renderer::setViewProjMat(Registry& registry)
 
         Mat4 viewMat = Mat4::view(transform.position, transform.rotation);
         Mat4 projMat = Mat4::ortho(left, right, bottom, top, cam.nearClip, cam.farClip);
-        LOG_INFO("pos: {}, aspect: {}, size: {}", transform.position, aspectRatio, cam.orthoSize);
 
         m_viewProjMat = projMat * viewMat;
         break;
@@ -95,8 +93,6 @@ void Renderer::setViewProjMat(Registry& registry)
 }
 void Renderer::setRenderWindowId(IdType id)
 {
-    endScene();
-
     IRenderContext* currContext = WindowManager::get().getWindow(m_renderWindowId);
     IRenderContext* newContext = WindowManager::get().getWindow(id);
 
@@ -170,8 +166,8 @@ void Renderer::beginScene() {}
 void Renderer::endScene() { flush(); }
 void Renderer::flush()
 {
-    // if called before init
-    if (m_renderWindowId == INVALID_ID || !m_shader || !m_vertices) {
+    // if called before init or empty render
+    if (m_renderWindowId == INVALID_ID || !m_shader || !m_vertices || m_quadCount == 0) {
         m_quadCount = 0;
         m_textureCount = 0;
         return;
