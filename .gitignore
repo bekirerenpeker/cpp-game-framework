@@ -60,3 +60,5 @@ Thumbs.db
 # Outputted files by the game
 game/output/
 compile_commands.json
+
+CLAUDE.md
