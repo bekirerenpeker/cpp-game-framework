@@ -21,6 +21,7 @@ class ImageFile : public File
     size_t getBufferSize() const;
     byte* getPixels() const;
     const ImageData& getImageData() const;
+    ImageData& getImageData();
 
     bool loadImage(int desiredChannels = 0);
     bool saveImage(ImageData& imgData);

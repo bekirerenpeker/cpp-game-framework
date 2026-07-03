@@ -20,6 +20,7 @@ size_t ImageFile::getDepth() const { return m_imgData.depth; }
 size_t ImageFile::getBufferSize() const { return getWidth() * getHeight() * getDepth(); }
 byte* ImageFile::getPixels() const { return m_imgData.pixels; }
 const ImageData& ImageFile::getImageData() const { return m_imgData; }
+ImageData& ImageFile::getImageData() { return m_imgData; }
 
 bool ImageFile::loadImage(int desiredChannels)
 {
