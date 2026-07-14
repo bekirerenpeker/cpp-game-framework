@@ -48,6 +48,8 @@ class Renderer : public Singleton<Renderer>
     void setRenderWindowId(IdType id);
     const IdType getRenderWindowId() const;
 
+    const Mat4& getViewProjMat() const { return m_viewProjMat; }
+
     void beginPass();
     void drawToBuffer();
     void drawToWindow();

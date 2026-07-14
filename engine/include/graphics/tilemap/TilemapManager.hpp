@@ -1,9 +1,11 @@
 #pragma once
 
-#include "utils/Singleton.hpp"
 #include "components/TilemapComponent.hpp"
+#include "utils/Singleton.hpp"
 
 namespace Engine {
+
+class Tileset;
 
 class TilemapManager : public Singleton<TilemapManager>
 {
@@ -15,6 +17,8 @@ class TilemapManager : public Singleton<TilemapManager>
     void clear(TilemapComponent& tilemap);
 
     void invalidateChunk(TilemapComponent& tilemap, int cx, int cy);
+
+    void setTileset(TilemapComponent& tilemap, Tileset* tileset);
 
   private:
     TilemapManager() = default;

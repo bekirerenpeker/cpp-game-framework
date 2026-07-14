@@ -40,6 +40,9 @@ class GlTexture : public IGlObject, public IResource
     GlTexture(unsigned int glId, int width, int height, int depth);
     GlTexture(Color color);
 
+    GlTexture(GlTexture&&) = default;
+    GlTexture& operator=(GlTexture&&) = default;
+
     void bind() const override { bind(0); }
     void bind(int slot) const;
     void unbind() const override;

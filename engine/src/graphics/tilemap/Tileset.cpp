@@ -9,9 +9,22 @@ Tileset::Tileset(const fs::path& tilesetImage)
 {
 }
 
+const Tileset::TileDefinition* Tileset::getTile(uint16_t id) const
+{
+    if (id == 0 || id >= m_tilesById.size()) return nullptr;
+    return &m_tilesById[id];
+}
+
+uint16_t Tileset::getTileId(const std::string& name) const
+{
+    auto it = m_tiles.find(name);
+    return it == m_tiles.end() ? 0 : it->second.id;
+}
+
 void Tileset::createTile(const std::string& name, int pixelX, int pixelY, int pixelW, int pixelH)
 {
     TileDefinition def;
+    def.id = static_cast<uint16_t>(m_tilesById.size());
     def.type = TileType::Normal;
     def.defaultFlags = 0;
 
@@ -21,6 +34,7 @@ void Tileset::createTile(const std::string& name, int pixelX, int pixelY, int pi
     def.uvMax.y = (pixelY + pixelH) / (float)m_texture.getHeight();
 
     m_tiles[name] = def;
+    m_tilesById.push_back(def);
 }
 
 void Tileset::fromGridSize(const std::string& prefix, int gridW, int gridH)

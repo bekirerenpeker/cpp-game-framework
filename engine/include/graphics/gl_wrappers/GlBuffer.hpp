@@ -25,6 +25,9 @@ class GlBuffer : public IGlObject
     GlBuffer(GlBufferType type);
     ~GlBuffer() override;
 
+    GlBuffer(GlBuffer&&) = default;
+    GlBuffer& operator=(GlBuffer&&) = default;
+
     void bind() const override;
     void unbind() const override;
 

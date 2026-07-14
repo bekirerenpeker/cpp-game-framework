@@ -11,6 +11,9 @@ class GlVertexArray : public IGlObject
     GlVertexArray();
     ~GlVertexArray();
 
+    GlVertexArray(GlVertexArray&&) = default;
+    GlVertexArray& operator=(GlVertexArray&&) = default;
+
     void bind() const override;
     void unbind() const override;
 

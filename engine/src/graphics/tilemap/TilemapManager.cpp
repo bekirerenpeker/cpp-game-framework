@@ -1,4 +1,5 @@
 #include "graphics/tilemap/TilemapManager.hpp"
+#include "graphics/tilemap/Tileset.hpp"
 
 namespace Engine {
 
@@ -67,6 +68,11 @@ void TilemapManager::invalidateChunk(TilemapComponent& tilemap, int cx, int cy)
     uint64_t key = TilemapComponent::getChunkKey(cx, cy);
     auto it = tilemap.m_chunks.find(key);
     if (it != tilemap.m_chunks.end()) it->second.isDirty = true;
+}
+
+void TilemapManager::setTileset(TilemapComponent& tilemap, Tileset* tileset)
+{
+    tilemap.m_tileset = tileset;
 }
 
 }   // namespace Engine

@@ -34,6 +34,9 @@ class GlShader : public IGlObject, public IResource
     GlShader(const fs::path& sourceFileDir);
     ~GlShader();
 
+    GlShader(GlShader&&) = default;
+    GlShader& operator=(GlShader&&) = default;
+
     void bind() const override;
     void unbind() const override;
 
