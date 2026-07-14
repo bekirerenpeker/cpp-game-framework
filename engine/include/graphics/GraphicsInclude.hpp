@@ -5,3 +5,4 @@
 #include "BatchRenderer.hpp"
 #include "Color.hpp"
 #include "Renderer.hpp"
+#include "TextureAtlas.hpp"

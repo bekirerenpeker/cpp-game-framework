@@ -1,5 +1,3 @@
-#pragma once
-
 #include "EngineInclude.hpp"
 #include "test_funcs.hpp"
 #include <chrono>

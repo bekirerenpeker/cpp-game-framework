@@ -1,13 +1,8 @@
 #include "graphics/tilemap/Tileset.hpp"
-#include "core/file_management/ImageFile.hpp"
-#include <string>
 
 namespace Engine {
 
-Tileset::Tileset(const fs::path& tilesetImage)
-    : m_tilsetImgPath(tilesetImage), m_texture(tilesetImage)
-{
-}
+Tileset::Tileset(const fs::path& tilesetImage) : m_atlas(tilesetImage) {}
 
 const Tileset::TileDefinition* Tileset::getTile(uint16_t id) const
 {
@@ -23,43 +18,41 @@ uint16_t Tileset::getTileId(const std::string& name) const
 
 void Tileset::createTile(const std::string& name, int pixelX, int pixelY, int pixelW, int pixelH)
 {
-    TileDefinition def;
-    def.id = static_cast<uint16_t>(m_tilesById.size());
-    def.type = TileType::Normal;
-    def.defaultFlags = 0;
-
-    def.uvMin.x = pixelX / (float)m_texture.getWidth();
-    def.uvMin.y = pixelY / (float)m_texture.getHeight();
-    def.uvMax.x = (pixelX + pixelW) / (float)m_texture.getWidth();
-    def.uvMax.y = (pixelY + pixelH) / (float)m_texture.getHeight();
-
-    m_tiles[name] = def;
-    m_tilesById.push_back(def);
+    registerTile(name, m_atlas.addRegion(name, pixelX, pixelY, pixelW, pixelH));
 }
 
 void Tileset::fromGridSize(const std::string& prefix, int gridW, int gridH)
 {
-    int cellW = m_texture.getWidth() / gridW;
-    int cellH = m_texture.getHeight() / gridH;
-    fromCellSize(prefix, cellW, cellH);
+    for (const std::string& key : m_atlas.fromGridSize(prefix, gridW, gridH)) {
+        registerTile(key, *m_atlas.getRegion(key));
+    }
 }
 
 void Tileset::fromCellSize(const std::string& prefix, int cellW, int cellH)
 {
-    int gridW = m_texture.getWidth() / cellW, gridH = m_texture.getHeight() / cellH;
-    for (int x = 0; x < gridW; x++) {
-        for (int y = 0; y < gridH; y++) {
-            createTile(prefix + std::to_string(x + y * gridW), x * cellW, y * cellH, cellW, cellH);
-        }
+    for (const std::string& key : m_atlas.fromCellSize(prefix, cellW, cellH)) {
+        registerTile(key, *m_atlas.getRegion(key));
     }
 }
 
 void Tileset::fromEdges(const std::string& prefix)
 {
-    ImageFile img(m_tilsetImgPath);
-    ImageData& data = img.getImageData();
+    for (const std::string& key : m_atlas.fromAutomatic(prefix)) {
+        registerTile(key, *m_atlas.getRegion(key));
+    }
+}
 
-    // implement algorithm for automatically selecting tiles using floodfill
+void Tileset::registerTile(const std::string& name, const TextureAtlas::Region& region)
+{
+    TileDefinition def;
+    def.id = static_cast<uint16_t>(m_tilesById.size());
+    def.type = TileType::Normal;
+    def.defaultFlags = 0;
+    def.uvMin = region.uvMin;
+    def.uvMax = region.uvMax;
+
+    m_tiles[name] = def;
+    m_tilesById.push_back(def);
 }
 
 }   // namespace Engine

@@ -1,8 +1,9 @@
 #pragma once
 
 #include "core/resource_management/IResource.hpp"
-#include "graphics/gl_wrappers/GlTexture.hpp"
+#include "graphics/TextureAtlas.hpp"
 #include "utils/math/Vec2.hpp"
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -28,8 +29,7 @@ class Tileset : public IResource
     };
 
   private:
-    fs::path m_tilsetImgPath;
-    GlTexture m_texture;
+    TextureAtlas m_atlas;
     std::unordered_map<std::string, TileDefinition> m_tiles;
     // Indexed by tile id; index 0 is the reserved "empty" sentinel, so real
     // tiles start at id 1. Lets the mesh builder resolve a TileData.textureId
@@ -40,7 +40,7 @@ class Tileset : public IResource
     Tileset(const fs::path& tilesetImage);
     ~Tileset() = default;
 
-    const GlTexture& getTexture() const { return m_texture; }
+    const GlTexture& getTexture() const { return m_atlas.getTexture(); }
 
     // Returns nullptr for the empty id (0) or any id that was never created.
     const TileDefinition* getTile(uint16_t id) const;
@@ -52,6 +52,9 @@ class Tileset : public IResource
     void fromGridSize(const std::string& prefix, int gridW, int gridH);
     void fromCellSize(const std::string& prefix, int cellW, int cellH);
     void fromEdges(const std::string& prefix);
+
+  private:
+    void registerTile(const std::string& name, const TextureAtlas::Region& region);
 };
 
 }   // namespace Engine
