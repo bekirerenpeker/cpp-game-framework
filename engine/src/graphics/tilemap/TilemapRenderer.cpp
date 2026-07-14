@@ -17,6 +17,8 @@ void TilemapRenderer::init(GlShader* shader, size_t maxQuadCount)
     },
         shader
     );
+    m_batch.configureVao(m_vao);
+    m_batch.setVao(&m_vao);
     m_initialized = true;
 }
 

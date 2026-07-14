@@ -11,7 +11,7 @@ int batch_renderer_test()
         {1000, 800, "Graphics Test Window 1", WindowFlags::Transparent}
     );
     IdType windowId2 = WindowManager::get().createWindow(
-        {1000, 800, "Graphics Test Window 1", WindowFlags::Transparent}
+        {1000, 800, "Graphics Test Window 2", WindowFlags::Transparent}
     );
 
     Registry registry;

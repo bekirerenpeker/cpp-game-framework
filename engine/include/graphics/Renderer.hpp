@@ -2,8 +2,8 @@
 
 #include "IRenderContext.hpp"
 #include "ecs/registry/Registry.hpp"
+#include "graphics/BatchRenderer.hpp"
 #include "graphics/Color.hpp"
-#include "graphics/gl_wrappers/GlBuffer.hpp"
 #include "graphics/gl_wrappers/GlShader.hpp"
 #include "graphics/gl_wrappers/GlTexture.hpp"
 #include "utils/Singleton.hpp"
@@ -24,20 +24,8 @@ class Renderer : public Singleton<Renderer>
     friend class Singleton<Renderer>;
 
   private:
-    const static int MAX_TEX_COUNT = 32;
-    size_t m_maxQuadCount, m_maxVertexCount, m_maxIndexCount;
-
     IdType m_renderWindowId = INVALID_ID;
-    Mat4 m_viewProjMat = Mat4();
-
-    GlBuffer m_vertexBuffer, m_indexBuffer;
-    GlShader* m_shader = nullptr;
-
-    GlTexture* m_textures[MAX_TEX_COUNT];
-    int m_textureCount;
-
-    VertexData* m_vertices = nullptr;
-    size_t m_quadCount;
+    BatchRenderer<VertexData> m_batch;
 
   public:
     void init(size_t maxQuadCount, GlShader* shader);
@@ -48,7 +36,7 @@ class Renderer : public Singleton<Renderer>
     void setRenderWindowId(IdType id);
     const IdType getRenderWindowId() const;
 
-    const Mat4& getViewProjMat() const { return m_viewProjMat; }
+    const Mat4& getViewProjMat() const { return m_batch.getViewProjMat(); }
 
     void beginPass();
     void drawToBuffer();
@@ -65,10 +53,9 @@ class Renderer : public Singleton<Renderer>
 
   private:
     void flush();
-    int getTextureIndex(GlTexture* texture);
 
-    Renderer();
-    ~Renderer();
+    Renderer() = default;
+    ~Renderer() = default;
 };
 
 }   // namespace Engine

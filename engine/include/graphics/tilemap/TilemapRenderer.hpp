@@ -15,6 +15,7 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
 
   private:
     BatchRenderer<TileVertex> m_batch;
+    GlVertexArray m_vao;
     bool m_initialized = false;
 
   public:
