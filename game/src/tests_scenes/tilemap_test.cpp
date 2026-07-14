@@ -14,12 +14,18 @@ int tilemap_test()
 
     IdType windowId =
         WindowManager::get().createWindow({1000, 800, "Tilemap Test", WindowFlags::Transparent});
+    IdType windowId2 =
+        WindowManager::get().createWindow({1000, 800, "Tilemap Test", WindowFlags::Transparent});
 
     Registry registry;
     EntityHandle camera = registry.create();
     camera.emplace<TransformComponent>().position = Vec3(32, 20, 0);
     camera.emplace<CameraComponent>().windowId = windowId;
     camera.get<CameraComponent>().orthoSize = 48;
+    EntityHandle camera2 = registry.create();
+    camera2.emplace<TransformComponent>().position = Vec3(32, 20, 0);
+    camera2.emplace<CameraComponent>().windowId = windowId2;
+    camera2.get<CameraComponent>().orthoSize = 48;
 
     // 16x16 px tiles. fromCellSize does not skip empty cells yet (known), so
     // every grid cell becomes a named tile "tile0", "tile1", ...
@@ -100,7 +106,7 @@ int tilemap_test()
             Renderer::get().clearColor(Color(0.1f, 0.1f, 0.15f, 1.0f));
 
             glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
-            TilemapRenderer::get().render(tilemap, Renderer::get().getViewProjMat());
+            TilemapRenderer::get().render(tilemap, id, Renderer::get().getViewProjMat());
 
             if (!loggedCount) {
                 LOG_INFO(

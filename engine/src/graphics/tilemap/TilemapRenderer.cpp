@@ -1,5 +1,6 @@
 #include "graphics/tilemap/TilemapRenderer.hpp"
 #include "core/logging/LoggerMacros.hpp"
+#include "core/window_management/WindowManager.hpp"
 #include "graphics/Color.hpp"
 #include "graphics/tilemap/Tileset.hpp"
 
@@ -17,12 +18,10 @@ void TilemapRenderer::init(GlShader* shader, size_t maxQuadCount)
     },
         shader
     );
-    m_batch.configureVao(m_vao);
-    m_batch.setVao(&m_vao);
     m_initialized = true;
 }
 
-void TilemapRenderer::render(TilemapComponent& tilemap, const Mat4& viewProj)
+void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId, const Mat4& viewProj)
 {
     if (!m_initialized) {
         LOG_WARNING("TilemapRenderer::render() called before init(); skipping");
@@ -33,11 +32,26 @@ void TilemapRenderer::render(TilemapComponent& tilemap, const Mat4& viewProj)
         return;
     }
 
+    Window* context = WindowManager::get().getWindow(windowId);
+    if (!context) {
+        LOG_WARNING("TilemapRenderer::render() got an invalid windowId; skipping");
+        return;
+    }
+
     Tileset& tileset = *tilemap.m_tileset;
 
     for (auto& [key, chunk] : tilemap.m_chunks) {
         if (chunk.isDirty) buildChunk(chunk, tileset);
     }
+
+    // VAOs are not shared across GL contexts, so use this context's own VAO,
+    // created and configured the first time we draw into this window.
+    GlVertexArray*& vao = context->vertexArray(this);
+    if (!vao) {
+        vao = new GlVertexArray();
+        m_batch.configureVao(*vao);
+    }
+    m_batch.setVao(vao);
 
     m_batch.setViewProjMat(viewProj);
 

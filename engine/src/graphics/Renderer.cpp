@@ -151,11 +151,12 @@ void Renderer::flush()
     }
 
     IRenderContext* renderContext = WindowManager::get().getWindow(m_renderWindowId);
-    if (!renderContext->m_vertexArray) {
-        renderContext->m_vertexArray = new GlVertexArray();
-        m_batch.configureVao(*renderContext->m_vertexArray);
+    GlVertexArray*& vao = renderContext->vertexArray(this);
+    if (!vao) {
+        vao = new GlVertexArray();
+        m_batch.configureVao(*vao);
     }
-    m_batch.setVao(renderContext->m_vertexArray);
+    m_batch.setVao(vao);
 
     m_batch.flush();
 }
