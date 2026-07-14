@@ -61,4 +61,6 @@ Thumbs.db
 game/output/
 compile_commands.json
 
+# Claude Code
 CLAUDE.md
+.claude/
