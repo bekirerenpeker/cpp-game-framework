@@ -56,6 +56,12 @@ class Tileset : public IResource
     Tileset(const fs::path& tilesetImage);
     ~Tileset() = default;
 
+    // The atlas owns the texture and all partitioning; use it to slice regions
+    // (fromCellSize / fromGridSize / fromAutomatic / addRegion), then turn those
+    // named regions into tiles with the create* methods below.
+    TextureAtlas& getAtlas() { return m_atlas; }
+    const TextureAtlas& getAtlas() const { return m_atlas; }
+
     const GlTexture& getTexture() const { return m_atlas.getTexture(); }
 
     // Returns nullptr for the empty id (0) or any id that was never created.
@@ -66,27 +72,21 @@ class Tileset : public IResource
     // for static tiles `time` is ignored and the fixed rect is returned.
     TextureAtlas::Region getTileUV(uint16_t id, float time) const;
 
-    void createTile(const std::string& name, int pixelX, int pixelY, int pixelW, int pixelH);
-
-    // Animated tile cycling through existing atlas regions (by key), one frame
-    // every frameDuration seconds. Returns the new tile's id.
+    // One tile from an existing atlas region, keyed by that region's name.
+    // Returns the new tile's id, or 0 if no such region exists.
+    uint16_t createTile(const std::string& regionName);
+    // Bulk tiles from regions prefix{minIndex}..prefix{maxIndex-1}.
+    void createTiles(const std::string& prefix, int minIndex, int maxIndex);
+    // Animated tile cycling through regions framePrefix{minIndex}..{maxIndex-1},
+    // one frame every frameDuration seconds. Returns the new tile's id.
     uint16_t createAnimatedTile(
-        const std::string& name, const std::vector<std::string>& frameKeys, float frameDuration,
-        AnimMode mode = AnimMode::Loop
-    );
-    // Animated tile whose frames are a horizontal strip of frameCount cells of
-    // size frameW x frameH starting at (pixelX, pixelY). Returns the new id.
-    uint16_t createAnimatedTileFromStrip(
-        const std::string& name, int pixelX, int pixelY, int frameW, int frameH, int frameCount,
+        const std::string& name, const std::string& framePrefix, int minIndex, int maxIndex,
         float frameDuration, AnimMode mode = AnimMode::Loop
     );
 
-    void fromGridSize(const std::string& prefix, int gridW, int gridH);
-    void fromCellSize(const std::string& prefix, int cellW, int cellH);
-    void fromEdges(const std::string& prefix);
-
   private:
-    uint16_t addTile(const std::string& name, const TextureAtlas::Region& region, TileType type);
+    uint16_t
+    registerTile(const std::string& name, const TextureAtlas::Region& region, TileType type);
     uint16_t registerAnimatedTile(const std::string& name, const TileAnimation& anim);
     static int animFrame(const TileAnimation& anim, float time);
 };

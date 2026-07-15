@@ -29,13 +29,34 @@ TextureAtlas::addRegion(const std::string& key, int pixelX, int pixelY, int pixe
     return m_regions[key] = region;
 }
 
+TextureAtlas::Bounds TextureAtlas::resolveBounds(const Bounds& bounds) const
+{
+    const int texW = m_texture.getWidth(), texH = m_texture.getHeight();
+
+    Bounds r;
+    r.x = bounds.x < 0 ? 0 : (bounds.x > texW ? texW : bounds.x);
+    r.y = bounds.y < 0 ? 0 : (bounds.y > texH ? texH : bounds.y);
+    r.w = bounds.w <= 0 ? texW - r.x : bounds.w;
+    r.h = bounds.h <= 0 ? texH - r.y : bounds.h;
+    if (r.x + r.w > texW) r.w = texW - r.x;
+    if (r.y + r.h > texH) r.h = texH - r.y;
+    return r;
+}
+
 std::vector<std::string> TextureAtlas::fromCellSize(const std::string& prefix, int cellW, int cellH)
+{
+    return fromCellSize(prefix, cellW, cellH, Bounds {});
+}
+
+std::vector<std::string>
+TextureAtlas::fromCellSize(const std::string& prefix, int cellW, int cellH, const Bounds& bounds)
 {
     std::vector<std::string> keys;
     if (cellW <= 0 || cellH <= 0) return keys;
 
-    const int cols = m_texture.getWidth() / cellW;
-    const int rows = m_texture.getHeight() / cellH;
+    const Bounds b = resolveBounds(bounds);
+    const int cols = b.w / cellW;
+    const int rows = b.h / cellH;
 
     ImageFile img(m_imagePath);
     img.loadImage(4);
@@ -44,7 +65,7 @@ std::vector<std::string> TextureAtlas::fromCellSize(const std::string& prefix, i
     int index = 0;
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < cols; col++) {
-            const int px = col * cellW, py = row * cellH;
+            const int px = b.x + col * cellW, py = b.y + row * cellH;
             if (!cellHasOpaquePixels(data, px, py, cellW, cellH)) continue;
 
             std::string key = prefix + std::to_string(index++);
@@ -58,11 +79,25 @@ std::vector<std::string> TextureAtlas::fromCellSize(const std::string& prefix, i
 std::vector<std::string>
 TextureAtlas::fromGridSize(const std::string& prefix, int gridCols, int gridRows)
 {
+    return fromGridSize(prefix, gridCols, gridRows, Bounds {});
+}
+
+std::vector<std::string> TextureAtlas::fromGridSize(
+    const std::string& prefix, int gridCols, int gridRows, const Bounds& bounds
+)
+{
     if (gridCols <= 0 || gridRows <= 0) return {};
-    return fromCellSize(prefix, m_texture.getWidth() / gridCols, m_texture.getHeight() / gridRows);
+    const Bounds b = resolveBounds(bounds);
+    return fromCellSize(prefix, b.w / gridCols, b.h / gridRows, b);
 }
 
 std::vector<std::string> TextureAtlas::fromAutomatic(const std::string& prefix)
+{
+    return fromAutomatic(prefix, Bounds {});
+}
+
+std::vector<std::string>
+TextureAtlas::fromAutomatic(const std::string& prefix, const Bounds& bounds)
 {
     std::vector<std::string> keys;
 
@@ -71,17 +106,19 @@ std::vector<std::string> TextureAtlas::fromAutomatic(const std::string& prefix)
     const ImageData& data = img.getImageData();
     if (!data.pixels || data.depth < 4) return keys;
 
-    const int W = static_cast<int>(data.width), H = static_cast<int>(data.height);
+    const int W = static_cast<int>(data.width);
+    const Bounds b = resolveBounds(bounds);
+    const int x0 = b.x, y0 = b.y, x1 = b.x + b.w, y1 = b.y + b.h;
     auto opaque = [&](int x, int y) {
         return data.pixels[(static_cast<size_t>(y) * W + x) * data.depth + 3] > 0;
     };
 
-    std::vector<bool> visited(static_cast<size_t>(W) * H, false);
+    std::vector<bool> visited(static_cast<size_t>(W) * data.height, false);
     std::vector<std::pair<int, int>> stack;
 
     int index = 0;
-    for (int sy = 0; sy < H; sy++) {
-        for (int sx = 0; sx < W; sx++) {
+    for (int sy = y0; sy < y1; sy++) {
+        for (int sx = x0; sx < x1; sx++) {
             if (visited[static_cast<size_t>(sy) * W + sx] || !opaque(sx, sy)) continue;
 
             int minX = sx, maxX = sx, minY = sy, maxY = sy;
@@ -89,8 +126,8 @@ std::vector<std::string> TextureAtlas::fromAutomatic(const std::string& prefix)
             stack.push_back({sx, sy});
             visited[static_cast<size_t>(sy) * W + sx] = true;
 
-            // 4-connected flood fill so tiles separated by a transparent gap stay
-            // distinct; grows the bounding box as it goes.
+            // 4-connected flood fill (clamped to bounds) so tiles separated by a
+            // transparent gap stay distinct; grows the bounding box as it goes.
             while (!stack.empty()) {
                 auto [cx, cy] = stack.back();
                 stack.pop_back();
@@ -104,7 +141,7 @@ std::vector<std::string> TextureAtlas::fromAutomatic(const std::string& prefix)
                 const int dy[] = {0, 0, 1, -1};
                 for (int d = 0; d < 4; d++) {
                     const int nx = cx + dx[d], ny = cy + dy[d];
-                    if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+                    if (nx < x0 || ny < y0 || nx >= x1 || ny >= y1) continue;
                     const size_t ni = static_cast<size_t>(ny) * W + nx;
                     if (visited[ni] || !opaque(nx, ny)) continue;
                     visited[ni] = true;

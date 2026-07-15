@@ -28,67 +28,37 @@ TextureAtlas::Region Tileset::getTileUV(uint16_t id, float time) const
     return {def->uvMin, def->uvMax};
 }
 
-void Tileset::createTile(const std::string& name, int pixelX, int pixelY, int pixelW, int pixelH)
+uint16_t Tileset::createTile(const std::string& regionName)
 {
-    addTile(name, m_atlas.addRegion(name, pixelX, pixelY, pixelW, pixelH), TileType::Normal);
+    const TextureAtlas::Region* region = m_atlas.getRegion(regionName);
+    if (!region) return 0;
+    return registerTile(regionName, *region, TileType::Normal);
+}
+
+void Tileset::createTiles(const std::string& prefix, int minIndex, int maxIndex)
+{
+    for (int i = minIndex; i < maxIndex; i++) createTile(prefix + std::to_string(i));
 }
 
 uint16_t Tileset::createAnimatedTile(
-    const std::string& name, const std::vector<std::string>& frameKeys, float frameDuration,
-    AnimMode mode
-)
-{
-    TileAnimation anim;
-    anim.frameDuration = frameDuration;
-    anim.mode = mode;
-    for (const std::string& key : frameKeys) {
-        if (const TextureAtlas::Region* region = m_atlas.getRegion(key)) {
-            anim.frames.push_back(*region);
-        }
-    }
-    return registerAnimatedTile(name, anim);
-}
-
-uint16_t Tileset::createAnimatedTileFromStrip(
-    const std::string& name, int pixelX, int pixelY, int frameW, int frameH, int frameCount,
+    const std::string& name, const std::string& framePrefix, int minIndex, int maxIndex,
     float frameDuration, AnimMode mode
 )
 {
     TileAnimation anim;
     anim.frameDuration = frameDuration;
     anim.mode = mode;
-    for (int i = 0; i < frameCount; i++) {
-        std::string frameKey = name + "#" + std::to_string(i);
-        anim.frames.push_back(
-            m_atlas.addRegion(frameKey, pixelX + i * frameW, pixelY, frameW, frameH)
-        );
+    for (int i = minIndex; i < maxIndex; i++) {
+        if (const TextureAtlas::Region* region =
+                m_atlas.getRegion(framePrefix + std::to_string(i))) {
+            anim.frames.push_back(*region);
+        }
     }
     return registerAnimatedTile(name, anim);
 }
 
-void Tileset::fromGridSize(const std::string& prefix, int gridW, int gridH)
-{
-    for (const std::string& key : m_atlas.fromGridSize(prefix, gridW, gridH)) {
-        addTile(key, *m_atlas.getRegion(key), TileType::Normal);
-    }
-}
-
-void Tileset::fromCellSize(const std::string& prefix, int cellW, int cellH)
-{
-    for (const std::string& key : m_atlas.fromCellSize(prefix, cellW, cellH)) {
-        addTile(key, *m_atlas.getRegion(key), TileType::Normal);
-    }
-}
-
-void Tileset::fromEdges(const std::string& prefix)
-{
-    for (const std::string& key : m_atlas.fromAutomatic(prefix)) {
-        addTile(key, *m_atlas.getRegion(key), TileType::Normal);
-    }
-}
-
 uint16_t
-Tileset::addTile(const std::string& name, const TextureAtlas::Region& region, TileType type)
+Tileset::registerTile(const std::string& name, const TextureAtlas::Region& region, TileType type)
 {
     TileDefinition def;
     def.id = static_cast<uint16_t>(m_tilesById.size());
@@ -107,7 +77,7 @@ uint16_t Tileset::registerAnimatedTile(const std::string& name, const TileAnimat
     // Fall back to the first frame as the static rect so getTile() stays useful.
     TextureAtlas::Region first =
         anim.frames.empty() ? TextureAtlas::Region {} : anim.frames.front();
-    uint16_t id = addTile(name, first, TileType::Animated);
+    uint16_t id = registerTile(name, first, TileType::Animated);
     m_animations[id] = anim;
     return id;
 }

@@ -22,20 +22,16 @@ int tilemap_test()
     camera.emplace<CameraComponent>().windowId = windowId;
     camera.get<CameraComponent>().orthoSize = 48;
 
-    // 16x16 px tiles. fromCellSize does not skip empty cells yet (known), so
-    // every grid cell becomes a named tile "tile0", "tile1", ...
+    // Partitioning lives on the atlas. Slice the whole sheet into 16x16 regions
+    // "tile0", "tile1", ... (transparent cells are skipped); the count is the
+    // number of regions produced.
     Tileset tileset("game/assets/images/TilesetFloorB.png");
-    tileset.fromCellSize("tile", 16, 16);
+    int tileCount = static_cast<int>(tileset.getAtlas().fromCellSize("tile", 16, 16).size());
 
-    if (tileset.getTileId("tile0") == 0) {
-        LOG_ERROR("      ERROR: tileset produced no tiles (is TilesetFloorB.png present?)");
+    if (tileCount < 3) {
+        LOG_ERROR("      ERROR: tileset produced too few tiles (is TilesetFloorB.png present?)");
         return 1;
     }
-
-    // Named tiles run tile0..tile(N-1) with ids 1..N. Many atlas cells are
-    // transparent, so cycling ids across the placed tiles keeps them visible.
-    int tileCount = 0;
-    while (tileset.getTileId("tile" + std::to_string(tileCount)) != 0) tileCount++;
 
     int mapWidth = 200;
     int mapHeight = 200;
@@ -43,20 +39,13 @@ int tilemap_test()
     // threshold at once, too high and the pattern turns to static.
     float frequency = 0.1f;
 
-    // Frames pulled from consecutive (non-empty) atlas tiles, wrapping at the end.
-    auto frameKeys = [&](int base, int count) {
-        std::vector<std::string> keys;
-        for (int i = 0; i < count; i++) {
-            keys.push_back("tile" + std::to_string((base + i) % tileCount));
-        }
-        return keys;
-    };
-
-    // Three animated tiles with the same frame count but different frame times.
+    // Three animated tiles sharing a frame count but differing in frame time,
+    // each cycling a third of the atlas regions by prefix + index range.
+    int f = tileCount / 3;
     uint16_t animTiles[] = {
-        tileset.createAnimatedTile("animSlow", frameKeys(0, 4), 0.5f),
-        tileset.createAnimatedTile("animMed", frameKeys(4, 4), 0.2f),
-        tileset.createAnimatedTile("animFast", frameKeys(8, 4), 0.07f),
+        tileset.createAnimatedTile("animSlow", "tile", 0 * f, 1 * f, 0.5f),
+        tileset.createAnimatedTile("animMed", "tile", 1 * f, 2 * f, 0.2f),
+        tileset.createAnimatedTile("animFast", "tile", 2 * f, 3 * f, 0.07f),
     };
 
     TilemapComponent tilemap;
