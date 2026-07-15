@@ -4,17 +4,16 @@
 
 using namespace Engine;
 
-// Draws an animated tilemap through the TilemapRenderer. Each frame it rewrites a
-// mapWidth x mapHeight grid from 3D Perlin noise (time on the z axis, so the
-// pattern scrolls) and renders it via the batch renderer. WASD/QE pan and zoom;
-// press V to toggle wireframe.
+// Draws a static Perlin-generated tilemap made entirely of animated tiles. The
+// layout is placed once; three vertical bands use animated tiles that share a
+// frame count but differ in frame time, so the speeds sit side by side. The
+// TilemapRenderer re-emits only the animated tiles each frame. WASD/QE pan and
+// zoom; press V to toggle wireframe.
 int tilemap_test()
 {
     LOG_INFO("================= TILEMAP RENDER TEST =================");
 
     IdType windowId =
-        WindowManager::get().createWindow({1000, 800, "Tilemap Test", WindowFlags::Transparent});
-    IdType windowId2 =
         WindowManager::get().createWindow({1000, 800, "Tilemap Test", WindowFlags::Transparent});
 
     Registry registry;
@@ -22,10 +21,6 @@ int tilemap_test()
     camera.emplace<TransformComponent>().position = Vec3(32, 20, 0);
     camera.emplace<CameraComponent>().windowId = windowId;
     camera.get<CameraComponent>().orthoSize = 48;
-    EntityHandle camera2 = registry.create();
-    camera2.emplace<TransformComponent>().position = Vec3(32, 20, 0);
-    camera2.emplace<CameraComponent>().windowId = windowId2;
-    camera2.get<CameraComponent>().orthoSize = 48;
 
     // 16x16 px tiles. fromCellSize does not skip empty cells yet (known), so
     // every grid cell becomes a named tile "tile0", "tile1", ...
@@ -47,11 +42,36 @@ int tilemap_test()
     // Scales the noise sample coords; too low and the whole map crosses the
     // threshold at once, too high and the pattern turns to static.
     float frequency = 0.1f;
-    // How fast the noise field scrolls along its 3rd axis per second.
-    float scrollSpeed = 0.5f;
+
+    // Frames pulled from consecutive (non-empty) atlas tiles, wrapping at the end.
+    auto frameKeys = [&](int base, int count) {
+        std::vector<std::string> keys;
+        for (int i = 0; i < count; i++) {
+            keys.push_back("tile" + std::to_string((base + i) % tileCount));
+        }
+        return keys;
+    };
+
+    // Three animated tiles with the same frame count but different frame times.
+    uint16_t animTiles[] = {
+        tileset.createAnimatedTile("animSlow", frameKeys(0, 4), 0.5f),
+        tileset.createAnimatedTile("animMed", frameKeys(4, 4), 0.2f),
+        tileset.createAnimatedTile("animFast", frameKeys(8, 4), 0.07f),
+    };
 
     TilemapComponent tilemap;
     TilemapManager::get().setTileset(tilemap, &tileset);
+
+    // Place the map once (it never changes after this). Perlin decides where a
+    // tile goes; three vertical bands choose which animation, so the differing
+    // frame rates sit side by side for comparison.
+    for (int y = 0; y < mapHeight; y++) {
+        for (int x = 0; x < mapWidth; x++) {
+            if (Math::perlin2D(x * frequency, y * frequency) < 0.5f) continue;
+            uint16_t id = animTiles[(x * 3) / mapWidth];
+            TilemapManager::get().setAt(tilemap, x - mapWidth / 2, y - mapHeight / 2, {id, 0});
+        }
+    }
 
     GlShader tilemapShader("game/assets/shaders/TilemapShader.glsl");
     GlShader ppShader("game/assets/shaders/PostProcessingShader.glsl");
@@ -69,19 +89,6 @@ int tilemap_test()
         windowsToClose.clear();
         Time::get().update();
         float dt = Time::get().deltaTime();
-
-        // Scroll the map by sampling 3D Perlin with time as the z axis; a tile is
-        // placed where the field crosses the threshold and cleared where it does
-        // not, so the pattern animates. Ids are position-based so a cell keeps a
-        // stable texture as blobs move through it.
-        float z = Time::get().currTime() * scrollSpeed;
-        for (int y = 0; y < mapHeight; y++) {
-            for (int x = 0; x < mapWidth; x++) {
-                bool solid = Math::perlin3D(x * frequency, y * frequency, z) >= 0.5f;
-                uint16_t id = solid ? static_cast<uint16_t>(1 + (x + y * mapWidth) % tileCount) : 0;
-                TilemapManager::get().setAt(tilemap, x - mapWidth / 2, y - mapHeight / 2, {id, 0});
-            }
-        }
 
         for (auto& [id, window] : WindowManager::get().getAllWindows()) {
             Input::get().update(id);

@@ -27,6 +27,14 @@ struct TileVertex
     int texIndex;
 };
 
+// An animated tile pulled out of the static chunk mesh. Its world-space corner
+// is cached on edit; its UVs are resolved from the tileset every frame.
+struct AnimatedTileInstance
+{
+    float x, y;
+    uint16_t tileId;
+};
+
 struct TilemapChunk
 {
     static constexpr int CHUNK_SIZE = 32;
@@ -34,10 +42,12 @@ struct TilemapChunk
     int chunkX = 0, chunkY = 0;
     TileData tiles[CHUNK_SIZE * CHUNK_SIZE];
 
-    // CPU mesh cache, rebuilt by TilemapRenderer only when the chunk is dirty.
-    // The GPU upload lives in the batch renderer, so the component is copyable
-    // and tile mutation (setAt) needs no GL context.
+    // CPU caches, rebuilt by TilemapRenderer only when the chunk is dirty. The
+    // static mesh is baked here; animated tiles are listed separately and
+    // re-emitted with current UVs every frame. GPU upload lives in the batch
+    // renderer, so the component is copyable and setAt needs no GL context.
     std::vector<TileVertex> mesh;
+    std::vector<AnimatedTileInstance> animatedTiles;
     uint32_t indexCount = 0;
     bool isDirty = false;
 };
