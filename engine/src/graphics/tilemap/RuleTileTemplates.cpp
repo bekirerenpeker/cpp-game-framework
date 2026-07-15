@@ -5,9 +5,24 @@ namespace Engine {
 
 namespace {
 
-// TODO: fill in by hand. Index = the 4 orthogonal bits of the neighbor mask
-// (bit0=N, bit2=E, bit4=S, bit6=W), reduced to bits 0..3 in that order.
-std::array<RuleTileMapping, 16> g_sixteenTable {};
+std::array<RuleTileMapping, 16> g_sixteenTable {
+    {{3, 0},
+     {7, 0},
+     {0, 0},
+     {4, 0},
+     {15, 0},
+     {11, 0},
+     {12, 0},
+     {8, 0},
+     {2, 0},
+     {6, 0},
+     {1, 0},
+     {5, 0},
+     {14, 0},
+     {10, 0},
+     {13, 0},
+     {9, 0}}
+};
 
 // TODO: fill in by hand. Index = the full 8-bit clockwise neighbor mask.
 std::array<RuleTileMapping, 256> g_full256Table {};

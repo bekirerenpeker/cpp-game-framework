@@ -26,9 +26,8 @@ int tilemap_test()
     // Partitioning lives on the atlas. Slice the whole sheet into 16x16 regions
     // "tile0", "tile1", ... (transparent cells are skipped); the count is the
     // number of regions produced.
-    Tileset tileset("game/assets/images/TilesetFloorB.png");
-    int tileCount =
-        static_cast<int>(tileset.getAtlas().fromCellSize("tile", 16, 16, {0, 48, 64, 64}).size());
+    Tileset tileset("game/assets/images/ruletile-16-template.png");
+    int tileCount = static_cast<int>(tileset.getAtlas().fromCellSize("tile", 8, 8).size());
 
     if (tileCount < 1) {
         LOG_ERROR("      ERROR: tileset produced too few tiles (is TilesetFloorB.png present?)");
