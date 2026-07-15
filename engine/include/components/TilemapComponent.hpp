@@ -27,8 +27,8 @@ struct TileVertex
     int texIndex;
 };
 
-// An animated tile pulled out of the static chunk mesh. Its world-space corner
-// is cached on edit; its UVs are resolved from the tileset every frame.
+// An animated tile pulled out of the static chunk mesh. Its tile-grid corner is
+// cached on edit; its UVs are resolved from the tileset every frame.
 struct AnimatedTileInstance
 {
     float x, y;

@@ -1,4 +1,5 @@
 #include "graphics/tilemap/Tileset.hpp"
+#include "core/logging/LoggerMacros.hpp"
 
 namespace Engine {
 
@@ -16,11 +17,16 @@ uint16_t Tileset::getTileId(const std::string& name) const
     return it == m_tiles.end() ? 0 : it->second.id;
 }
 
-TextureAtlas::Region Tileset::getTileUV(uint16_t id, float time, Vec2 worldPos) const
+TextureAtlas::Region Tileset::getTileUV(uint16_t id, float time, Vec2 tilePos) const
 {
     auto anim = m_animations.find(id);
     if (anim != m_animations.end() && !anim->second.frames.empty()) {
-        return anim->second.frames[animFrame(anim->second, time, worldPos)];
+        return anim->second.frames[animFrame(anim->second, time, tilePos)];
+    }
+
+    auto vars = m_variations.find(id);
+    if (vars != m_variations.end() && !vars->second.empty()) {
+        return vars->second[hashTilePos(tilePos) % vars->second.size()];
     }
 
     const TileDefinition* def = getTile(id);
@@ -41,6 +47,19 @@ void Tileset::createTiles(const std::string& prefix, int minIndex, int maxIndex)
 }
 
 uint16_t Tileset::createAnimatedTile(
+    const std::string& name, const std::vector<std::string>& frameNames, float frameDuration,
+    AnimMode mode, bool randomOffset
+)
+{
+    TileAnimation anim;
+    anim.frameDuration = frameDuration;
+    anim.mode = mode;
+    anim.randomOffset = randomOffset;
+    anim.frames = gatherRegions(frameNames);
+    return registerAnimatedTile(name, anim);
+}
+
+uint16_t Tileset::createAnimatedTile(
     const std::string& name, const std::string& framePrefix, int minIndex, int maxIndex,
     float frameDuration, AnimMode mode, bool randomOffset
 )
@@ -49,13 +68,44 @@ uint16_t Tileset::createAnimatedTile(
     anim.frameDuration = frameDuration;
     anim.mode = mode;
     anim.randomOffset = randomOffset;
+    anim.frames = gatherRegions(framePrefix, minIndex, maxIndex);
+    return registerAnimatedTile(name, anim);
+}
+
+uint16_t
+Tileset::createRandomizedTile(const std::string& name, const std::vector<std::string>& regionNames)
+{
+    return registerRandomizedTile(name, gatherRegions(regionNames));
+}
+
+uint16_t Tileset::createRandomizedTile(
+    const std::string& name, const std::string& prefix, int minIndex, int maxIndex
+)
+{
+    return registerRandomizedTile(name, gatherRegions(prefix, minIndex, maxIndex));
+}
+
+std::vector<TextureAtlas::Region>
+Tileset::gatherRegions(const std::vector<std::string>& names) const
+{
+    std::vector<TextureAtlas::Region> regions;
+    for (const std::string& name : names) {
+        if (const TextureAtlas::Region* region = m_atlas.getRegion(name))
+            regions.push_back(*region);
+    }
+    return regions;
+}
+
+std::vector<TextureAtlas::Region>
+Tileset::gatherRegions(const std::string& prefix, int minIndex, int maxIndex) const
+{
+    std::vector<TextureAtlas::Region> regions;
     for (int i = minIndex; i < maxIndex; i++) {
-        if (const TextureAtlas::Region* region =
-                m_atlas.getRegion(framePrefix + std::to_string(i))) {
-            anim.frames.push_back(*region);
+        if (const TextureAtlas::Region* region = m_atlas.getRegion(prefix + std::to_string(i))) {
+            regions.push_back(*region);
         }
     }
-    return registerAnimatedTile(name, anim);
+    return regions;
 }
 
 uint16_t
@@ -75,22 +125,40 @@ Tileset::registerTile(const std::string& name, const TextureAtlas::Region& regio
 
 uint16_t Tileset::registerAnimatedTile(const std::string& name, const TileAnimation& anim)
 {
+    if (anim.frames.empty()) {
+        LOG_ERROR("createAnimatedTile('{}'): no frame regions found; tile not created", name);
+        return 0;
+    }
+
     // Fall back to the first frame as the static rect so getTile() stays useful.
-    TextureAtlas::Region first =
-        anim.frames.empty() ? TextureAtlas::Region {} : anim.frames.front();
-    uint16_t id = registerTile(name, first, TileType::Animated);
+    uint16_t id = registerTile(name, anim.frames.front(), TileType::Animated);
     m_animations[id] = anim;
     return id;
 }
 
-int Tileset::animFrame(const TileAnimation& anim, float time, Vec2 worldPos)
+uint16_t Tileset::registerRandomizedTile(
+    const std::string& name, const std::vector<TextureAtlas::Region>& variants
+)
+{
+    if (variants.empty()) {
+        LOG_ERROR("createRandomizedTile('{}'): no variant regions found; tile not created", name);
+        return 0;
+    }
+
+    // The first variant doubles as the static rect so getTile() stays useful.
+    uint16_t id = registerTile(name, variants.front(), TileType::Randomized);
+    m_variations[id] = variants;
+    return id;
+}
+
+int Tileset::animFrame(const TileAnimation& anim, float time, Vec2 tilePos)
 {
     int n = static_cast<int>(anim.frames.size());
     if (n <= 1 || anim.frameDuration <= 0.0f) return 0;
 
     int step = static_cast<int>(time / anim.frameDuration);
     if (step < 0) step = 0;
-    if (anim.randomOffset) step += frameOffset(worldPos, n);
+    if (anim.randomOffset) step += hashTilePos(tilePos) % static_cast<uint32_t>(n);
 
     switch (anim.mode) {
     case AnimMode::Once    : return step < n ? step : n - 1;
@@ -104,17 +172,18 @@ int Tileset::animFrame(const TileAnimation& anim, float time, Vec2 worldPos)
     }
 }
 
-int Tileset::frameOffset(Vec2 worldPos, int frameCount)
+uint32_t Tileset::hashTilePos(Vec2 tilePos)
 {
-    // Deterministic spatial hash so a tile's phase is stable across frames and
-    // runs (not Random, which would reshuffle every call).
-    uint32_t x = static_cast<uint32_t>(static_cast<int>(worldPos.x));
-    uint32_t y = static_cast<uint32_t>(static_cast<int>(worldPos.y));
+    // Deterministic spatial hash so a tile's pick/phase is stable across frames
+    // and runs (not Random, which would reshuffle every call). Callers take it
+    // mod their option count.
+    uint32_t x = static_cast<uint32_t>(static_cast<int>(tilePos.x));
+    uint32_t y = static_cast<uint32_t>(static_cast<int>(tilePos.y));
     uint32_t h = x * 73856093u ^ y * 19349663u;
     h ^= h >> 13;
     h *= 0x5bd1e995u;
     h ^= h >> 15;
-    return static_cast<int>(h % static_cast<uint32_t>(frameCount));
+    return h;
 }
 
 }   // namespace Engine

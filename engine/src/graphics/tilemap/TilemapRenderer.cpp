@@ -128,15 +128,18 @@ void TilemapRenderer::buildChunk(TilemapChunk& chunk, Tileset& tileset)
             const float y0 = static_cast<float>(baseY + ly);
 
             // Animated tiles change UVs every frame, so keep them out of the
-            // static mesh and re-emit them at draw time from their world corner.
+            // static mesh and re-emit them at draw time from their tile position.
             if (def->type == TileType::Animated) {
                 chunk.animatedTiles.push_back({x0, y0, tile.textureId});
                 continue;
             }
 
+            // Normal and Randomized tiles bake once. getTileUV resolves the fixed
+            // rect for Normal and the position-chosen variant for Randomized.
+            const TextureAtlas::Region uv = tileset.getTileUV(tile.textureId, 0.0f, Vec2(x0, y0));
             const float x1 = x0 + 1.0f;
             const float y1 = y0 + 1.0f;
-            const Vec2 uvMin = def->uvMin, uvMax = def->uvMax;
+            const Vec2 uvMin = uv.uvMin, uvMax = uv.uvMax;
 
             chunk.mesh.push_back({Vec2(x0, y0), Vec2(uvMin.x, uvMin.y), COLOR_WHITE, 0});
             chunk.mesh.push_back({Vec2(x1, y0), Vec2(uvMax.x, uvMin.y), COLOR_WHITE, 0});

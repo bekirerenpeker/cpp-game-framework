@@ -54,6 +54,9 @@ class Tileset : public IResource
     std::vector<TileDefinition> m_tilesById {TileDefinition {}};
     // Animation data keyed by tile id, for tiles whose type is Animated.
     std::unordered_map<uint16_t, TileAnimation> m_animations;
+    // Region variants keyed by tile id, for tiles whose type is Randomized. One
+    // variant is picked per tile position, so it bakes into the static mesh.
+    std::unordered_map<uint16_t, std::vector<TextureAtlas::Region>> m_variations;
 
   public:
     Tileset(const fs::path& tilesetImage);
@@ -71,31 +74,52 @@ class Tileset : public IResource
     const TileDefinition* getTile(uint16_t id) const;
     // Returns 0 (empty) if no tile with that name exists.
     uint16_t getTileId(const std::string& name) const;
-    // Current UV rect for a tile. For animated tiles it's the frame at `time`;
-    // for static tiles `time` is ignored and the fixed rect is returned. worldPos
-    // only matters for animations created with randomOffset (per-tile phase).
-    TextureAtlas::Region getTileUV(uint16_t id, float time, Vec2 worldPos = VEC2_ZERO) const;
+    // Current UV rect for a tile, resolved from its tile position in the tilemap
+    // grid. Animated tiles return the frame at `time`; randomized tiles return the
+    // variant chosen for tilePos; static tiles ignore both and return their fixed
+    // rect. tilePos matters for randomized tiles and for animations created with
+    // randomOffset (per-tile phase).
+    TextureAtlas::Region getTileUV(uint16_t id, float time, Vec2 tilePos = VEC2_ZERO) const;
 
     // One tile from an existing atlas region, keyed by that region's name.
     // Returns the new tile's id, or 0 if no such region exists.
     uint16_t createTile(const std::string& regionName);
     // Bulk tiles from regions prefix{minIndex}..prefix{maxIndex-1}.
     void createTiles(const std::string& prefix, int minIndex, int maxIndex);
-    // Animated tile cycling through regions framePrefix{minIndex}..{maxIndex-1},
-    // one frame every frameDuration seconds. Returns the new tile's id. With
-    // randomOffset, each placed tile is phase-shifted by its position so a field
-    // of the same tile does not animate in lockstep.
+    // Animated tile cycling through the given frame regions, one frame every
+    // frameDuration seconds. Returns the new tile's id. With randomOffset, each
+    // placed tile is phase-shifted by its position so a field of the same tile
+    // does not animate in lockstep. Frames come from an explicit name list or
+    // from framePrefix{minIndex}..{maxIndex-1}.
+    uint16_t createAnimatedTile(
+        const std::string& name, const std::vector<std::string>& frameNames, float frameDuration,
+        AnimMode mode = AnimMode::Loop, bool randomOffset = false
+    );
     uint16_t createAnimatedTile(
         const std::string& name, const std::string& framePrefix, int minIndex, int maxIndex,
         float frameDuration, AnimMode mode = AnimMode::Loop, bool randomOffset = false
     );
+    // Randomized tile that shows one of the given variant regions, chosen
+    // deterministically from each tile's position. Returns the new tile's id.
+    // Variants come from an explicit name list or from prefix{minIndex}..{maxIndex-1}.
+    uint16_t
+    createRandomizedTile(const std::string& name, const std::vector<std::string>& regionNames);
+    uint16_t createRandomizedTile(
+        const std::string& name, const std::string& prefix, int minIndex, int maxIndex
+    );
 
   private:
+    std::vector<TextureAtlas::Region> gatherRegions(const std::vector<std::string>& names) const;
+    std::vector<TextureAtlas::Region>
+    gatherRegions(const std::string& prefix, int minIndex, int maxIndex) const;
     uint16_t
     registerTile(const std::string& name, const TextureAtlas::Region& region, TileType type);
     uint16_t registerAnimatedTile(const std::string& name, const TileAnimation& anim);
-    static int animFrame(const TileAnimation& anim, float time, Vec2 worldPos);
-    static int frameOffset(Vec2 worldPos, int frameCount);
+    uint16_t registerRandomizedTile(
+        const std::string& name, const std::vector<TextureAtlas::Region>& variants
+    );
+    static int animFrame(const TileAnimation& anim, float time, Vec2 tilePos);
+    static uint32_t hashTilePos(Vec2 tilePos);
 };
 
 }   // namespace Engine

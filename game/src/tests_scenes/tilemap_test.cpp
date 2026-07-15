@@ -4,11 +4,11 @@
 
 using namespace Engine;
 
-// Draws a static Perlin-generated tilemap made entirely of animated tiles. The
-// layout is placed once; three vertical bands use animated tiles that share a
-// frame count but differ in frame time, so the speeds sit side by side. The
-// TilemapRenderer re-emits only the animated tiles each frame. WASD/QE pan and
-// zoom; press V to toggle wireframe.
+// Draws a static Perlin-generated tilemap in four vertical bands: three animated
+// tiles that share a frame count but differ in frame time, plus one randomized
+// tile that picks a variant per tile position. The layout is placed once; the
+// TilemapRenderer bakes the randomized band into the static mesh and re-emits
+// only the animated tiles each frame. WASD/QE pan and zoom; press V for wireframe.
 int tilemap_test()
 {
     LOG_INFO("================= TILEMAP RENDER TEST =================");
@@ -28,7 +28,7 @@ int tilemap_test()
     Tileset tileset("game/assets/images/TilesetFloorB.png");
     int tileCount = static_cast<int>(tileset.getAtlas().fromCellSize("tile", 16, 16).size());
 
-    if (tileCount < 3) {
+    if (tileCount < 4) {
         LOG_ERROR("      ERROR: tileset produced too few tiles (is TilesetFloorB.png present?)");
         return 1;
     }
@@ -39,27 +39,29 @@ int tilemap_test()
     // threshold at once, too high and the pattern turns to static.
     float frequency = 0.1f;
 
-    // Three animated tiles sharing a frame count but differing in frame time,
-    // each cycling a third of the atlas regions by prefix + index range. The
-    // trailing `true` gives each placed tile a per-position phase offset so a
-    // band of the same tile does not animate in lockstep.
-    int f = tileCount / 3;
-    uint16_t animTiles[] = {
+    // Four tiles, each drawing from a quarter of the atlas regions by prefix +
+    // index range. Three are animated (same frame count, different frame times);
+    // the fourth is randomized, picking one variant per tile position so its band
+    // is a static but varied field. The trailing `true` on animMed gives each
+    // placed tile a per-position phase offset so its band does not run in lockstep.
+    int f = tileCount / 4;
+    uint16_t bandTiles[] = {
         tileset.createAnimatedTile("animSlow", "tile", 0 * f, 1 * f, 0.5f, AnimMode::Loop, false),
         tileset.createAnimatedTile("animMed", "tile", 1 * f, 2 * f, 0.2f, AnimMode::Loop, true),
         tileset.createAnimatedTile("animFast", "tile", 2 * f, 3 * f, 0.07f, AnimMode::Loop, false),
+        tileset.createRandomizedTile("randomVariants", "tile", 3 * f, 4 * f),
     };
 
     TilemapComponent tilemap;
     TilemapManager::get().setTileset(tilemap, &tileset);
 
     // Place the map once (it never changes after this). Perlin decides where a
-    // tile goes; three vertical bands choose which animation, so the differing
-    // frame rates sit side by side for comparison.
+    // tile goes; four vertical bands choose which tile, so the three animation
+    // rates and the randomized field sit side by side for comparison.
     for (int y = 0; y < mapHeight; y++) {
         for (int x = 0; x < mapWidth; x++) {
             if (Math::perlin2D(x * frequency, y * frequency) < 0.5f) continue;
-            uint16_t id = animTiles[(x * 3) / mapWidth];
+            uint16_t id = bandTiles[(x * 4) / mapWidth];
             TilemapManager::get().setAt(tilemap, x - mapWidth / 2, y - mapHeight / 2, {id, 0});
         }
     }
