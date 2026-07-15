@@ -119,53 +119,53 @@ std::vector<RuleTileRule> RuleTileTemplateManager::builtin47Tile()
     // cells to match. Diagonals whose orthogonals aren't both present are 'x'.
     // Rule string is N,NE,E,SE,S,SW,W,NW.
     return {
-        {"0x0x0x0x",  0, 0}, // -
-        {"1x0x0x0x",  1, 0}, // N
-        {"0x1x0x0x",  2, 0}, // E
-        {"101x0x0x",  3, 0}, // N E, NE open
-        {"111x0x0x",  4, 0}, // N E, NE filled
-        {"0x0x1x0x",  5, 0}, // S
-        {"1x0x1x0x",  6, 0}, // N S
-        {"0x101x0x",  7, 0}, // E S, SE open
-        {"0x111x0x",  8, 0}, // E S, SE filled
-        {"10101x0x",  9, 0}, // N E S, NE open SE open
-        {"11101x0x", 10, 0}, // N E S, NE filled SE open
-        {"10111x0x", 11, 0}, // N E S, NE open SE filled
-        {"11111x0x", 12, 0}, // N E S, NE filled SE filled
-        {"0x0x0x1x", 13, 0}, // W
-        {"1x0x0x10", 14, 0}, // N W, NW open
-        {"1x0x0x11", 15, 0}, // N W, NW filled
-        {"0x1x0x1x", 16, 0}, // E W
-        {"101x0x10", 17, 0}, // N E W, NE open NW open
-        {"111x0x10", 18, 0}, // N E W, NE filled NW open
-        {"101x0x11", 19, 0}, // N E W, NE open NW filled
-        {"111x0x11", 20, 0}, // N E W, NE filled NW filled
-        {"0x0x101x", 21, 0}, // S W, SW open
-        {"0x0x111x", 22, 0}, // S W, SW filled
-        {"1x0x1010", 23, 0}, // N S W, SW open NW open
-        {"1x0x1110", 24, 0}, // N S W, SW filled NW open
-        {"1x0x1011", 25, 0}, // N S W, SW open NW filled
-        {"1x0x1111", 26, 0}, // N S W, SW filled NW filled
-        {"0x10101x", 27, 0}, // E S W, SE open SW open
-        {"0x11101x", 28, 0}, // E S W, SE filled SW open
-        {"0x10111x", 29, 0}, // E S W, SE open SW filled
-        {"0x11111x", 30, 0}, // E S W, SE filled SW filled
-        {"10101010", 31, 0}, // N E S W, no diagonals
-        {"11101010", 32, 0}, // N E S W, NE
+        {"0x1x0x0x",  0, 0}, // E        (bottom row, left cap)
+        {"0x1x0x1x",  1, 0}, // E W      (bottom row, horizontal middle)
+        {"0x0x0x1x",  2, 0}, // W        (bottom row, right cap)
+        {"0x0x0x0x",  3, 0}, // -        (isolated, bottom-right)
+        {"101x0x11",  4, 0}, // N E, NE filled
+        {"111x0x10",  5, 0}, // S
+        {"10111x0x",  6, 0}, // N S
+        {"1x0x1110",  7, 0}, // E S, SE open
+        {"10101x0x",  8, 0}, // E S, SE filled
+        {"101x0x10",  9, 0}, // N E S, NE open SE open
+        {"101x0x0x", 10, 0}, // N E S, NE filled SE open
+        {"1x0x0x10", 11, 0}, // N E S, NE open SE filled
+        {"1x1x0x0x", 12, 0}, // N E      (blob bottom-left corner)
+        {"1x1x0x1x", 13, 0}, // N E W    (blob bottom edge)
+        {"1x0x0x1x", 14, 0}, // N W      (blob bottom-right corner)
+        {"1x0x0x0x", 15, 0}, // N        (vertical strip, bottom cap)
+        {"0x10111x", 16, 0}, // E W
+        {"0x11101x", 17, 0}, // N E W, NE open NW open
+        {"11101x0x", 18, 0}, // N E W, NE filled NW open
+        {"1x0x1011", 19, 0}, // N E W, NE open NW filled
+        {"0x10101x", 20, 0}, // N E W, NE filled NW filled
+        {"1x0x1010", 21, 0}, // S W, SW open
+        {"0x101x0x", 22, 0}, // S W, SW filled
+        {"0x0x101x", 23, 0}, // N S W, SW open NW open
+        {"1x1x1x0x", 24, 0}, // N E S    (blob left edge)
+        {"11111111", 25, 0}, // N E S W  (blob interior)
+        {"1x0x1x1x", 26, 0}, // N S W    (blob right edge)
+        {"1x0x1x0x", 27, 0}, // N S      (vertical strip, middle)
+        {"1x111111", 28, 0}, // E S W, SE filled SW open
+        {"1111111x", 29, 0}, // E S W, SE open SW filled
+        {"11101011", 30, 0}, // E S W, SE filled SW filled
+        {"10101111", 31, 0}, // N E S W, no diagonals
+        {"10101110", 32, 0}, // N E S W, NE
         {"10111010", 33, 0}, // N E S W, SE
-        {"11111010", 34, 0}, // N E S W, NE SE
-        {"10101110", 35, 0}, // N E S W, SW
-        {"11101110", 36, 0}, // N E S W, NE SW
-        {"10111110", 37, 0}, // N E S W, SE SW
-        {"11111110", 38, 0}, // N E S W, NE SE SW
-        {"10101011", 39, 0}, // N E S W, NW
-        {"11101011", 40, 0}, // N E S W, NE NW
-        {"10111011", 41, 0}, // N E S W, SE NW
-        {"11111011", 42, 0}, // N E S W, NE SE NW
-        {"10101111", 43, 0}, // N E S W, SW NW
-        {"11101111", 44, 0}, // N E S W, NE SW NW
-        {"10111111", 45, 0}, // N E S W, SE SW NW
-        {"11111111", 46, 0}, // N E S W, all diagonals
+        {"10111011", 34, 0}, // N E S W, NE SE
+        {"11101110", 35, 0}, // N E S W, SW
+        {"0x1x1x0x", 36, 0}, // E S      (blob top-left corner)
+        {"0x1x1x1x", 37, 0}, // E S W    (blob top edge)
+        {"0x0x1x1x", 38, 0}, // S W      (blob top-right corner)
+        {"0x0x1x0x", 39, 0}, // S        (vertical strip, top cap)
+        {"111x1111", 40, 0}, // N E S W, NE NW
+        {"11111x11", 41, 0}, // N E S W, SE NW
+        {"11111010", 42, 0}, // N E S W, NE SE NW
+        {"10111110", 43, 0}, // N E S W, SW NW
+        {"10101011", 44, 0}, // N E S W, NE SW NW
+        {"11101010", 45, 0}, // N E S W, SE SW NW
+        {"10101010", 46, 0}, // N E S W, all diagonals
     };
 }
 
