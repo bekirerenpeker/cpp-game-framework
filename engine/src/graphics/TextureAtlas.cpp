@@ -22,9 +22,12 @@ TextureAtlas::addRegion(const std::string& key, int pixelX, int pixelY, int pixe
     const float w = static_cast<float>(m_texture.getWidth());
     const float h = static_cast<float>(m_texture.getHeight());
 
+    // Inset by half a texel so UVs never land exactly on a cell boundary; sampled
+    // there, floating-point error can round into the neighboring cell and bleed
+    // its edge pixels into this tile.
     Region region;
-    region.uvMin = Vec2(pixelX / w, pixelY / h);
-    region.uvMax = Vec2((pixelX + pixelW) / w, (pixelY + pixelH) / h);
+    region.uvMin = Vec2((pixelX + 0.5f) / w, (pixelY + 0.5f) / h);
+    region.uvMax = Vec2((pixelX + pixelW - 0.5f) / w, (pixelY + pixelH - 0.5f) / h);
 
     return m_regions[key] = region;
 }
