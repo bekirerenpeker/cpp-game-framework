@@ -33,11 +33,17 @@ void TilemapManager::setAt(TilemapComponent& tilemap, int x, int y, const TileDa
 
         // 5. Cross-Chunk Boundary Invalidation
         // If a tile is modified on the edge of a chunk, its neighbors must rebuild
-        // their vertex buffers to adjust for potential rule tile changes.
+        // their vertex buffers to adjust for potential rule tile changes. A tile at
+        // a chunk corner also reaches diagonally into the corner-adjacent chunk,
+        // since rule tiles sample all 8 neighbors, not just the orthogonal 4.
         if (localX == 0) invalidateChunk(tilemap, cx - 1, cy);
         if (localX == S - 1) invalidateChunk(tilemap, cx + 1, cy);
         if (localY == 0) invalidateChunk(tilemap, cx, cy - 1);
         if (localY == S - 1) invalidateChunk(tilemap, cx, cy + 1);
+        if (localX == 0 && localY == 0) invalidateChunk(tilemap, cx - 1, cy - 1);
+        if (localX == 0 && localY == S - 1) invalidateChunk(tilemap, cx - 1, cy + 1);
+        if (localX == S - 1 && localY == 0) invalidateChunk(tilemap, cx + 1, cy - 1);
+        if (localX == S - 1 && localY == S - 1) invalidateChunk(tilemap, cx + 1, cy + 1);
     }
 }
 

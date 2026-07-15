@@ -2,6 +2,7 @@
 
 #include "core/resource_management/IResource.hpp"
 #include "graphics/TextureAtlas.hpp"
+#include "graphics/tilemap/RuleTileTemplates.hpp"
 #include "utils/math/Vec2.hpp"
 #include <string>
 #include <unordered_map>
@@ -57,6 +58,15 @@ class Tileset : public IResource
     // Region variants keyed by tile id, for tiles whose type is Randomized. One
     // variant is picked per tile position, so it bakes into the static mesh.
     std::unordered_map<uint16_t, std::vector<TextureAtlas::Region>> m_variations;
+    // Rule data keyed by tile id, for tiles whose type is Rule. Which variant (and
+    // rotation) is shown is resolved from a live 8-neighbor bitmask, so it also
+    // bakes into the static mesh.
+    struct TileRule
+    {
+        std::vector<TextureAtlas::Region> variants;
+        RuleTileTemplate templateType;
+    };
+    std::unordered_map<uint16_t, TileRule> m_rules;
 
   public:
     Tileset(const fs::path& tilesetImage);
@@ -108,6 +118,27 @@ class Tileset : public IResource
         const std::string& name, const std::string& prefix, int minIndex, int maxIndex
     );
 
+    // Rule tile cycling through the variant regions prefix{minIndex}..{maxIndex-1};
+    // which variant (and rotation) is shown per placement is resolved by
+    // templateType from each tile's live 8-neighbor bitmask at bake time.
+    uint16_t createRuleTile(
+        const std::string& name, const std::string& prefix, int minIndex, int maxIndex,
+        RuleTileTemplate templateType
+    );
+
+    struct RuleTileUV
+    {
+        TextureAtlas::Region region;
+        int rotation = 0;
+    };
+    // Resolves a rule tile's region + rotation for a given neighbor bitmask. Only
+    // meaningful for TileType::Rule tiles; used by TilemapRenderer at bake time.
+    RuleTileUV getRuleTileUV(uint16_t id, uint8_t neighborMask) const;
+
+    // Whether two tiles connect for rule-tile bitmask purposes. Currently: same
+    // nonzero id.
+    bool tilesConnect(uint16_t a, uint16_t b) const;
+
   private:
     std::vector<TextureAtlas::Region> gatherRegions(const std::vector<std::string>& names) const;
     std::vector<TextureAtlas::Region>
@@ -118,6 +149,7 @@ class Tileset : public IResource
     uint16_t registerRandomizedTile(
         const std::string& name, const std::vector<TextureAtlas::Region>& variants
     );
+    uint16_t registerRuleTile(const std::string& name, const TileRule& rule);
     static int animFrame(const TileAnimation& anim, float time, Vec2 tilePos);
     static uint32_t hashTilePos(Vec2 tilePos);
 };

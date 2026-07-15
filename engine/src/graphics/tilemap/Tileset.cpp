@@ -85,6 +85,17 @@ uint16_t Tileset::createRandomizedTile(
     return registerRandomizedTile(name, gatherRegions(prefix, minIndex, maxIndex));
 }
 
+uint16_t Tileset::createRuleTile(
+    const std::string& name, const std::string& prefix, int minIndex, int maxIndex,
+    RuleTileTemplate templateType
+)
+{
+    TileRule rule;
+    rule.templateType = templateType;
+    rule.variants = gatherRegions(prefix, minIndex, maxIndex);
+    return registerRuleTile(name, rule);
+}
+
 std::vector<TextureAtlas::Region>
 Tileset::gatherRegions(const std::vector<std::string>& names) const
 {
@@ -151,6 +162,27 @@ uint16_t Tileset::registerRandomizedTile(
     return id;
 }
 
+uint16_t Tileset::registerRuleTile(const std::string& name, const TileRule& rule)
+{
+    if (rule.variants.empty()) {
+        LOG_ERROR("createRuleTile('{}'): no variant regions found; tile not created", name);
+        return 0;
+    }
+
+    int expected = ruleTileTemplateSize(rule.templateType);
+    if (expected > 0 && static_cast<int>(rule.variants.size()) != expected) {
+        LOG_WARNING(
+            "createRuleTile('{}'): got {} regions, template expects {}", name, rule.variants.size(),
+            expected
+        );
+    }
+
+    // The first variant doubles as the static rect so getTile() stays useful.
+    uint16_t id = registerTile(name, rule.variants.front(), TileType::Rule);
+    m_rules[id] = rule;
+    return id;
+}
+
 int Tileset::animFrame(const TileAnimation& anim, float time, Vec2 tilePos)
 {
     int n = static_cast<int>(anim.frames.size());
@@ -171,6 +203,18 @@ int Tileset::animFrame(const TileAnimation& anim, float time, Vec2 tilePos)
     default            : return step % n;
     }
 }
+
+Tileset::RuleTileUV Tileset::getRuleTileUV(uint16_t id, uint8_t neighborMask) const
+{
+    auto it = m_rules.find(id);
+    if (it == m_rules.end() || it->second.variants.empty()) return {};
+
+    RuleTileMapping mapping = resolveRuleTileTemplate(it->second.templateType, neighborMask);
+    uint8_t idx = mapping.regionIndex < it->second.variants.size() ? mapping.regionIndex : 0;
+    return {it->second.variants[idx], mapping.rotation};
+}
+
+bool Tileset::tilesConnect(uint16_t a, uint16_t b) const { return a != 0 && a == b; }
 
 uint32_t Tileset::hashTilePos(Vec2 tilePos)
 {

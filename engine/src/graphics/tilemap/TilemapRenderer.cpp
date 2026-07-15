@@ -3,6 +3,7 @@
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/WindowManager.hpp"
 #include "graphics/Color.hpp"
+#include "graphics/tilemap/TilemapManager.hpp"
 #include "graphics/tilemap/Tileset.hpp"
 
 namespace Engine {
@@ -42,7 +43,7 @@ void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId, const M
     Tileset& tileset = *tilemap.m_tileset;
 
     for (auto& [key, chunk] : tilemap.m_chunks) {
-        if (chunk.isDirty) buildChunk(chunk, tileset);
+        if (chunk.isDirty) buildChunk(tilemap, chunk, tileset);
     }
 
     // VAOs are not shared across GL contexts, so use this context's own VAO,
@@ -104,7 +105,7 @@ size_t TilemapRenderer::totalIndexCount(const TilemapComponent& tilemap) const
     return total;
 }
 
-void TilemapRenderer::buildChunk(TilemapChunk& chunk, Tileset& tileset)
+void TilemapRenderer::buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk, Tileset& tileset)
 {
     constexpr int S = TilemapChunk::CHUNK_SIZE;
 
@@ -134,11 +135,27 @@ void TilemapRenderer::buildChunk(TilemapChunk& chunk, Tileset& tileset)
                 continue;
             }
 
+            const float x1 = x0 + 1.0f;
+            const float y1 = y0 + 1.0f;
+
+            // Rule tiles resolve their region + rotation from a live 8-neighbor
+            // bitmask, computed here (bake time) so it costs nothing per frame.
+            if (def->type == TileType::Rule) {
+                uint8_t mask =
+                    computeNeighborMask(tilemap, tileset, tile.textureId, baseX + lx, baseY + ly);
+                Tileset::RuleTileUV ruv = tileset.getRuleTileUV(tile.textureId, mask);
+                std::array<Vec2, 4> uv = rotatedUVCorners(ruv.region, ruv.rotation);
+
+                chunk.mesh.push_back({Vec2(x0, y0), uv[0], COLOR_WHITE, 0});
+                chunk.mesh.push_back({Vec2(x1, y0), uv[1], COLOR_WHITE, 0});
+                chunk.mesh.push_back({Vec2(x1, y1), uv[2], COLOR_WHITE, 0});
+                chunk.mesh.push_back({Vec2(x0, y1), uv[3], COLOR_WHITE, 0});
+                continue;
+            }
+
             // Normal and Randomized tiles bake once. getTileUV resolves the fixed
             // rect for Normal and the position-chosen variant for Randomized.
             const TextureAtlas::Region uv = tileset.getTileUV(tile.textureId, 0.0f, Vec2(x0, y0));
-            const float x1 = x0 + 1.0f;
-            const float y1 = y0 + 1.0f;
             const Vec2 uvMin = uv.uvMin, uvMax = uv.uvMax;
 
             chunk.mesh.push_back({Vec2(x0, y0), Vec2(uvMin.x, uvMin.y), COLOR_WHITE, 0});
@@ -150,6 +167,41 @@ void TilemapRenderer::buildChunk(TilemapChunk& chunk, Tileset& tileset)
 
     chunk.indexCount = static_cast<uint32_t>((chunk.mesh.size() / 4) * 6);
     chunk.isDirty = false;
+}
+
+uint8_t TilemapRenderer::computeNeighborMask(
+    TilemapComponent& tilemap, Tileset& tileset, uint16_t selfId, int gx, int gy
+)
+{
+    // Clockwise from N (up): N, NE, E, SE, S, SW, W, NW.
+    static constexpr int dx[8] = {0, 1, 1, 1, 0, -1, -1, -1};
+    static constexpr int dy[8] = {1, 1, 0, -1, -1, -1, 0, 1};
+
+    uint8_t mask = 0;
+    for (int i = 0; i < 8; i++) {
+        TileData neighbor = TilemapManager::get().getAt(tilemap, gx + dx[i], gy + dy[i]);
+        if (tileset.tilesConnect(selfId, neighbor.textureId)) mask |= static_cast<uint8_t>(1 << i);
+    }
+    return mask;
+}
+
+std::array<Vec2, 4>
+TilemapRenderer::rotatedUVCorners(const TextureAtlas::Region& region, int rotation)
+{
+    // Corner order matches vertex order (bottom-left, bottom-right, top-right,
+    // top-left), which runs counter-clockwise. Shifting backward through this
+    // list makes the sampled image content appear rotated clockwise by
+    // `rotation` quarter turns.
+    std::array<Vec2, 4> corners = {
+        region.uvMin,
+        Vec2(region.uvMax.x, region.uvMin.y),
+        region.uvMax,
+        Vec2(region.uvMin.x, region.uvMax.y),
+    };
+    int shift = ((rotation % 4) + 4) % 4;
+    std::array<Vec2, 4> out;
+    for (int i = 0; i < 4; i++) out[i] = corners[(i - shift + 4) % 4];
+    return out;
 }
 
 }   // namespace Engine

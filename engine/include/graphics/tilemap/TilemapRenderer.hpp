@@ -2,9 +2,11 @@
 
 #include "components/TilemapComponent.hpp"
 #include "graphics/BatchRenderer.hpp"
+#include "graphics/TextureAtlas.hpp"
 #include "utils/Singleton.hpp"
 #include "utils/TypeAliases.hpp"
 #include "utils/math/Mat4.hpp"
+#include <array>
 
 namespace Engine {
 
@@ -33,7 +35,11 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
     TilemapRenderer() = default;
     ~TilemapRenderer() = default;
 
-    void buildChunk(TilemapChunk& chunk, Tileset& tileset);
+    void buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk, Tileset& tileset);
+    static uint8_t computeNeighborMask(
+        TilemapComponent& tilemap, Tileset& tileset, uint16_t selfId, int gx, int gy
+    );
+    static std::array<Vec2, 4> rotatedUVCorners(const TextureAtlas::Region& region, int rotation);
 };
 
 }   // namespace Engine
