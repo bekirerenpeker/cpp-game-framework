@@ -87,11 +87,11 @@ uint16_t Tileset::createRandomizedTile(
 
 uint16_t Tileset::createRuleTile(
     const std::string& name, const std::string& prefix, int minIndex, int maxIndex,
-    RuleTileTemplate templateType
+    const std::string& templateName
 )
 {
     TileRule rule;
-    rule.templateType = templateType;
+    rule.table = &RuleTileTemplateManager::get().getTemplate(templateName);
     rule.variants = gatherRegions(prefix, minIndex, maxIndex);
     return registerRuleTile(name, rule);
 }
@@ -169,11 +169,18 @@ uint16_t Tileset::registerRuleTile(const std::string& name, const TileRule& rule
         return 0;
     }
 
-    int expected = ruleTileTemplateSize(rule.templateType);
-    if (expected > 0 && static_cast<int>(rule.variants.size()) != expected) {
+    // The template only references region indices up to some maximum; warn if the
+    // variant list can't cover them (out-of-range indices fall back to variant 0).
+    int needed = 0;
+    if (rule.table) {
+        for (const RuleTileMapping& m : *rule.table) {
+            if (m.regionIndex >= needed) needed = m.regionIndex + 1;
+        }
+    }
+    if (needed > 0 && static_cast<int>(rule.variants.size()) < needed) {
         LOG_WARNING(
-            "createRuleTile('{}'): got {} regions, template expects {}", name, rule.variants.size(),
-            expected
+            "createRuleTile('{}'): got {} regions, template references up to {}", name,
+            rule.variants.size(), needed
         );
     }
 
@@ -207,9 +214,9 @@ int Tileset::animFrame(const TileAnimation& anim, float time, Vec2 tilePos)
 Tileset::RuleTileUV Tileset::getRuleTileUV(uint16_t id, uint8_t neighborMask) const
 {
     auto it = m_rules.find(id);
-    if (it == m_rules.end() || it->second.variants.empty()) return {};
+    if (it == m_rules.end() || it->second.variants.empty() || !it->second.table) return {};
 
-    RuleTileMapping mapping = resolveRuleTileTemplate(it->second.templateType, neighborMask);
+    RuleTileMapping mapping = (*it->second.table)[neighborMask];
     uint8_t idx = mapping.regionIndex < it->second.variants.size() ? mapping.regionIndex : 0;
     return {it->second.variants[idx], mapping.rotation};
 }

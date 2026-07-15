@@ -26,7 +26,7 @@ int tilemap_test()
     // Partitioning lives on the atlas. Slice the whole sheet into 16x16 regions
     // "tile0", "tile1", ... (transparent cells are skipped); the count is the
     // number of regions produced.
-    Tileset tileset("game/assets/images/ruletile-16-template.png");
+    Tileset tileset("game/assets/images/ruletile-47-template.png");
     int tileCount = static_cast<int>(tileset.getAtlas().fromCellSize("tile", 8, 8).size());
 
     if (tileCount < 1) {
@@ -34,11 +34,12 @@ int tilemap_test()
         return 1;
     }
 
-    // Sixteen needs only 16 atlas cells; swapping to RuleTileTemplate::Full256
-    // is a one-line change. The bitmask->tile tables are blank for now, so every
-    // placement shows region 0 with no rotation until they're filled in by hand.
-    uint16_t ruleTileId =
-        tileset.createRuleTile("ruleTile", "tile", 0, tileCount, RuleTileTemplate::Sixteen);
+    // "16-tile" is the built-in orthogonal template on the standard 4x4 sheet
+    // (top-left 3x3 blob, right column vertical strip, bottom row horizontal strip
+    // + isolated at bottom-right); it's generated on first use. Register a custom
+    // template via RuleTileTemplateManager::createTemplate and pass its name here
+    // to use more elaborate rules.
+    uint16_t ruleTileId = tileset.createRuleTile("ruleTile", "tile", 0, tileCount, "47-tile");
 
     TilemapComponent tilemap;
     TilemapManager::get().setTileset(tilemap, &tileset);

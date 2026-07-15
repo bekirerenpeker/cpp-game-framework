@@ -64,7 +64,10 @@ class Tileset : public IResource
     struct TileRule
     {
         std::vector<TextureAtlas::Region> variants;
-        RuleTileTemplate templateType;
+        // Compiled 256-entry lookup owned by RuleTileTemplateManager; its entries
+        // stay pointer-stable, so we cache it here to avoid a per-tile name lookup
+        // at bake time.
+        const std::array<RuleTileMapping, 256>* table = nullptr;
     };
     std::unordered_map<uint16_t, TileRule> m_rules;
 
@@ -119,11 +122,12 @@ class Tileset : public IResource
     );
 
     // Rule tile cycling through the variant regions prefix{minIndex}..{maxIndex-1};
-    // which variant (and rotation) is shown per placement is resolved by
-    // templateType from each tile's live 8-neighbor bitmask at bake time.
+    // which variant (and rotation) is shown per placement is resolved by the named
+    // template (from RuleTileTemplateManager) applied to each tile's live 8-neighbor
+    // bitmask at bake time. "16-tile" is built in; register custom templates first.
     uint16_t createRuleTile(
         const std::string& name, const std::string& prefix, int minIndex, int maxIndex,
-        RuleTileTemplate templateType
+        const std::string& templateName
     );
 
     struct RuleTileUV
