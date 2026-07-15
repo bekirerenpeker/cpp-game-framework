@@ -41,6 +41,9 @@ class Tileset : public IResource
         std::vector<TextureAtlas::Region> frames;
         float frameDuration = 0.1f;
         AnimMode mode = AnimMode::Loop;
+        // When set, each tile starts at a per-position frame offset so identical
+        // animated tiles don't play in lockstep.
+        bool randomOffset = false;
     };
 
     TextureAtlas m_atlas;
@@ -69,8 +72,9 @@ class Tileset : public IResource
     // Returns 0 (empty) if no tile with that name exists.
     uint16_t getTileId(const std::string& name) const;
     // Current UV rect for a tile. For animated tiles it's the frame at `time`;
-    // for static tiles `time` is ignored and the fixed rect is returned.
-    TextureAtlas::Region getTileUV(uint16_t id, float time) const;
+    // for static tiles `time` is ignored and the fixed rect is returned. worldPos
+    // only matters for animations created with randomOffset (per-tile phase).
+    TextureAtlas::Region getTileUV(uint16_t id, float time, Vec2 worldPos = VEC2_ZERO) const;
 
     // One tile from an existing atlas region, keyed by that region's name.
     // Returns the new tile's id, or 0 if no such region exists.
@@ -78,17 +82,20 @@ class Tileset : public IResource
     // Bulk tiles from regions prefix{minIndex}..prefix{maxIndex-1}.
     void createTiles(const std::string& prefix, int minIndex, int maxIndex);
     // Animated tile cycling through regions framePrefix{minIndex}..{maxIndex-1},
-    // one frame every frameDuration seconds. Returns the new tile's id.
+    // one frame every frameDuration seconds. Returns the new tile's id. With
+    // randomOffset, each placed tile is phase-shifted by its position so a field
+    // of the same tile does not animate in lockstep.
     uint16_t createAnimatedTile(
         const std::string& name, const std::string& framePrefix, int minIndex, int maxIndex,
-        float frameDuration, AnimMode mode = AnimMode::Loop
+        float frameDuration, AnimMode mode = AnimMode::Loop, bool randomOffset = false
     );
 
   private:
     uint16_t
     registerTile(const std::string& name, const TextureAtlas::Region& region, TileType type);
     uint16_t registerAnimatedTile(const std::string& name, const TileAnimation& anim);
-    static int animFrame(const TileAnimation& anim, float time);
+    static int animFrame(const TileAnimation& anim, float time, Vec2 worldPos);
+    static int frameOffset(Vec2 worldPos, int frameCount);
 };
 
 }   // namespace Engine

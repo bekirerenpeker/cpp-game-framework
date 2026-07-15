@@ -40,12 +40,14 @@ int tilemap_test()
     float frequency = 0.1f;
 
     // Three animated tiles sharing a frame count but differing in frame time,
-    // each cycling a third of the atlas regions by prefix + index range.
+    // each cycling a third of the atlas regions by prefix + index range. The
+    // trailing `true` gives each placed tile a per-position phase offset so a
+    // band of the same tile does not animate in lockstep.
     int f = tileCount / 3;
     uint16_t animTiles[] = {
-        tileset.createAnimatedTile("animSlow", "tile", 0 * f, 1 * f, 0.5f),
-        tileset.createAnimatedTile("animMed", "tile", 1 * f, 2 * f, 0.2f),
-        tileset.createAnimatedTile("animFast", "tile", 2 * f, 3 * f, 0.07f),
+        tileset.createAnimatedTile("animSlow", "tile", 0 * f, 1 * f, 0.5f, AnimMode::Loop, false),
+        tileset.createAnimatedTile("animMed", "tile", 1 * f, 2 * f, 0.2f, AnimMode::Loop, true),
+        tileset.createAnimatedTile("animFast", "tile", 2 * f, 3 * f, 0.07f, AnimMode::Loop, false),
     };
 
     TilemapComponent tilemap;

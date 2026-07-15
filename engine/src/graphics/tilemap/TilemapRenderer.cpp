@@ -73,7 +73,7 @@ void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId, const M
     const float time = Time::get().currTime();
     for (auto& [key, chunk] : tilemap.m_chunks) {
         for (const AnimatedTileInstance& a : chunk.animatedTiles) {
-            TextureAtlas::Region uv = tileset.getTileUV(a.tileId, time);
+            TextureAtlas::Region uv = tileset.getTileUV(a.tileId, time, Vec2(a.x, a.y));
             const float x1 = a.x + 1.0f, y1 = a.y + 1.0f;
 
             BatchRenderer<TileVertex>::Quad quad = m_batch.nextQuad(texture);
