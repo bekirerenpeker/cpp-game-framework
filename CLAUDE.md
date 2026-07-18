@@ -67,6 +67,26 @@ Rendering goes through an offscreen FBO then a post-processing pass to the windo
 - **Audio** ([audio](engine/include/audio)): miniaudio-backed `AudioManager` with buses, streams, and instances (`piano_demo` scene exercises it).
 - **Math** ([utils/math](engine/include/utils/math)): custom `Vec2/3/4`, `Mat4`, `Random`, `MathFuncs` — do not pull in GLM.
 
+## What to reach for
+Prefer the engine's own systems over the raw STL/third-party equivalent. The game never includes third-party headers directly — the engine wraps each one.
+
+Use the engine's, not the raw version:
+- **Math / vectors / matrices** → `Vec2/3/4`, `Mat4`, and the `Math::` free functions (`sin`, `clamp`, `lerp`, `floor`, `perlin2D/3D`, `DEG2RAD`, …). Do **not** include `<cmath>` or GLM. Randomness → `Random::` (`float01`, `rangeInt`, `pointInCircle`, …), not `<random>`.
+- **IDs / handles** → `IdType` with `INVALID_ID`/`START_ID` (from [utils/TypeAliases.hpp](engine/include/utils/TypeAliases.hpp)), plus the `uint`/`byte` aliases — never a raw `int`/`unsigned` for a handle. Runtime per-type ids → `TypeRegistery::get().getTypeId<T>()`.
+- **Stable-id → value storage** → `IdIndexedVector<T>` ([utils/IdIndexedVector.hpp](engine/include/utils/IdIndexedVector.hpp)): id-keyed, O(1) `get`, swap-remove; derive `T` from `IHasId` to auto-assign ids on `add`. Reach for this before hand-rolling an id/slot map.
+- **Global services** → the `Singleton<T>` CRTP (private ctor + `friend class Singleton<...>`).
+- **Heap-owned resources** (textures, tilesets, audio, …) → `ResourceManager` + `IResource` (`addResource<T>(...)` → `IdType`, `getResource<T>(id)`).
+- **Files** → `FileManager` typed entries (`TextFile`/`BinaryFile`/`JsonFile`/`ImageFile`), not raw `<fstream>`.
+- **Entities / game state** → the ECS (`Registry`, `EntityHandle`, `View<...>`), not ad-hoc containers of game objects.
+- **GL objects** → the `gl_wrappers/` RAII types, never raw `glGen*`/`glBind*`.
+- **Console output** → the logging macros, never `std::cout`/`std::cerr`.
+
+**STL is used freely** where there's no engine equivalent: `std::vector`, `std::unordered_map`, `std::string`, `std::array`, `std::pair`/`tuple`, structured bindings, `if constexpr`, fixed-width ints (`<cstdint>`). `std::format`-style formatting comes in through the logging macros.
+
+**Ownership**: managers use **raw owning pointers with manual `new`/`delete`** (e.g. `ResourceManager`, per-context FBOs/VAOs) — smart pointers are not the norm. Match that; don't introduce `unique_ptr`/`shared_ptr` unless extending code that already uses them.
+
+**Third-party libraries**, each reached only through its wrapper: glfw → `WindowManager`/`GlfwContext`; glad → `gl_wrappers/*`/`GladContext`; stb → `ImageFile` + `Math::perlin2D/3D`; miniaudio → `AudioManager`; nlohmann_json → `JsonFile`.
+
 ## Conventions
 - Members prefixed `m_`; constants `ALL_CAPS`; types `PascalCase`; methods `camelCase`.
 - 4-space indent, `{` on same line except function bodies, Allman-style class access labels (`  public:` indented). No `.clang-format` is committed — match the surrounding file.
