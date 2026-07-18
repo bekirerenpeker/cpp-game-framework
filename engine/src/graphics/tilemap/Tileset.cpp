@@ -125,7 +125,6 @@ Tileset::registerTile(const std::string& name, const TextureAtlas::Region& regio
     TileDefinition def;
     def.id = static_cast<uint16_t>(m_tilesById.size());
     def.type = type;
-    def.defaultFlags = 0;
     def.uvMin = region.uvMin;
     def.uvMax = region.uvMax;
 

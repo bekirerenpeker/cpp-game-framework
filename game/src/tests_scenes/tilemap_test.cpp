@@ -70,7 +70,7 @@ int tilemap_test()
             for (int x = 0; x < mapWidth; x++) {
                 bool solid = Math::perlin3D(x * frequency, y * frequency, z) >= 0.5f;
                 uint16_t id = solid ? ruleTileId : 0;
-                TilemapManager::get().setAt(tilemap, x - mapWidth / 2, y - mapHeight / 2, {id, 0});
+                TilemapManager::get().setAt(tilemap, x - mapWidth / 2, y - mapHeight / 2, {id});
             }
         }
 

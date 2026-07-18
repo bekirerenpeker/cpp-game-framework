@@ -33,7 +33,6 @@ class Tileset : public IResource
         uint16_t id = 0;
         TileType type = TileType::Normal;
         Vec2 uvMin = VEC2_ZERO, uvMax = VEC2_ONE;
-        uint16_t defaultFlags = 0;
     };
 
   private:
@@ -42,68 +41,37 @@ class Tileset : public IResource
         std::vector<TextureAtlas::Region> frames;
         float frameDuration = 0.1f;
         AnimMode mode = AnimMode::Loop;
-        // When set, each tile starts at a per-position frame offset so identical
-        // animated tiles don't play in lockstep.
         bool randomOffset = false;
+    };
+
+    struct TileRule
+    {
+        std::vector<TextureAtlas::Region> variants;
+        const std::array<RuleTileMapping, 256>* table = nullptr;
     };
 
     TextureAtlas m_atlas;
     std::unordered_map<std::string, TileDefinition> m_tiles;
-    // Indexed by tile id; index 0 is the reserved "empty" sentinel, so real
-    // tiles start at id 1. Lets the mesh builder resolve a TileData.textureId
-    // to its UV rect in O(1).
     std::vector<TileDefinition> m_tilesById {TileDefinition {}};
-    // Animation data keyed by tile id, for tiles whose type is Animated.
     std::unordered_map<uint16_t, TileAnimation> m_animations;
-    // Region variants keyed by tile id, for tiles whose type is Randomized. One
-    // variant is picked per tile position, so it bakes into the static mesh.
     std::unordered_map<uint16_t, std::vector<TextureAtlas::Region>> m_variations;
-    // Rule data keyed by tile id, for tiles whose type is Rule. Which variant (and
-    // rotation) is shown is resolved from a live 8-neighbor bitmask, so it also
-    // bakes into the static mesh.
-    struct TileRule
-    {
-        std::vector<TextureAtlas::Region> variants;
-        // Compiled 256-entry lookup owned by RuleTileTemplateManager; its entries
-        // stay pointer-stable, so we cache it here to avoid a per-tile name lookup
-        // at bake time.
-        const std::array<RuleTileMapping, 256>* table = nullptr;
-    };
     std::unordered_map<uint16_t, TileRule> m_rules;
 
   public:
     Tileset(const fs::path& tilesetImage);
     ~Tileset() = default;
 
-    // The atlas owns the texture and all partitioning; use it to slice regions
-    // (fromCellSize / fromGridSize / fromAutomatic / addRegion), then turn those
-    // named regions into tiles with the create* methods below.
     TextureAtlas& getAtlas() { return m_atlas; }
     const TextureAtlas& getAtlas() const { return m_atlas; }
 
     const GlTexture& getTexture() const { return m_atlas.getTexture(); }
 
-    // Returns nullptr for the empty id (0) or any id that was never created.
     const TileDefinition* getTile(uint16_t id) const;
-    // Returns 0 (empty) if no tile with that name exists.
     uint16_t getTileId(const std::string& name) const;
-    // Current UV rect for a tile, resolved from its tile position in the tilemap
-    // grid. Animated tiles return the frame at `time`; randomized tiles return the
-    // variant chosen for tilePos; static tiles ignore both and return their fixed
-    // rect. tilePos matters for randomized tiles and for animations created with
-    // randomOffset (per-tile phase).
     TextureAtlas::Region getTileUV(uint16_t id, float time, Vec2 tilePos = VEC2_ZERO) const;
 
-    // One tile from an existing atlas region, keyed by that region's name.
-    // Returns the new tile's id, or 0 if no such region exists.
     uint16_t createTile(const std::string& regionName);
-    // Bulk tiles from regions prefix{minIndex}..prefix{maxIndex-1}.
     void createTiles(const std::string& prefix, int minIndex, int maxIndex);
-    // Animated tile cycling through the given frame regions, one frame every
-    // frameDuration seconds. Returns the new tile's id. With randomOffset, each
-    // placed tile is phase-shifted by its position so a field of the same tile
-    // does not animate in lockstep. Frames come from an explicit name list or
-    // from framePrefix{minIndex}..{maxIndex-1}.
     uint16_t createAnimatedTile(
         const std::string& name, const std::vector<std::string>& frameNames, float frameDuration,
         AnimMode mode = AnimMode::Loop, bool randomOffset = false
@@ -112,19 +80,11 @@ class Tileset : public IResource
         const std::string& name, const std::string& framePrefix, int minIndex, int maxIndex,
         float frameDuration, AnimMode mode = AnimMode::Loop, bool randomOffset = false
     );
-    // Randomized tile that shows one of the given variant regions, chosen
-    // deterministically from each tile's position. Returns the new tile's id.
-    // Variants come from an explicit name list or from prefix{minIndex}..{maxIndex-1}.
     uint16_t
     createRandomizedTile(const std::string& name, const std::vector<std::string>& regionNames);
     uint16_t createRandomizedTile(
         const std::string& name, const std::string& prefix, int minIndex, int maxIndex
     );
-
-    // Rule tile cycling through the variant regions prefix{minIndex}..{maxIndex-1};
-    // which variant (and rotation) is shown per placement is resolved by the named
-    // template (from RuleTileTemplateManager) applied to each tile's live 8-neighbor
-    // bitmask at bake time. "16-tile" is built in; register custom templates first.
     uint16_t createRuleTile(
         const std::string& name, const std::string& prefix, int minIndex, int maxIndex,
         const std::string& templateName
@@ -135,12 +95,8 @@ class Tileset : public IResource
         TextureAtlas::Region region;
         int rotation = 0;
     };
-    // Resolves a rule tile's region + rotation for a given neighbor bitmask. Only
-    // meaningful for TileType::Rule tiles; used by TilemapRenderer at bake time.
     RuleTileUV getRuleTileUV(uint16_t id, uint8_t neighborMask) const;
 
-    // Whether two tiles connect for rule-tile bitmask purposes. Currently: same
-    // nonzero id.
     bool tilesConnect(uint16_t a, uint16_t b) const;
 
   private:

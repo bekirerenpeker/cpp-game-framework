@@ -24,8 +24,6 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
     void init(GlShader* shader, size_t maxQuadCount = 20000);
     void render(TilemapComponent& tilemap, IdType windowId);
 
-    size_t totalIndexCount(const TilemapComponent& tilemap) const;
-
   private:
     TilemapRenderer() = default;
     ~TilemapRenderer() = default;

@@ -12,13 +12,9 @@ class Tileset;
 
 struct TileData
 {
-    uint16_t textureId = 0;   // 0 == empty tile (skipped when meshing)
-    uint16_t flags = 0;
+    uint16_t textureId = 0;
 };
 
-// Per-vertex data for the tilemap mesh. A single tileset texture is bound per
-// tilemap, so no per-vertex texture index is needed. Kept intentionally simple
-// and expandable (the color channel leaves room for tint/lighting later).
 struct TileVertex
 {
     Vec2 pos;
@@ -27,8 +23,6 @@ struct TileVertex
     int texIndex;
 };
 
-// An animated tile pulled out of the static chunk mesh. Its tile-grid corner is
-// cached on edit; its UVs are resolved from the tileset every frame.
 struct AnimatedTileInstance
 {
     float x, y;
@@ -42,13 +36,8 @@ struct TilemapChunk
     int chunkX = 0, chunkY = 0;
     TileData tiles[CHUNK_SIZE * CHUNK_SIZE];
 
-    // CPU caches, rebuilt by TilemapRenderer only when the chunk is dirty. The
-    // static mesh is baked here; animated tiles are listed separately and
-    // re-emitted with current UVs every frame. GPU upload lives in the batch
-    // renderer, so the component is copyable and setAt needs no GL context.
     std::vector<TileVertex> mesh;
     std::vector<AnimatedTileInstance> animatedTiles;
-    uint32_t indexCount = 0;
     bool isDirty = false;
 };
 

@@ -63,7 +63,6 @@ void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId)
 
     const GlTexture* texture = &tileset.getTexture();
 
-    // Static geometry: the pre-baked chunk meshes.
     for (auto& [key, chunk] : tilemap.m_chunks) {
         if (!chunkVisible(chunk, visible)) continue;
         for (size_t i = 0; i + 4 <= chunk.mesh.size(); i += 4) {
@@ -75,7 +74,6 @@ void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId)
         }
     }
 
-    // Animated geometry: resolve each animated tile's current frame and emit it.
     const float time = Time::get().currTime();
     for (auto& [key, chunk] : tilemap.m_chunks) {
         if (!chunkVisible(chunk, visible)) continue;
@@ -102,15 +100,6 @@ void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId)
     m_batch.flush();
 }
 
-size_t TilemapRenderer::totalIndexCount(const TilemapComponent& tilemap) const
-{
-    size_t total = 0;
-    for (const auto& [key, chunk] : tilemap.m_chunks) {
-        total += chunk.indexCount + chunk.animatedTiles.size() * 6;
-    }
-    return total;
-}
-
 void TilemapRenderer::buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk, Tileset& tileset)
 {
     constexpr int S = TilemapChunk::CHUNK_SIZE;
@@ -122,7 +111,6 @@ void TilemapRenderer::buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk,
     const int baseX = chunk.chunkX * S;
     const int baseY = chunk.chunkY * S;
 
-    // Compact non-empty tiles so the shared sequential index buffer stays valid.
     for (int ly = 0; ly < S; ly++) {
         for (int lx = 0; lx < S; lx++) {
             const TileData& tile = chunk.tiles[ly * S + lx];
@@ -134,8 +122,8 @@ void TilemapRenderer::buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk,
             const float x0 = static_cast<float>(baseX + lx);
             const float y0 = static_cast<float>(baseY + ly);
 
-            // Animated tiles change UVs every frame, so keep them out of the
-            // static mesh and re-emit them at draw time from their tile position.
+            // Animated tiles change UVs every frame, so they're kept out of the
+            // static mesh and re-emitted at draw time instead.
             if (def->type == TileType::Animated) {
                 chunk.animatedTiles.push_back({x0, y0, tile.textureId});
                 continue;
@@ -144,8 +132,8 @@ void TilemapRenderer::buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk,
             const float x1 = x0 + 1.0f;
             const float y1 = y0 + 1.0f;
 
-            // Rule tiles resolve their region + rotation from a live 8-neighbor
-            // bitmask, computed here (bake time) so it costs nothing per frame.
+            // Rule tiles resolve region + rotation from a live 8-neighbor bitmask
+            // here at bake time, so it costs nothing per frame.
             if (def->type == TileType::Rule) {
                 uint8_t mask =
                     computeNeighborMask(tilemap, tileset, tile.textureId, baseX + lx, baseY + ly);
@@ -159,8 +147,6 @@ void TilemapRenderer::buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk,
                 continue;
             }
 
-            // Normal and Randomized tiles bake once. getTileUV resolves the fixed
-            // rect for Normal and the position-chosen variant for Randomized.
             const TextureAtlas::Region uv = tileset.getTileUV(tile.textureId, 0.0f, Vec2(x0, y0));
             const Vec2 uvMin = uv.uvMin, uvMax = uv.uvMax;
 
@@ -171,7 +157,6 @@ void TilemapRenderer::buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk,
         }
     }
 
-    chunk.indexCount = static_cast<uint32_t>((chunk.mesh.size() / 4) * 6);
     chunk.isDirty = false;
 }
 
