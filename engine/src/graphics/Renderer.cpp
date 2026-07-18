@@ -40,6 +40,7 @@ void Renderer::setShader(GlShader* shader) { m_batch.setShader(shader); }
 void Renderer::setViewProjMat(Registry& registry)
 {
     Mat4 viewProjMat;
+    m_visibleBounds = WorldBounds {};
 
     Window* window = WindowManager::get().getWindow(m_renderWindowId);
     if (!window) {
@@ -61,6 +62,8 @@ void Renderer::setViewProjMat(Registry& registry)
         Mat4 projMat = Mat4::ortho(left, right, bottom, top, cam.nearClip, cam.farClip);
 
         viewProjMat = projMat * viewMat;
+        m_visibleBounds.min = Vec2(transform.position.x + left, transform.position.y + bottom);
+        m_visibleBounds.max = Vec2(transform.position.x + right, transform.position.y + top);
         break;
     }
 

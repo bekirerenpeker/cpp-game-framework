@@ -5,12 +5,12 @@
 #include "graphics/TextureAtlas.hpp"
 #include "utils/Singleton.hpp"
 #include "utils/TypeAliases.hpp"
-#include "utils/math/Mat4.hpp"
 #include <array>
 
 namespace Engine {
 
 class Tileset;
+struct WorldBounds;
 
 class TilemapRenderer : public Singleton<TilemapRenderer>
 {
@@ -22,12 +22,7 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
 
   public:
     void init(GlShader* shader, size_t maxQuadCount = 20000);
-
-    // Rebuilds any dirty chunks and draws the whole tilemap into the currently
-    // bound render target. windowId names the render context whose per-context
-    // VAO is used (VAOs are not shared across contexts). Buffer/window/pass
-    // setup is the caller's job.
-    void render(TilemapComponent& tilemap, IdType windowId, const Mat4& viewProj);
+    void render(TilemapComponent& tilemap, IdType windowId);
 
     size_t totalIndexCount(const TilemapComponent& tilemap) const;
 
@@ -40,6 +35,7 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
         TilemapComponent& tilemap, Tileset& tileset, uint16_t selfId, int gx, int gy
     );
     static std::array<Vec2, 4> rotatedUVCorners(const TextureAtlas::Region& region, int rotation);
+    static bool chunkVisible(const TilemapChunk& chunk, const WorldBounds& bounds);
 };
 
 }   // namespace Engine

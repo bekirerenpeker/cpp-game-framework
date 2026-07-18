@@ -3,6 +3,7 @@
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/WindowManager.hpp"
 #include "graphics/Color.hpp"
+#include "graphics/Renderer.hpp"
 #include "graphics/tilemap/TilemapManager.hpp"
 #include "graphics/tilemap/Tileset.hpp"
 
@@ -23,8 +24,10 @@ void TilemapRenderer::init(GlShader* shader, size_t maxQuadCount)
     m_initialized = true;
 }
 
-void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId, const Mat4& viewProj)
+void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId)
 {
+    const Mat4& viewProj = Renderer::get().getViewProjMat();
+
     if (!m_initialized) {
         LOG_WARNING("TilemapRenderer::render() called before init(); skipping");
         return;
@@ -41,9 +44,10 @@ void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId, const M
     }
 
     Tileset& tileset = *tilemap.m_tileset;
+    const WorldBounds& visible = Renderer::get().getVisibleWorldBounds();
 
     for (auto& [key, chunk] : tilemap.m_chunks) {
-        if (chunk.isDirty) buildChunk(tilemap, chunk, tileset);
+        if (chunk.isDirty && chunkVisible(chunk, visible)) buildChunk(tilemap, chunk, tileset);
     }
 
     // VAOs are not shared across GL contexts, so use this context's own VAO,
@@ -61,6 +65,7 @@ void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId, const M
 
     // Static geometry: the pre-baked chunk meshes.
     for (auto& [key, chunk] : tilemap.m_chunks) {
+        if (!chunkVisible(chunk, visible)) continue;
         for (size_t i = 0; i + 4 <= chunk.mesh.size(); i += 4) {
             BatchRenderer<TileVertex>::Quad quad = m_batch.nextQuad(texture);
             for (int v = 0; v < 4; v++) {
@@ -73,6 +78,7 @@ void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId, const M
     // Animated geometry: resolve each animated tile's current frame and emit it.
     const float time = Time::get().currTime();
     for (auto& [key, chunk] : tilemap.m_chunks) {
+        if (!chunkVisible(chunk, visible)) continue;
         for (const AnimatedTileInstance& a : chunk.animatedTiles) {
             TextureAtlas::Region uv = tileset.getTileUV(a.tileId, time, Vec2(a.x, a.y));
             const float x1 = a.x + 1.0f, y1 = a.y + 1.0f;
@@ -202,6 +208,15 @@ TilemapRenderer::rotatedUVCorners(const TextureAtlas::Region& region, int rotati
     std::array<Vec2, 4> out;
     for (int i = 0; i < 4; i++) out[i] = corners[(i - shift + 4) % 4];
     return out;
+}
+
+bool TilemapRenderer::chunkVisible(const TilemapChunk& chunk, const WorldBounds& bounds)
+{
+    constexpr int S = TilemapChunk::CHUNK_SIZE;
+    const float minX = static_cast<float>(chunk.chunkX * S);
+    const float minY = static_cast<float>(chunk.chunkY * S);
+    return minX <= bounds.max.x && minX + S >= bounds.min.x && minY <= bounds.max.y &&
+           minY + S >= bounds.min.y;
 }
 
 }   // namespace Engine

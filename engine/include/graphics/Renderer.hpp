@@ -19,6 +19,13 @@ struct VertexData
     int texIndex;
 };
 
+// Axis-aligned world-space rectangle, e.g. the camera's visible area.
+struct WorldBounds
+{
+    Vec2 min = VEC2_ZERO;
+    Vec2 max = VEC2_ZERO;
+};
+
 class Renderer : public Singleton<Renderer>
 {
     friend class Singleton<Renderer>;
@@ -26,6 +33,7 @@ class Renderer : public Singleton<Renderer>
   private:
     IdType m_renderWindowId = INVALID_ID;
     BatchRenderer<VertexData> m_batch;
+    WorldBounds m_visibleBounds;
 
   public:
     void init(size_t maxQuadCount, GlShader* shader);
@@ -37,6 +45,7 @@ class Renderer : public Singleton<Renderer>
     const IdType getRenderWindowId() const;
 
     const Mat4& getViewProjMat() const { return m_batch.getViewProjMat(); }
+    const WorldBounds& getVisibleWorldBounds() const { return m_visibleBounds; }
 
     void beginPass();
     void drawToBuffer();

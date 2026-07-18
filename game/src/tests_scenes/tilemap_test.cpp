@@ -19,7 +19,7 @@ int tilemap_test()
 
     Registry registry;
     EntityHandle camera = registry.create();
-    camera.emplace<TransformComponent>().position = Vec3(32, 20, 0);
+    camera.emplace<TransformComponent>();
     camera.emplace<CameraComponent>().windowId = windowId;
     camera.get<CameraComponent>().orthoSize = 48;
 
@@ -40,13 +40,10 @@ int tilemap_test()
     TilemapComponent tilemap;
     TilemapManager::get().setTileset(tilemap, &tileset);
 
-    int mapWidth = 200;
-    int mapHeight = 200;
-    // Scales the noise sample coords; too low and the whole map crosses the
-    // threshold at once, too high and the pattern turns to static.
+    int mapWidth = 250;
+    int mapHeight = 250;
     float frequency = 0.1f;
-    // How fast the noise field scrolls along its 3rd axis per second.
-    float scrollSpeed = 0.5f;
+    float scrollSpeed = 0.32f;
 
     GlShader tilemapShader("game/assets/shaders/TilemapShader.glsl");
     GlShader quadShader("game/assets/shaders/QuadShader.glsl");
@@ -100,7 +97,7 @@ int tilemap_test()
             Renderer::get().clearColor(Color(0.1f, 0.1f, 0.15f, 1.0f));
 
             glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
-            TilemapRenderer::get().render(tilemap, id, Renderer::get().getViewProjMat());
+            TilemapRenderer::get().render(tilemap, id);
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
             Renderer::get().endScene();
