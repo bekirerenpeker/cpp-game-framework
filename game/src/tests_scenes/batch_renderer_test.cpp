@@ -1,44 +1,121 @@
 #include "EngineInclude.hpp"
 #include "test_funcs.hpp"
+#include <glad/glad.h>
 
 using namespace Engine;
 
+// Draws overlapping sprite stacks through Renderer::renderSprites(), with each
+// stack's entities created highest-layer-first so draw order can only come out
+// right if SpriteComponent::layer is honoured. WASD/QE pan and zoom; F flips,
+// H hides the middle layer, C churns a middle sprite, V toggles wireframe.
 int batch_renderer_test()
 {
     Logger::get().setUseAsync(true);
 
     IdType windowId1 = WindowManager::get().createWindow(
-        {1000, 800, "Graphics Test Window 1", WindowFlags::Transparent}
+        {1000, 800, "Sprite Test Window 1", WindowFlags::Transparent}
     );
     IdType windowId2 = WindowManager::get().createWindow(
-        {1000, 800, "Graphics Test Window 2", WindowFlags::Transparent}
+        {1000, 800, "Sprite Test Window 2", WindowFlags::Transparent}
     );
 
     Registry registry;
     EntityHandle camera1 = registry.create();
     camera1.emplace<TransformComponent>();
     camera1.emplace<CameraComponent>().windowId = windowId1;
-    camera1.get<CameraComponent>().orthoSize = 1000;
+    camera1.get<CameraComponent>().orthoSize = 40;
     EntityHandle camera2 = registry.create();
     camera2.emplace<TransformComponent>();
     camera2.emplace<CameraComponent>().windowId = windowId2;
-    camera2.get<CameraComponent>().orthoSize = 1000;
+    camera2.get<CameraComponent>().orthoSize = 40;
 
-    GlTexture tex("game/assets/images/mario.png");
+    GlTexture marioTex("game/assets/images/mario.png");
+    TextureAtlas tileAtlas("game/assets/images/TilesetFloorB.png");
+    std::vector<std::string> tileKeys = tileAtlas.fromCellSize("tile", 32, 32);
+    if (tileKeys.empty()) {
+        LOG_ERROR("atlas produced no regions (is TilesetFloorB.png present?)");
+        return 1;
+    }
+
     GlShader shader("game/assets/shaders/QuadShader.glsl");
     GlShader ppShader("game/assets/shaders/PostProcessingShader.glsl");
     Renderer::get().init(10000, &shader);
 
+    constexpr int STACK_COUNT = 5, LAYERS_PER_STACK = 5;
+    std::vector<Entity> stackSprites;
+    for (int s = 0; s < STACK_COUNT; s++) {
+        for (int layer = LAYERS_PER_STACK - 1; layer >= 0; layer--) {
+            EntityHandle sprite = registry.create();
+
+            int stackIndex = s - STACK_COUNT / 2;
+            float stackX = stackIndex * 9.0f;
+            TransformComponent& transform = sprite.emplace<TransformComponent>();
+            transform.position = Vec3(stackX + layer * 1.2f, layer * 1.2f, 0);
+            transform.scale = VEC2_ONE * 6.0f;
+
+            SpriteComponent& quad = sprite.emplace<SpriteComponent>();
+            quad.layer = layer;
+            if (layer % 2 == 0) {
+                quad.texture = &marioTex;
+            } else {
+                const TextureAtlas::Region* region =
+                    tileAtlas.getRegion(tileKeys[layer % tileKeys.size()]);
+                quad.texture = &tileAtlas.getTexture();
+                quad.uvMin = region->uvMin;
+                quad.uvMax = region->uvMax;
+            }
+            float shade = 0.35f + 0.65f * (layer / float(LAYERS_PER_STACK - 1));
+            quad.color = Color(shade, shade, shade, 1);
+
+            stackSprites.push_back(sprite.getEntity());
+        }
+    }
+
+    std::vector<Entity> spinners;
+    for (int s = 0; s < STACK_COUNT; s++) {
+        EntityHandle spinner = registry.create();
+        int stackIndex = s - STACK_COUNT / 2;
+        float stackX = stackIndex * 9.0f;
+        TransformComponent& transform = spinner.emplace<TransformComponent>();
+        transform.position = Vec3(stackX + 2.4f, -7.0f, 0);
+        transform.scale = VEC2_ONE * 4.0f;
+
+        SpriteComponent& quad = spinner.emplace<SpriteComponent>();
+        quad.texture = &marioTex;
+        quad.layer = LAYERS_PER_STACK;
+        quad.color = COLOR_YELLOW;
+        spinners.push_back(spinner.getEntity());
+    }
+
     Input::get().addAxis("Horizontal", {KeyCode::D, KeyCode::A, KeyCode::Right, KeyCode::Left});
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S, KeyCode::Up, KeyCode::Down});
     Input::get().addAxis("Zoom", {KeyCode::E, KeyCode::Q});
+
+    bool flipped = false, hideMiddle = false, churn = false, wireframe = false;
+    int churnLayer = LAYERS_PER_STACK / 2;
 
     std::vector<IdType> windowsToClose;
     while (WindowManager::get().anyWindowOpen()) {
         windowsToClose.clear();
         Time::get().update();
         float dt = Time::get().deltaTime();
-        LOG_INFO("FPS: {}", 1 / dt);
+        float time = Time::get().currTime();
+
+        if (churn) {
+            EntityHandle victim(stackSprites[churnLayer], registry);
+            TransformComponent transform = victim.get<TransformComponent>();
+            SpriteComponent quad = victim.get<SpriteComponent>();
+            victim.destroy();
+
+            EntityHandle respawned = registry.create();
+            respawned.emplace<TransformComponent>(transform);
+            respawned.emplace<SpriteComponent>(quad);
+            stackSprites[churnLayer] = respawned.getEntity();
+        }
+
+        for (Entity spinner : spinners) {
+            EntityHandle(spinner, registry).get<TransformComponent>().rotation = time;
+        }
 
         for (auto& [windowId, window] : WindowManager::get().getAllWindows()) {
             Input::get().update(windowId);
@@ -46,14 +123,28 @@ int batch_renderer_test()
             View<TransformComponent, CameraComponent> camView(registry);
             for (const auto& [ent, trans, cam] : camView) {
                 if (cam.windowId != windowId) continue;
-                trans.position.x += Input::get().getAxis("Horizontal") * dt * 2 * cam.orthoSize;
-                trans.position.y += Input::get().getAxis("Vertical") * dt * 2 * cam.orthoSize;
-                cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize * 2;
+                trans.position.x += Input::get().getAxis("Horizontal") * dt * cam.orthoSize;
+                trans.position.y += Input::get().getAxis("Vertical") * dt * cam.orthoSize;
+                cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
             }
 
             if (Input::get().keyPressed(KeyCode::Escape) || !window->isOpen()) {
                 windowsToClose.push_back(windowId);
             }
+            if (Input::get().keyPressed(KeyCode::F)) {
+                flipped = !flipped;
+                View<SpriteComponent> spriteView(registry);
+                for (const auto& [ent, quad] : spriteView) quad.flipX = flipped;
+            }
+            if (Input::get().keyPressed(KeyCode::H)) {
+                hideMiddle = !hideMiddle;
+                View<SpriteComponent> spriteView(registry);
+                for (const auto& [ent, quad] : spriteView) {
+                    if (quad.layer == churnLayer) quad.visible = !hideMiddle;
+                }
+            }
+            if (Input::get().keyPressed(KeyCode::C)) churn = !churn;
+            if (Input::get().keyPressed(KeyCode::V)) wireframe = !wireframe;
 
             Renderer::get().setRenderWindowId(windowId);
             Renderer::get().setViewProjMat(registry);
@@ -61,17 +152,12 @@ int batch_renderer_test()
             Renderer::get().beginPass();
             Renderer::get().setShader(&shader);
             Renderer::get().clearColor(Color(0.5f, 0.5f, 1.0f, 1.0f));
-            float size = 5;
-            int w = window->getWidth() / size, h = window->getHeight() / size;
-            for (int x = 0; x < w; x++) {
-                for (int y = 0; y < h; y++) {
-                    Renderer::get().addQuad(
-                        Vec2(x, y) * size - window->getSize() / 2.f, VEC2_ONE * size,
-                        Time::get().currTime() + windowId * PI2,
-                        Color(1 - x / (float)w, 1 - y / (float)h, 0, 1), &tex
-                    );
-                }
-            }
+
+            Renderer::get().renderSprites(registry);
+
+            glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
+            Renderer::get().endScene();
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
             Renderer::get().beginPass();
             Renderer::get().setShader(&ppShader);

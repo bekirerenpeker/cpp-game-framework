@@ -37,8 +37,8 @@ int tilemap_test()
     // "47-tile" is the built-in blob template; it's generated on first use.
     uint16_t ruleTileId = tileset.createRuleTile("ruleTile", "tile", 0, tileCount, "47-tile");
 
-    TilemapComponent tilemap;
-    TilemapManager::get().setTileset(tilemap, &tileset);
+    EntityHandle tilemapEntity = registry.create();
+    TilemapManager::get().setTileset(tilemapEntity.emplace<TilemapComponent>(), &tileset);
 
     int mapWidth = 250;
     int mapHeight = 250;
@@ -66,6 +66,7 @@ int tilemap_test()
         // not, so the pattern animates and the rule tile keeps re-picking its
         // region/rotation as neighbors change.
         float z = Time::get().currTime() * scrollSpeed;
+        TilemapComponent& tilemap = tilemapEntity.get<TilemapComponent>();
         for (int y = 0; y < mapHeight; y++) {
             for (int x = 0; x < mapWidth; x++) {
                 bool solid = Math::perlin3D(x * frequency, y * frequency, z) >= 0.5f;
@@ -97,7 +98,7 @@ int tilemap_test()
             Renderer::get().clearColor(Color(0.1f, 0.1f, 0.15f, 1.0f));
 
             glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
-            TilemapRenderer::get().render(tilemap, id);
+            TilemapRenderer::get().render(registry, id);
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
             Renderer::get().endScene();

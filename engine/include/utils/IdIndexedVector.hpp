@@ -11,7 +11,7 @@ namespace Engine {
 class IHasId
 {
   protected:
-    IdType m_id;
+    IdType m_id = INVALID_ID;
 
   public:
     virtual ~IHasId() = default;
@@ -21,7 +21,7 @@ class IHasId
 };
 
 template<
-    typename T, bool inheritsId = std::is_base_of_v<IHasId, T>,
+    typename T, bool inheritsId = std::is_base_of_v<IHasId, std::remove_pointer_t<T>>,
     bool isPointer = std::is_pointer_v<T>>
 class IdIndexedVector
 {

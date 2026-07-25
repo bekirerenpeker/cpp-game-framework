@@ -2,6 +2,7 @@
 #include "core/Time.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/WindowManager.hpp"
+#include "ecs/registry/View.hpp"
 #include "graphics/Color.hpp"
 #include "graphics/Renderer.hpp"
 #include "graphics/tilemap/TilemapManager.hpp"
@@ -22,6 +23,12 @@ void TilemapRenderer::init(GlShader* shader, size_t maxQuadCount)
         shader
     );
     m_initialized = true;
+}
+
+void TilemapRenderer::render(Registry& registry, IdType windowId)
+{
+    View<TilemapComponent> view(registry);
+    for (const auto& [entity, tilemap] : view) render(tilemap, windowId);
 }
 
 void TilemapRenderer::render(TilemapComponent& tilemap, IdType windowId)

@@ -27,9 +27,15 @@ class Input : public Singleton<Input>
         334, 335, 336, 340, 341, 342, 343, 344, 345, 346, 347, 348,
     };
 
-    bool m_keyCurrState[KEY_COUNT], m_keyPrevState[KEY_COUNT];
-    bool m_buttonCurrState[BUTTON_COUNT], m_buttonPrevState[BUTTON_COUNT];
-    Vec2 m_mousePos;
+    struct WindowState
+    {
+        bool keyCurrState[KEY_COUNT] = {}, keyPrevState[KEY_COUNT] = {};
+        bool buttonCurrState[BUTTON_COUNT] = {}, buttonPrevState[BUTTON_COUNT] = {};
+        Vec2 mousePos = VEC2_ZERO;
+    };
+
+    std::unordered_map<IdType, WindowState> m_windowStates;
+    WindowState* m_currState = nullptr;
 
     std::unordered_map<std::string, InputAxis> m_axises;
 
@@ -50,7 +56,7 @@ class Input : public Singleton<Input>
     Vec2 getMousePos();
 
   private:
-    Input();
+    Input() = default;
     ~Input() = default;
 };
 

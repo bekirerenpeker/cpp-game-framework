@@ -3,7 +3,9 @@
 #include "Entity.hpp"
 #include "ecs/signals/Signal.hpp"
 #include "ecs/signals/Sink.hpp"
+#include <algorithm>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace Engine {
@@ -17,11 +19,60 @@ class ISparseSet
     virtual bool contains(Entity e) const = 0;
 };
 
+struct InsertionSort
+{
+    template<typename T, typename Compare>
+    void operator()(
+        std::vector<T>& dense, std::vector<Entity>& entities, std::vector<size_t>&, Compare compare
+    ) const
+    {
+        for (size_t i = 1; i < dense.size(); i++) {
+            size_t j = i;
+            while (j > 0 && compare(dense[j], dense[j - 1])) {
+                std::swap(dense[j], dense[j - 1]);
+                std::swap(entities[j], entities[j - 1]);
+                j--;
+            }
+        }
+    }
+};
+
+struct StdSort
+{
+    template<typename T, typename Compare>
+    void operator()(
+        std::vector<T>& dense, std::vector<Entity>& entities, std::vector<size_t>& indices,
+        Compare compare
+    ) const
+    {
+        size_t count = dense.size();
+        indices.resize(count);
+        for (size_t i = 0; i < count; i++) indices[i] = i;
+
+        std::sort(indices.begin(), indices.end(), [&](size_t a, size_t b) {
+            return compare(dense[a], dense[b]);
+        });
+
+        for (size_t i = 0; i < count; i++) {
+            size_t curr = i;
+            while (i != indices[curr]) {
+                size_t next = indices[curr];
+                std::swap(dense[curr], dense[next]);
+                std::swap(entities[curr], entities[next]);
+                indices[curr] = curr;
+                curr = next;
+            }
+            indices[curr] = curr;
+        }
+    }
+};
+
 template<typename T, bool isEmpty = std::is_empty_v<T>> class SparseSet : public ISparseSet
 {
     std::vector<T> m_dense;
     std::vector<Entity> m_entities;
     std::vector<size_t> m_sparse;
+    std::vector<size_t> m_sortIndices;
 
     Signal<void(Entity)> m_onCreate;
     Signal<void(Entity)> m_onSet;
@@ -135,6 +186,21 @@ template<typename T, bool isEmpty = std::is_empty_v<T>> class SparseSet : public
         if (contains(from)) {
             if constexpr (isEmpty) insert(to, T {});
             else insert(to, T(get(from)));
+        }
+    }
+
+    template<typename Compare, typename Algo = InsertionSort>
+    void sort(Compare compare, Algo algo = Algo {})
+    {
+        if constexpr (isEmpty) {
+            return;
+        } else {
+            if (m_entities.size() < 2) return;
+
+            algo(m_dense, m_entities, m_sortIndices, compare);
+            for (size_t i = 0; i < m_entities.size(); i++) {
+                m_sparse[getEntityId(m_entities[i])] = i;
+            }
         }
     }
 };

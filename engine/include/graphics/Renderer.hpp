@@ -57,8 +57,12 @@ class Renderer : public Singleton<Renderer>
     void beginScene();
     void endScene();
 
-    void addQuad(Vec2 pos, Vec2 size, Color color, GlTexture* texture);
-    void addQuad(Vec2 pos, Vec2 size, float angleRad, Color color, GlTexture* texture);
+    void renderSprites(Registry& registry);
+
+    void addQuad(
+        Vec2 pos, Vec2 size, Color color, const GlTexture* texture, Vec2 uvMin = VEC2_ZERO,
+        Vec2 uvMax = VEC2_ONE, float angleRad = 0.0f
+    );
 
   private:
     void flush();

@@ -46,6 +46,12 @@ class Registry
     }
     template<typename T> void clearPool() { return getPool<T>().clear(); }
 
+    template<typename T, typename Compare, typename Algo = InsertionSort>
+    void sort(Compare compare, Algo algo = Algo {})
+    {
+        getPool<T>().sort(compare, algo);
+    }
+
     template<typename T, typename... Args> void setContext(Args&&... args)
     {
         IdType typeId = TypeRegistery::get().getTypeId<T>();

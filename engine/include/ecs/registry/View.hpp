@@ -62,10 +62,13 @@ class ViewImpl<std::tuple<Includes...>, Exclude<Excludes...>>
 {
   private:
     Registry& m_registry;
+    const std::vector<Entity>* m_drivingOverride = nullptr;
 
     // Dynamically finds the smallest pool to act as the driving iterator array
     const std::vector<Entity>& getDrivingEntities()
     {
+        if (m_drivingOverride) return *m_drivingOverride;
+
         size_t minSize = static_cast<size_t>(-1);
         const std::vector<Entity>* drivingPool = nullptr;
 
@@ -122,12 +125,23 @@ class ViewImpl<std::tuple<Includes...>, Exclude<Excludes...>>
         auto operator*() const
         {
             Entity e = entities[index];
-            return std::tie(e, reg.getPool<Includes>().get(e)...);
+            return std::tuple<Entity, Includes&...>(e, reg.getPool<Includes>().get(e)...);
         }
     };
 
   public:
     ViewImpl(Registry& registry) : m_registry(registry) {}
+
+    template<typename T> ViewImpl use()
+    {
+        static_assert(
+            (std::is_same_v<T, Includes> || ...),
+            "Error: View::use<T>() requires T to be one of the view's included components!"
+        );
+        ViewImpl pinned(*this);
+        pinned.m_drivingOverride = &m_registry.getPool<T>().getEntities();
+        return pinned;
+    }
 
     auto begin()
     {

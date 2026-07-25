@@ -8,7 +8,7 @@ namespace Engine {
 struct TransformComponent
 {
     Vec3 position = VEC3_ZERO;
-    Vec2 scale = VEC2_ZERO;
+    Vec2 scale = VEC2_ONE;
     float rotation = 0.0f;
 
     TransformComponent() = default;

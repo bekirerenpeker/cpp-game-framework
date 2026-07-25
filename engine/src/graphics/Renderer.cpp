@@ -1,6 +1,7 @@
 #include "graphics/Renderer.hpp"
 #include "components/TransformComponent.hpp"
 #include "components/CameraComponent.hpp"
+#include "components/SpriteComponent.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/WindowManager.hpp"
 #include "ecs/registry/View.hpp"
@@ -12,6 +13,8 @@
 #include "graphics/gl_wrappers/GlTexture.hpp"
 #include "utils/TypeAliases.hpp"
 #include "utils/math/Vec2.hpp"
+#include <functional>
+#include <utility>
 
 namespace Engine {
 
@@ -164,38 +167,59 @@ void Renderer::flush()
     m_batch.flush();
 }
 
-void Renderer::addQuad(Vec2 pos, Vec2 size, Color color, GlTexture* texture)
+void Renderer::renderSprites(Registry& registry)
 {
-    BatchRenderer<VertexData>::Quad quad = m_batch.nextQuad(texture);
+    registry.sort<SpriteComponent>([](const SpriteComponent& a, const SpriteComponent& b) {
+        if (a.layer != b.layer) return a.layer < b.layer;
+        return std::less<const GlTexture*> {}(a.texture, b.texture);
+    });
 
-    quad.verts[0] = {pos + Vec2(-1, -1) * size / 2.f, Vec2(0, 0), color, quad.texIndex};
-    quad.verts[1] = {pos + Vec2(+1, -1) * size / 2.f, Vec2(1, 0), color, quad.texIndex};
-    quad.verts[2] = {pos + Vec2(+1, +1) * size / 2.f, Vec2(1, 1), color, quad.texIndex};
-    quad.verts[3] = {pos + Vec2(-1, +1) * size / 2.f, Vec2(0, 1), color, quad.texIndex};
+    View<TransformComponent, SpriteComponent> view(registry);
+    for (const auto& [entity, transform, sprite] : view.use<SpriteComponent>()) {
+        if (!sprite.visible || !sprite.texture) continue;
+
+        Vec2 pos(transform.position.x, transform.position.y);
+        Vec2 size = transform.scale;
+
+        Vec2 halfExtents = size.abs() / 2.f;
+        if (transform.rotation != 0) halfExtents = Vec2(halfExtents.magnitude());
+
+        if (pos.x + halfExtents.x < m_visibleBounds.min.x ||
+            pos.x - halfExtents.x > m_visibleBounds.max.x ||
+            pos.y + halfExtents.y < m_visibleBounds.min.y ||
+            pos.y - halfExtents.y > m_visibleBounds.max.y) {
+            continue;
+        }
+
+        Vec2 uvMin = sprite.uvMin, uvMax = sprite.uvMax;
+        if (sprite.flipX) std::swap(uvMin.x, uvMax.x);
+        if (sprite.flipY) std::swap(uvMin.y, uvMax.y);
+
+        addQuad(pos, size, sprite.color, sprite.texture, uvMin, uvMax, transform.rotation);
+    }
 }
-void Renderer::addQuad(Vec2 pos, Vec2 size, float angleRad, Color color, GlTexture* texture)
+
+void Renderer::addQuad(
+    Vec2 pos, Vec2 size, Color color, const GlTexture* texture, Vec2 uvMin, Vec2 uvMax,
+    float angleRad
+)
 {
-    // remove this angle == 0 check if it leads to performance issues
-    if (angleRad == 0) return addQuad(pos, size, color, texture);
+    const Vec2 corners[4] = {Vec2(-1, -1), Vec2(+1, -1), Vec2(+1, +1), Vec2(-1, +1)};
+    const Vec2 uvs[4] = {
+        {uvMin.x, uvMin.y},
+        {uvMax.x, uvMin.y},
+        {uvMax.x, uvMax.y},
+        {uvMin.x, uvMax.y}
+    };
 
     BatchRenderer<VertexData>::Quad quad = m_batch.nextQuad(texture);
 
-    quad.verts[0] = {
-        pos + Vec2(-1, -1).rotatedAround(VEC2_ZERO, angleRad) * size / 2.f, Vec2(0, 0), color,
-        quad.texIndex
-    };
-    quad.verts[1] = {
-        pos + Vec2(+1, -1).rotatedAround(VEC2_ZERO, angleRad) * size / 2.f, Vec2(1, 0), color,
-        quad.texIndex
-    };
-    quad.verts[2] = {
-        pos + Vec2(+1, +1).rotatedAround(VEC2_ZERO, angleRad) * size / 2.f, Vec2(1, 1), color,
-        quad.texIndex
-    };
-    quad.verts[3] = {
-        pos + Vec2(-1, +1).rotatedAround(VEC2_ZERO, angleRad) * size / 2.f, Vec2(0, 1), color,
-        quad.texIndex
-    };
+    // remove this angle == 0 check if it leads to performance issues
+    bool rotated = angleRad != 0;
+    for (int i = 0; i < 4; i++) {
+        Vec2 corner = rotated ? corners[i].rotatedAround(VEC2_ZERO, angleRad) : corners[i];
+        quad.verts[i] = {pos + corner * size / 2.f, uvs[i], color, quad.texIndex};
+    }
 }
 
 }   // namespace Engine

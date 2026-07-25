@@ -42,7 +42,7 @@ class EntityHandle
     template<typename T> const T& get() const { return m_registry.getPool<T>().get(m_entity); }
     template<typename T1, typename T2, typename... Ts> auto get()
     {
-        return std::tie(get<T1>(m_entity), get<T2>(m_entity), get<Ts>(m_entity)...);
+        return std::tie(get<T1>(), get<T2>(), get<Ts>()...);
     }
     template<typename T1, typename T2, typename... Ts> auto get() const
     {
