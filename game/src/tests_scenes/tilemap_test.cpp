@@ -55,16 +55,12 @@ int tilemap_test()
     Input::get().addAxis("Zoom", {KeyCode::E, KeyCode::Q});
 
     bool wireframe = false;
-    std::vector<IdType> windowsToClose;
-    while (WindowManager::get().anyWindowOpen()) {
-        windowsToClose.clear();
-        Time::get().update();
-        float dt = Time::get().deltaTime();
 
-        // Scroll the map by sampling 3D Perlin with time as the z axis; a tile is
-        // placed where the field crosses the threshold and cleared where it does
-        // not, so the pattern animates and the rule tile keeps re-picking its
-        // region/rotation as neighbors change.
+    // Scroll the map by sampling 3D Perlin with time as the z axis; a tile is
+    // placed where the field crosses the threshold and cleared where it does
+    // not, so the pattern animates and the rule tile keeps re-picking its
+    // region/rotation as neighbors change.
+    auto onFrame = [&](float dt) {
         float z = Time::get().currTime() * scrollSpeed;
         TilemapComponent& tilemap = tilemapEntity.get<TilemapComponent>();
         for (int y = 0; y < mapHeight; y++) {
@@ -74,41 +70,35 @@ int tilemap_test()
                 TilemapManager::get().setAt(tilemap, x - mapWidth / 2, y - mapHeight / 2, {id});
             }
         }
+    };
 
-        for (auto& [id, window] : WindowManager::get().getAllWindows()) {
-            ViewContext::get().setActiveWindow(id);
-            Input::get().update();
-
-            View<TransformComponent, CameraComponent> camView(registry);
-            for (const auto& [ent, trans, cam] : camView) {
-                if (cam.windowId != id) continue;
-                trans.position.x += Input::get().getAxis("Horizontal") * dt * cam.orthoSize;
-                trans.position.y += Input::get().getAxis("Vertical") * dt * cam.orthoSize;
-                cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
-            }
-
-            if (Input::get().keyPressed(KeyCode::Escape) || !window->isOpen()) {
-                windowsToClose.push_back(id);
-            }
-            if (Input::get().keyPressed(KeyCode::V)) wireframe = !wireframe;
-
-            ViewContext::get().updateCamera(registry);
-
-            Renderer::get().beginScene();
-            Renderer::get().clearColor(Color(0.1f, 0.1f, 0.15f, 1.0f));
-
-            glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
-            TilemapRenderer::get().render(registry);
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-            Renderer::get().endScene();
-
-            window->swapBuffers();
+    auto onWindowUpdate = [&](IdType id, float dt) {
+        View<TransformComponent, CameraComponent> camView(registry);
+        for (const auto& [ent, trans, cam] : camView) {
+            if (cam.windowId != id) continue;
+            trans.position.x += Input::get().getAxis("Horizontal") * dt * cam.orthoSize;
+            trans.position.y += Input::get().getAxis("Vertical") * dt * cam.orthoSize;
+            cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
         }
+        if (Input::get().keyPressed(KeyCode::V)) wireframe = !wireframe;
+    };
 
-        GlfwContext::pollEvents();
-        for (const auto& id : windowsToClose) WindowManager::get().closeWindow(id);
-    }
+    auto onWindowRender = [&](IdType id, float dt) {
+        Renderer::get().beginScene();
+        Renderer::get().clearColor(Color(0.1f, 0.1f, 0.15f, 1.0f));
+
+        glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
+        TilemapRenderer::get().render(registry);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+        Renderer::get().endScene();
+    };
+
+    Application app(registry);
+    app.onFrame().bind(&onFrame);
+    app.onWindowUpdate().bind(&onWindowUpdate);
+    app.onWindowRender().bind(&onWindowRender);
+    app.run();
 
     LOG_INFO("==========================================================\n");
     return 0;

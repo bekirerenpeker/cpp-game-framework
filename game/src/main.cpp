@@ -6,5 +6,5 @@ using namespace Engine;
 int main()
 {
     Logger::get().addSink<FileSink>("game/output/log.txt");
-    return batch_renderer_test();
+    return tilemap_test();
 }

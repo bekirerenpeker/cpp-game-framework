@@ -6,3 +6,4 @@
 #include "file_management/FileManagementInclude.hpp"
 #include "resource_management/ResourceManagementInclude.hpp"
 #include "Time.hpp"
+#include "Application.hpp"

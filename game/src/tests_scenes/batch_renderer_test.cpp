@@ -94,11 +94,7 @@ int batch_renderer_test()
     bool flipped = false, hideMiddle = false, churn = false, wireframe = false;
     int churnLayer = LAYERS_PER_STACK / 2;
 
-    std::vector<IdType> windowsToClose;
-    while (WindowManager::get().anyWindowOpen()) {
-        windowsToClose.clear();
-        Time::get().update();
-        float dt = Time::get().deltaTime();
+    auto onFrame = [&](float dt) {
         float time = Time::get().currTime();
 
         if (churn) {
@@ -116,59 +112,54 @@ int batch_renderer_test()
         for (Entity spinner : spinners) {
             EntityHandle(spinner, registry).get<TransformComponent>().rotation = time;
         }
+    };
 
-        for (auto& [windowId, window] : WindowManager::get().getAllWindows()) {
-            ViewContext::get().setActiveWindow(windowId);
-            Input::get().update();
-
-            View<TransformComponent, CameraComponent> camView(registry);
-            for (const auto& [ent, trans, cam] : camView) {
-                if (cam.windowId != windowId) continue;
-                trans.position.x += Input::get().getAxis("Horizontal") * dt * cam.orthoSize;
-                trans.position.y += Input::get().getAxis("Vertical") * dt * cam.orthoSize;
-                cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
-            }
-
-            if (Input::get().keyPressed(KeyCode::Escape) || !window->isOpen()) {
-                windowsToClose.push_back(windowId);
-            }
-            if (Input::get().keyPressed(KeyCode::F)) {
-                flipped = !flipped;
-                View<SpriteComponent> spriteView(registry);
-                for (const auto& [ent, quad] : spriteView) quad.flipX = flipped;
-            }
-            if (Input::get().keyPressed(KeyCode::H)) {
-                hideMiddle = !hideMiddle;
-                View<SpriteComponent> spriteView(registry);
-                for (const auto& [ent, quad] : spriteView) {
-                    if (quad.layer == churnLayer) quad.visible = !hideMiddle;
-                }
-            }
-            if (Input::get().keyPressed(KeyCode::C)) churn = !churn;
-            if (Input::get().keyPressed(KeyCode::V)) wireframe = !wireframe;
-
-            ViewContext::get().updateCamera(registry);
-
-            Renderer::get().beginPass();
-            Renderer::get().setShader(&shader);
-            Renderer::get().clearColor(Color(0.5f, 0.5f, 1.0f, 1.0f));
-
-            Renderer::get().renderSprites(registry);
-
-            glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
-            Renderer::get().endScene();
-            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
-            Renderer::get().beginPass();
-            Renderer::get().setShader(&ppShader);
-            Renderer::get().drawToWindow();
-
-            window->swapBuffers();
+    auto onWindowUpdate = [&](IdType windowId, float dt) {
+        View<TransformComponent, CameraComponent> camView(registry);
+        for (const auto& [ent, trans, cam] : camView) {
+            if (cam.windowId != windowId) continue;
+            trans.position.x += Input::get().getAxis("Horizontal") * dt * cam.orthoSize;
+            trans.position.y += Input::get().getAxis("Vertical") * dt * cam.orthoSize;
+            cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
         }
 
-        GlfwContext::pollEvents();
-        for (const auto& windowId : windowsToClose) WindowManager::get().closeWindow(windowId);
-    }
+        if (Input::get().keyPressed(KeyCode::F)) {
+            flipped = !flipped;
+            View<SpriteComponent> spriteView(registry);
+            for (const auto& [ent, quad] : spriteView) quad.flipX = flipped;
+        }
+        if (Input::get().keyPressed(KeyCode::H)) {
+            hideMiddle = !hideMiddle;
+            View<SpriteComponent> spriteView(registry);
+            for (const auto& [ent, quad] : spriteView) {
+                if (quad.layer == churnLayer) quad.visible = !hideMiddle;
+            }
+        }
+        if (Input::get().keyPressed(KeyCode::C)) churn = !churn;
+        if (Input::get().keyPressed(KeyCode::V)) wireframe = !wireframe;
+    };
+
+    auto onWindowRender = [&](IdType windowId, float dt) {
+        Renderer::get().beginPass();
+        Renderer::get().setShader(&shader);
+        Renderer::get().clearColor(Color(0.5f, 0.5f, 1.0f, 1.0f));
+
+        Renderer::get().renderSprites(registry);
+
+        glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
+        Renderer::get().endScene();
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+        Renderer::get().beginPass();
+        Renderer::get().setShader(&ppShader);
+        Renderer::get().drawToWindow();
+    };
+
+    Application app(registry);
+    app.onFrame().bind(&onFrame);
+    app.onWindowUpdate().bind(&onWindowUpdate);
+    app.onWindowRender().bind(&onWindowRender);
+    app.run();
 
     return 0;
 }

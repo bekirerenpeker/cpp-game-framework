@@ -50,6 +50,21 @@ template<typename Ret, typename... Args> class Delegate<Ret(Args...)>
         m_stub = &memberFunctionStub<C, Method>;
     }
 
+    // Bind any callable object -- a lambda or a functor -- through its
+    // operator(). Only the pointer is stored, so the object must outlive the
+    // delegate; taking it by pointer is what stops a temporary binding here.
+    // The constraint keeps a signature mismatch as an error on this line
+    // instead of one inside the stub. Generic lambdas are not supported:
+    // their operator() is a template with no single address to take.
+    template<class C>
+        requires requires(C* callable, Args... args) { (*callable)(args...); }
+    void bind(C* callable)
+    {
+        assert(callable != nullptr && "Cannot bind to a null callable!");
+        m_instance = callable;
+        m_stub = &memberFunctionStub<C, &C::operator()>;
+    }
+
     // Check if the delegate actually has a function bound to it
     bool isBound() const { return m_stub != nullptr; }
 

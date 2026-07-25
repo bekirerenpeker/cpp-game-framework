@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A 2D Terraria-style game written in C++20, built on a custom engine. The repo is split into a reusable **engine** static library and a thin **game** executable that currently drives it through hand-written test scenes rather than a real gameplay loop.
 
+## Working backlog
+
+[TODOS.md](TODOS.md) at the repo root tracks planned engine work. Check it when picking a next task, and keep it current: add items when new work is defined, edit items when a plan changes, check off / move to "Done" with a one-line note when something lands. Don't let it drift from what's actually true in the code.
+
 ## Build & Run
 
 The project uses CMake. VS Code is configured to use the **Ninja** generator and copies `compile_commands.json` to the repo root for clangd.
@@ -62,6 +66,9 @@ Located in `engine/include/ecs/`. Not EnTT — a hand-rolled equivalent.
 3. `GlfwContext::pollEvents()` once after all windows; close windows collected during iteration afterward (don't mutate the window list mid-loop).
 
 Rendering goes through an offscreen FBO then a post-processing pass to the window (see `beginPass`/`drawToWindow`/`drawToBuffer` and the `gl_wrappers/` RAII wrappers: `GlBuffer`, `GlShader`, `GlTexture`, `GlFrameBuffer`, `GlVertexArray`, `GlLayout`). Shaders are single `.glsl` files containing multiple stages (see `game/assets/shaders/`).
+
+### Application — the frame/window loop
+[core/Application.hpp](engine/include/core/Application.hpp) owns steps 2–3 above so scenes don't hand-roll them: the `anyWindowOpen` loop, `Time::update`, per-window `setActiveWindow`/`Input::update`, escape/close bookkeeping, `ViewContext::updateCamera`, `swapBuffers` and `pollEvents`. Scene code supplies three `Delegate` phases — `onFrame(dt)` (once per frame), `onWindowUpdate(windowId, dt)` (per window, before the view-proj matrix is baked, so move cameras here), `onWindowRender(windowId, dt)` (per window, matrix ready) — bound with `app.onFrame().bind(&fn)` and run with `app.run()`. Each phase is optional; unbound ones are skipped. The render body (passes, shaders, draw calls) stays entirely in the callback. `tilemap_test`/`batch_renderer_test` show the shape; the manual loop is still valid for scenes needing full control.
 
 ### Other subsystems
 - **Logging** ([core/logging](engine/include/core/logging)): use `LOG_INFO/LOG_WARNING/LOG_ERROR(fmt, ...)` (std::format-style). Sinks are pluggable (`ConsoleSink`, `FileSink`); add with `Logger::get().addSink<FileSink>(path)`. `setUseAsync(true)` enables async logging. Register a `std::formatter` for a custom type via the `DEFINE_TYPE_FORMATTER` macro. Never use `std::cout`/`std::cerr` directly — always go through the logging macros.
