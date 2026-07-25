@@ -43,7 +43,10 @@ There is **no test framework**. The "tests" in `game/src/tests_scenes/` are inte
 Every subsystem folder has a `*Include.hpp` (e.g. `CoreInclude.hpp`, `GraphicsInclude.hpp`, `ComponentsInclude.hpp`) that re-exports the folder's public headers. When adding a new type to a subsystem, add its header to the corresponding `*Include.hpp` so it flows up to `EngineInclude.hpp`. Sources are glob-collected by CMake (`file(GLOB_RECURSE ... src/**.cpp)`), so new `.cpp` files are picked up on the next configure but **new files require re-running CMake configure**, not just build.
 
 ### Global managers are Singletons
-Core services are accessed as `Xxx::get()` via the CRTP base [utils/Singleton.hpp](engine/include/utils/Singleton.hpp): `WindowManager`, `Renderer`, `Input`, `Time`, `Logger`, `ResourceManager`, `AudioManager`, `TilemapManager`, `TypeRegistery`. Constructors are private with `friend class Singleton<...>`.
+Core services are accessed as `Xxx::get()` via the CRTP base [utils/Singleton.hpp](engine/include/utils/Singleton.hpp): `WindowManager`, `ViewContext`, `Renderer`, `Input`, `Time`, `Logger`, `ResourceManager`, `AudioManager`, `TilemapManager`, `TypeRegistery`. Constructors are private with `friend class Singleton<...>`.
+
+### ViewContext — the active window + camera
+[core/window_management/ViewContext.hpp](engine/include/core/window_management/ViewContext.hpp) owns "which window am I working on and what camera is looking at it": the active window id, the active camera entity, its view-proj matrix and visible `WorldBounds`, plus `screenToWorld`/`worldToScreen`/`getMouseWorldPos`. `Renderer`, `TilemapRenderer` and `Input` all read from it rather than holding or re-receiving that state. Per window each frame, `setActiveWindow(id)` comes first — `Input::update()` picks its window from here — then `updateCamera(registry)` once the camera has been moved. Cull with `isVisible(pos, halfExtents)`; the bounds are already widened for a rotated camera.
 
 ### ECS (custom, EnTT-like)
 Located in `engine/include/ecs/`. Not EnTT — a hand-rolled equivalent.
@@ -55,14 +58,14 @@ Located in `engine/include/ecs/`. Not EnTT — a hand-rolled equivalent.
 ### Rendering (batch renderer + multi-window)
 [graphics/Renderer.hpp](engine/include/graphics/Renderer.hpp) is a batched quad renderer (single Singleton). Typical per-frame flow, driven per-window:
 1. `WindowManager::createWindow(...)` returns an `IdType`; cameras are entities with `TransformComponent` + `CameraComponent` (the camera's `windowId` binds it to a window).
-2. Per window each frame: `setRenderWindowId(id)` → `setViewProjMat(registry)` → `beginPass()` → `setShader()` / `clearColor()` → `addQuad(...)` many times → a second `beginPass()` with a post-processing shader → `drawToWindow()` → `window->swapBuffers()`.
+2. Per window each frame: `ViewContext::setActiveWindow(id)` → `Input::update()` → `ViewContext::updateCamera(registry)` → `beginPass()` → `setShader()` / `clearColor()` → `addQuad(...)` many times → a second `beginPass()` with a post-processing shader → `drawToWindow()` → `window->swapBuffers()`. The Renderer binds the GL context lazily, syncing to `ViewContext`'s active window inside `beginPass`/`beginScene`/`flush`.
 3. `GlfwContext::pollEvents()` once after all windows; close windows collected during iteration afterward (don't mutate the window list mid-loop).
 
 Rendering goes through an offscreen FBO then a post-processing pass to the window (see `beginPass`/`drawToWindow`/`drawToBuffer` and the `gl_wrappers/` RAII wrappers: `GlBuffer`, `GlShader`, `GlTexture`, `GlFrameBuffer`, `GlVertexArray`, `GlLayout`). Shaders are single `.glsl` files containing multiple stages (see `game/assets/shaders/`).
 
 ### Other subsystems
 - **Logging** ([core/logging](engine/include/core/logging)): use `LOG_INFO/LOG_WARNING/LOG_ERROR(fmt, ...)` (std::format-style). Sinks are pluggable (`ConsoleSink`, `FileSink`); add with `Logger::get().addSink<FileSink>(path)`. `setUseAsync(true)` enables async logging. Register a `std::formatter` for a custom type via the `DEFINE_TYPE_FORMATTER` macro. Never use `std::cout`/`std::cerr` directly — always go through the logging macros.
-- **Input** ([core/input](engine/include/core/input)): `Input::get().update(windowId)` per window; axis-based via `addAxis("Name", {posKeys..., negKeys...})` then `getAxis("Name")`; also `keyPressed(KeyCode::...)`.
+- **Input** ([core/input](engine/include/core/input)): `Input::get().update()` per window, after `ViewContext::setActiveWindow(id)`; axis-based via `addAxis("Name", {posKeys..., negKeys...})` then `getAxis("Name")`; also `keyPressed(KeyCode::...)`.
 - **File management** ([core/file_management](engine/include/core/file_management)): typed file entries (`TextFile`, `BinaryFile`, `JsonFile`, `ImageFile`) under an `IFileEntry`/`Folder` tree via `FileManager`.
 - **Audio** ([audio](engine/include/audio)): miniaudio-backed `AudioManager` with buses, streams, and instances (`piano_demo` scene exercises it).
 - **Math** ([utils/math](engine/include/utils/math)): custom `Vec2/3/4`, `Mat4`, `Random`, `MathFuncs` — do not pull in GLM.
@@ -75,6 +78,7 @@ Use the engine's, not the raw version:
 - **IDs / handles** → `IdType` with `INVALID_ID`/`START_ID` (from [utils/TypeAliases.hpp](engine/include/utils/TypeAliases.hpp)), plus the `uint`/`byte` aliases — never a raw `int`/`unsigned` for a handle. Runtime per-type ids → `TypeRegistery::get().getTypeId<T>()`.
 - **Stable-id → value storage** → `IdIndexedVector<T>` ([utils/IdIndexedVector.hpp](engine/include/utils/IdIndexedVector.hpp)): id-keyed, O(1) `get`, swap-remove; derive `T` from `IHasId` to auto-assign ids on `add`. Reach for this before hand-rolling an id/slot map.
 - **Global services** → the `Singleton<T>` CRTP (private ctor + `friend class Singleton<...>`).
+- **Active window / camera / matrices / screen↔world** → `ViewContext`, never the `Renderer`. It is the single source for the current window id, view-proj matrix, visible bounds and mouse world position.
 - **Heap-owned resources** (textures, tilesets, audio, …) → `ResourceManager` + `IResource` (`addResource<T>(...)` → `IdType`, `getResource<T>(id)`).
 - **Files** → `FileManager` typed entries (`TextFile`/`BinaryFile`/`JsonFile`/`ImageFile`), not raw `<fstream>`.
 - **Entities / game state** → the ECS (`Registry`, `EntityHandle`, `View<...>`), not ad-hoc containers of game objects.

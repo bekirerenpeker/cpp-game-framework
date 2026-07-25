@@ -76,7 +76,8 @@ int tilemap_test()
         }
 
         for (auto& [id, window] : WindowManager::get().getAllWindows()) {
-            Input::get().update(id);
+            ViewContext::get().setActiveWindow(id);
+            Input::get().update();
 
             View<TransformComponent, CameraComponent> camView(registry);
             for (const auto& [ent, trans, cam] : camView) {
@@ -91,14 +92,13 @@ int tilemap_test()
             }
             if (Input::get().keyPressed(KeyCode::V)) wireframe = !wireframe;
 
-            Renderer::get().setRenderWindowId(id);
-            Renderer::get().setViewProjMat(registry);
+            ViewContext::get().updateCamera(registry);
 
             Renderer::get().beginScene();
             Renderer::get().clearColor(Color(0.1f, 0.1f, 0.15f, 1.0f));
 
             glPolygonMode(GL_FRONT_AND_BACK, wireframe ? GL_LINE : GL_FILL);
-            TilemapRenderer::get().render(registry, id);
+            TilemapRenderer::get().render(registry);
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 
             Renderer::get().endScene();

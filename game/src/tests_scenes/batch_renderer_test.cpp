@@ -118,7 +118,8 @@ int batch_renderer_test()
         }
 
         for (auto& [windowId, window] : WindowManager::get().getAllWindows()) {
-            Input::get().update(windowId);
+            ViewContext::get().setActiveWindow(windowId);
+            Input::get().update();
 
             View<TransformComponent, CameraComponent> camView(registry);
             for (const auto& [ent, trans, cam] : camView) {
@@ -146,8 +147,7 @@ int batch_renderer_test()
             if (Input::get().keyPressed(KeyCode::C)) churn = !churn;
             if (Input::get().keyPressed(KeyCode::V)) wireframe = !wireframe;
 
-            Renderer::get().setRenderWindowId(windowId);
-            Renderer::get().setViewProjMat(registry);
+            ViewContext::get().updateCamera(registry);
 
             Renderer::get().beginPass();
             Renderer::get().setShader(&shader);

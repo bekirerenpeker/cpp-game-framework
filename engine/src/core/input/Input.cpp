@@ -1,4 +1,5 @@
 #include "core/input/Input.hpp"
+#include "core/window_management/ViewContext.hpp"
 #include "core/window_management/WindowManager.hpp"
 #include <cstring>
 
@@ -10,10 +11,11 @@ void Input::addAxis(const std::string& name, const InputAxis& axis)
 }
 int Input::getAxis(const std::string& name) { return m_axises.at(name).getValue(); }
 
-void Input::update(IdType windowId)
+void Input::update()
 {
     if (!WindowManager::get().anyWindowOpen()) return;
 
+    IdType windowId = ViewContext::get().getActiveWindowId();
     Window* window = WindowManager::get().getWindow(windowId);
     if (window == nullptr) {
         windowId = WindowManager::get().getMainWindowId();

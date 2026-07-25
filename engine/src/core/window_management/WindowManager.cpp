@@ -2,6 +2,7 @@
 #include "GLFW/glfw3.h"
 #include "context/GladContext.hpp"
 #include "core/logging/LoggerMacros.hpp"
+#include "core/window_management/ViewContext.hpp"
 #include "core/window_management/Window.hpp"
 #include "graphics/Renderer.hpp"
 
@@ -30,7 +31,7 @@ IdType WindowManager::createWindow(WindowCreationOptions opts, bool setAsMain)
     IdType id = m_windows.add(new Window(opts, nullptr, m_contextWindow.getGlfwHandle()));
     if (setAsMain || m_mainWindowId == INVALID_ID) {
         m_mainWindowId = id;
-        Renderer::get().setRenderWindowId(m_mainWindowId);
+        ViewContext::get().setActiveWindow(m_mainWindowId);
     }
 
     return id;
@@ -41,7 +42,8 @@ void WindowManager::closeWindow(IdType windowId)
     // change the current context to the deleted window so every opengl id
     // that was created in this context points to the right object
     Window* win = m_windows.get(windowId);
-    Renderer::get().setRenderWindowId(INVALID_ID);
+    ViewContext::get().setActiveWindow(INVALID_ID);
+    Renderer::get().releaseRenderContext();
     glfwMakeContextCurrent(win->getGlfwHandle());
 
     m_windows.remove(windowId);

@@ -23,9 +23,10 @@ int piano_demo()
     }
 
     Window* mainWindow = WindowManager::get().getMainWindow();
+    ViewContext::get().setActiveWindow(windowId);
     while (mainWindow->isOpen()) {
         Time::get().update();
-        Input::get().update(windowId);
+        Input::get().update();
 
         if (Input::get().keyPressed(KeyCode::Q)) break;
 

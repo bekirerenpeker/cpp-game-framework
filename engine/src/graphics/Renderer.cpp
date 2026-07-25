@@ -1,8 +1,8 @@
 #include "graphics/Renderer.hpp"
 #include "components/TransformComponent.hpp"
-#include "components/CameraComponent.hpp"
 #include "components/SpriteComponent.hpp"
 #include "core/logging/LoggerMacros.hpp"
+#include "core/window_management/ViewContext.hpp"
 #include "core/window_management/WindowManager.hpp"
 #include "ecs/registry/View.hpp"
 #include "graphics/Color.hpp"
@@ -32,7 +32,11 @@ void Renderer::init(size_t maxQuadCount, GlShader* shader)
     );
 }
 
-void Renderer::clear() { glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); }
+void Renderer::clear()
+{
+    syncRenderContext();
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+}
 void Renderer::clearColor(Color color)
 {
     glClearColor(color.r, color.g, color.b, color.a);
@@ -40,48 +44,12 @@ void Renderer::clearColor(Color color)
 }
 
 void Renderer::setShader(GlShader* shader) { m_batch.setShader(shader); }
-void Renderer::setViewProjMat(Registry& registry)
+
+void Renderer::syncRenderContext()
 {
-    Mat4 viewProjMat;
-    m_visibleBounds = WorldBounds {};
-
-    Window* window = WindowManager::get().getWindow(m_renderWindowId);
-    if (!window) {
-        m_batch.setViewProjMat(viewProjMat);
-        return;
-    }
-    float aspectRatio = window->getAspectRatio();
-
-    View<TransformComponent, CameraComponent> view(registry);
-    for (const auto& [entity, transform, cam] : view) {
-        if (cam.windowId != m_renderWindowId || !cam.isPrimary) continue;
-
-        float left = -cam.orthoSize * aspectRatio * 0.5f;
-        float right = cam.orthoSize * aspectRatio * 0.5f;
-        float bottom = -cam.orthoSize * 0.5f;
-        float top = cam.orthoSize * 0.5f;
-
-        Mat4 viewMat = Mat4::view(transform.position, transform.rotation);
-        Mat4 projMat = Mat4::ortho(left, right, bottom, top, cam.nearClip, cam.farClip);
-
-        viewProjMat = projMat * viewMat;
-        m_visibleBounds.min = Vec2(transform.position.x + left, transform.position.y + bottom);
-        m_visibleBounds.max = Vec2(transform.position.x + right, transform.position.y + top);
-        break;
-    }
-
-    m_batch.setViewProjMat(viewProjMat);
-}
-void Renderer::setRenderWindowId(IdType id)
-{
-    IRenderContext* currContext = WindowManager::get().getWindow(m_renderWindowId);
+    IdType id = ViewContext::get().getActiveWindowId();
+    IRenderContext* currContext = WindowManager::get().getWindow(m_boundWindowId);
     IRenderContext* newContext = WindowManager::get().getWindow(id);
-
-    if (id == INVALID_ID) {
-        if (currContext) currContext->unbindRenderContext();
-        m_renderWindowId = INVALID_ID;
-        return;
-    }
 
     if (!newContext || (newContext == currContext && !currContext->m_isRenderContextDirty)) return;
     if (currContext) currContext->unbindRenderContext();
@@ -98,14 +66,22 @@ void Renderer::setRenderWindowId(IdType id)
 
     glViewport(0, 0, newContext->getRenderContextWidth(), newContext->getRenderContextHeight());
     newContext->m_isRenderContextDirty = false;
-    m_renderWindowId = id;
+    m_boundWindowId = id;
 }
-const IdType Renderer::getRenderWindowId() const { return m_renderWindowId; }
+void Renderer::releaseRenderContext()
+{
+    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
+    if (context) context->unbindRenderContext();
+    m_boundWindowId = INVALID_ID;
+}
+void Renderer::applyViewProj() { m_batch.setViewProjMat(ViewContext::get().getViewProjMat()); }
 
 void Renderer::beginPass()
 {
-    if (m_renderWindowId == INVALID_ID) return;
-    IRenderContext* context = WindowManager::get().getWindow(m_renderWindowId);
+    syncRenderContext();
+    applyViewProj();
+    if (m_boundWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
 
     endScene();
     context->switchBuffers();
@@ -116,8 +92,9 @@ void Renderer::beginPass()
 }
 void Renderer::drawToBuffer()
 {
-    if (m_renderWindowId == INVALID_ID) return;
-    IRenderContext* context = WindowManager::get().getWindow(m_renderWindowId);
+    syncRenderContext();
+    if (m_boundWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
 
     Mat4 viewProjMat = m_batch.getViewProjMat();
     m_batch.setViewProjMat(Mat4());
@@ -129,8 +106,9 @@ void Renderer::drawToBuffer()
 }
 void Renderer::drawToWindow()
 {
-    if (m_renderWindowId == INVALID_ID) return;
-    IRenderContext* context = WindowManager::get().getWindow(m_renderWindowId);
+    syncRenderContext();
+    if (m_boundWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
 
     Mat4 viewProjMat = m_batch.getViewProjMat();
     m_batch.setViewProjMat(Mat4());
@@ -143,20 +121,26 @@ void Renderer::drawToWindow()
     m_batch.setViewProjMat(viewProjMat);
 }
 
-void Renderer::beginScene() {}
+void Renderer::beginScene()
+{
+    syncRenderContext();
+    applyViewProj();
+}
 void Renderer::endScene() { flush(); }
 void Renderer::flush()
 {
+    syncRenderContext();
+
     // Guarded on isReady() (init() has run) so the lazy VAO creation below
-    // never captures a not-yet-set vertex layout -- WindowManager triggers a
-    // setRenderWindowId() for the very first window before init() runs.
-    if (m_renderWindowId == INVALID_ID || !m_batch.isReady()) {
+    // never captures a not-yet-set vertex layout -- the first sync can land on
+    // a window before init() runs.
+    if (m_boundWindowId == INVALID_ID || !m_batch.isReady()) {
         m_batch.setVao(nullptr);
         m_batch.flush();
         return;
     }
 
-    IRenderContext* renderContext = WindowManager::get().getWindow(m_renderWindowId);
+    IRenderContext* renderContext = WindowManager::get().getWindow(m_boundWindowId);
     GlVertexArray*& vao = renderContext->vertexArray(this);
     if (!vao) {
         vao = new GlVertexArray();
@@ -184,12 +168,7 @@ void Renderer::renderSprites(Registry& registry)
         Vec2 halfExtents = size.abs() / 2.f;
         if (transform.rotation != 0) halfExtents = Vec2(halfExtents.magnitude());
 
-        if (pos.x + halfExtents.x < m_visibleBounds.min.x ||
-            pos.x - halfExtents.x > m_visibleBounds.max.x ||
-            pos.y + halfExtents.y < m_visibleBounds.min.y ||
-            pos.y - halfExtents.y > m_visibleBounds.max.y) {
-            continue;
-        }
+        if (!ViewContext::get().isVisible(pos, halfExtents)) continue;
 
         Vec2 uvMin = sprite.uvMin, uvMax = sprite.uvMax;
         if (sprite.flipX) std::swap(uvMin.x, uvMax.x);

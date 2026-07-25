@@ -40,7 +40,7 @@ class Input : public Singleton<Input>
     std::unordered_map<std::string, InputAxis> m_axises;
 
   public:
-    void update(IdType windowId = INVALID_ID);
+    void update();
 
     void addAxis(const std::string& name, const InputAxis& axis);
     int getAxis(const std::string& name);

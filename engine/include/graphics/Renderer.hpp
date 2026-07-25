@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IRenderContext.hpp"
+#include "core/window_management/ViewContext.hpp"
 #include "ecs/registry/Registry.hpp"
 #include "graphics/BatchRenderer.hpp"
 #include "graphics/Color.hpp"
@@ -19,33 +20,19 @@ struct VertexData
     int texIndex;
 };
 
-// Axis-aligned world-space rectangle, e.g. the camera's visible area.
-struct WorldBounds
-{
-    Vec2 min = VEC2_ZERO;
-    Vec2 max = VEC2_ZERO;
-};
-
 class Renderer : public Singleton<Renderer>
 {
     friend class Singleton<Renderer>;
 
   private:
-    IdType m_renderWindowId = INVALID_ID;
+    IdType m_boundWindowId = INVALID_ID;
     BatchRenderer<VertexData> m_batch;
-    WorldBounds m_visibleBounds;
 
   public:
     void init(size_t maxQuadCount, GlShader* shader);
 
     void setShader(GlShader* shader);
-    void setViewProjMat(Registry& registry);
-
-    void setRenderWindowId(IdType id);
-    const IdType getRenderWindowId() const;
-
-    const Mat4& getViewProjMat() const { return m_batch.getViewProjMat(); }
-    const WorldBounds& getVisibleWorldBounds() const { return m_visibleBounds; }
+    void releaseRenderContext();
 
     void beginPass();
     void drawToBuffer();
@@ -65,6 +52,8 @@ class Renderer : public Singleton<Renderer>
     );
 
   private:
+    void syncRenderContext();
+    void applyViewProj();
     void flush();
 
     Renderer() = default;

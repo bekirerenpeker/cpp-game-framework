@@ -11,7 +11,6 @@ namespace Engine {
 
 class Tileset;
 class Registry;
-struct WorldBounds;
 
 class TilemapRenderer : public Singleton<TilemapRenderer>
 {
@@ -23,8 +22,8 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
 
   public:
     void init(GlShader* shader, size_t maxQuadCount = 20000);
-    void render(TilemapComponent& tilemap, IdType windowId);
-    void render(Registry& registry, IdType windowId);
+    void render(TilemapComponent& tilemap);
+    void render(Registry& registry);
 
   private:
     TilemapRenderer() = default;
@@ -35,7 +34,7 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
         TilemapComponent& tilemap, Tileset& tileset, uint16_t selfId, int gx, int gy
     );
     static std::array<Vec2, 4> rotatedUVCorners(const TextureAtlas::Region& region, int rotation);
-    static bool chunkVisible(const TilemapChunk& chunk, const WorldBounds& bounds);
+    static bool chunkVisible(const TilemapChunk& chunk);
 };
 
 }   // namespace Engine
