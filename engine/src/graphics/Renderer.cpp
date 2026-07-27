@@ -155,8 +155,12 @@ void Renderer::renderSprites(Registry& registry)
 {
     registry.sort<SpriteComponent>([](const SpriteComponent& a, const SpriteComponent& b) {
         if (a.layer != b.layer) return a.layer < b.layer;
+        if (a.shader != b.shader) return std::less<const GlShader*> {}(a.shader, b.shader);
         return std::less<const GlTexture*> {}(a.texture, b.texture);
     });
+
+    GlShader* passShader = m_batch.getShader();
+    GlShader* currShader = passShader;
 
     View<TransformComponent, SpriteComponent> view(registry);
     for (const auto& [entity, transform, sprite] : view.use<SpriteComponent>()) {
@@ -174,7 +178,20 @@ void Renderer::renderSprites(Registry& registry)
         if (sprite.flipX) std::swap(uvMin.x, uvMax.x);
         if (sprite.flipY) std::swap(uvMin.y, uvMax.y);
 
+        // Switched after the culling checks so a skipped sprite never costs a flush.
+        GlShader* shader = sprite.shader ? sprite.shader : passShader;
+        if (shader != currShader) {
+            flush();
+            m_batch.setShader(shader);
+            currShader = shader;
+        }
+
         addQuad(pos, size, sprite.color, sprite.texture, uvMin, uvMax, transform.rotation);
+    }
+
+    if (currShader != passShader) {
+        flush();
+        m_batch.setShader(passShader);
     }
 }
 

@@ -29,13 +29,12 @@ rather than leaving a stale description.
   `CHUNK_SIZE^2` rebake where feasible). Do alongside the terrain-type
   rework since both touch `TileVertex`/`TilemapRenderer`.
 
-- [ ] **Sprite material/shader grouping** — `Renderer` currently takes one
-  shader per `beginPass`/scene; `SpriteComponent` has `layer` but no way to
-  say "draw this sprite with a different shader." Add a small
-  `MaterialComponent` (shader id, maybe uniforms), sort sprites by
-  `(shader, layer, texture)` instead of just `(layer, texture)`, and flush
-  the batch on shader boundary the same way `BatchRenderer` already flushes
-  on texture-slot overflow.
+- [ ] **Per-sprite material uniforms** — `SpriteComponent::shader` covers
+  "draw this sprite with a different shader", but there is still no way to
+  feed a custom shader its own uniforms (tint strength, outline width, …).
+  Needs a material concept — a shared uniform set stored once and referenced
+  by sprites, applied on the shader switch in `Renderer::renderSprites` —
+  rather than per-entity uniform blobs.
 
 ## Later
 
@@ -43,8 +42,8 @@ rather than leaving a stale description.
   `BatchRenderer<TextVertex>` instance, following the `TilemapRenderer`
   pattern), font loading via `ResourceManager`/`FileManager`.
 - [ ] **UI system** — layout + widgets, built on top of text rendering and
-  the sprite/quad batch. Needs the sprite material system above if any UI
-  effects want custom shaders (9-slice, blur, etc.).
+  the sprite/quad batch. Custom-shader effects (9-slice, blur, etc.) go
+  through `SpriteComponent::shader`, plus the material uniforms item above.
 - [ ] **Docs pass** — no `docs/` currently exists; CLAUDE.md is the only
   source of truth. Once the above systems stabilize, either expand
   CLAUDE.md's "Other subsystems" section or split into a `docs/` folder per
@@ -52,6 +51,12 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **Per-sprite shaders** — `SpriteComponent` gained a `GlShader* shader`
+  (`nullptr` = whatever shader is bound on the `Renderer`).
+  `Renderer::renderSprites` now sorts by `(layer, shader, texture)`, flushes
+  the batch on a shader boundary, and restores the pass shader when done.
+  `BatchRenderer::getShader()` added so the pass shader can be read back.
 
 - [x] **Application/loop wrapper** — added `Engine::Application`
   ([Application.hpp](engine/include/core/Application.hpp) +

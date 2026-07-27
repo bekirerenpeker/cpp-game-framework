@@ -6,10 +6,12 @@
 namespace Engine {
 
 class GlTexture;
+class GlShader;
 
 struct SpriteComponent
 {
     const GlTexture* texture = nullptr;
+    GlShader* shader = nullptr;   // nullptr = the shader bound on the Renderer
     Vec2 uvMin = VEC2_ZERO, uvMax = VEC2_ONE;
     Color color = COLOR_WHITE;
     int layer = 0;

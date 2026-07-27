@@ -6,8 +6,10 @@ using namespace Engine;
 
 // Draws overlapping sprite stacks through Renderer::renderSprites(), with each
 // stack's entities created highest-layer-first so draw order can only come out
-// right if SpriteComponent::layer is honoured. WASD/QE pan and zoom; F flips,
-// H hides the middle layer, C churns a middle sprite, V toggles wireframe.
+// right if SpriteComponent::layer is honoured. The spinning sprites carry their
+// own grayscale shader, so they also exercise the mid-batch shader switch.
+// WASD/QE pan and zoom; F flips, H hides the middle layer, C churns a middle
+// sprite, V toggles wireframe, G toggles the spinners' shader.
 int batch_renderer_test()
 {
     Logger::get().setUseAsync(true);
@@ -38,6 +40,7 @@ int batch_renderer_test()
     }
 
     GlShader shader("game/assets/shaders/QuadShader.glsl");
+    GlShader grayShader("game/assets/shaders/GrayscaleQuadShader.glsl");
     GlShader ppShader("game/assets/shaders/PostProcessingShader.glsl");
     Renderer::get().init(10000, &shader);
 
@@ -84,6 +87,7 @@ int batch_renderer_test()
         quad.texture = &marioTex;
         quad.layer = LAYERS_PER_STACK;
         quad.color = COLOR_YELLOW;
+        quad.shader = &grayShader;
         spinners.push_back(spinner.getEntity());
     }
 
@@ -91,7 +95,7 @@ int batch_renderer_test()
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S, KeyCode::Up, KeyCode::Down});
     Input::get().addAxis("Zoom", {KeyCode::E, KeyCode::Q});
 
-    bool flipped = false, hideMiddle = false, churn = false, wireframe = false;
+    bool flipped = false, hideMiddle = false, churn = false, wireframe = false, grayed = true;
     int churnLayer = LAYERS_PER_STACK / 2;
 
     auto onFrame = [&](float dt) {
@@ -137,6 +141,13 @@ int batch_renderer_test()
         }
         if (Input::get().keyPressed(KeyCode::C)) churn = !churn;
         if (Input::get().keyPressed(KeyCode::V)) wireframe = !wireframe;
+        if (Input::get().keyPressed(KeyCode::G)) {
+            grayed = !grayed;
+            for (Entity spinner : spinners) {
+                EntityHandle(spinner, registry).get<SpriteComponent>().shader =
+                    grayed ? &grayShader : nullptr;
+            }
+        }
     };
 
     auto onWindowRender = [&](IdType windowId, float dt) {
