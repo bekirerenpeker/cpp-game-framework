@@ -50,3 +50,49 @@ if(IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/glad")
 else()
     message(FATAL_ERROR "GLAD directory is missing! Generate it from the web service and place the include/ and src/ folders in lib/glad.")
 endif()
+
+# --- Font baker (freetype + msdf-atlas-gen) ---
+# Only needed to BAKE a font atlas from a .ttf. The Font resource reads the
+# baked .png/.json cache without either library, so a shipping build that ships
+# its .cache/fonts/ can turn this off and drop both dependencies entirely.
+option(ENGINE_BUILD_FONT_BAKER "Build the msdf-atlas-gen backed font baker" ON)
+
+if(ENGINE_BUILD_FONT_BAKER)
+    if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/freetype")
+        message(FATAL_ERROR "freetype submodule is missing! Run: git submodule update --init --recursive")
+    endif()
+    if(NOT IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/msdf-atlas-gen")
+        message(FATAL_ERROR "msdf-atlas-gen submodule is missing! Run: git submodule update --init --recursive")
+    endif()
+
+    # Strip every optional freetype dependency so it builds with no system packages.
+    set(FT_DISABLE_ZLIB     ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_BZIP2    ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_PNG      ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_HARFBUZZ ON CACHE BOOL "" FORCE)
+    set(FT_DISABLE_BROTLI   ON CACHE BOOL "" FORCE)
+    add_subdirectory(freetype)
+
+    # freetype only sets EXPORT_NAME Freetype::Freetype for its install export, so
+    # that target does not exist in a build tree. msdfgen guards its
+    # find_package(Freetype) on `if(NOT TARGET Freetype::Freetype)` -- without this
+    # alias it would go looking for a system freetype that doesn't exist here.
+    if(NOT TARGET Freetype::Freetype)
+        add_library(Freetype::Freetype ALIAS freetype)
+    endif()
+
+    set(MSDF_ATLAS_BUILD_STANDALONE OFF CACHE BOOL "" FORCE)
+    set(MSDF_ATLAS_USE_VCPKG        OFF CACHE BOOL "" FORCE)
+    set(MSDF_ATLAS_USE_SKIA         OFF CACHE BOOL "" FORCE)
+    set(MSDF_ATLAS_NO_ARTERY_FONT   ON  CACHE BOOL "" FORCE)
+    set(MSDF_ATLAS_INSTALL          OFF CACHE BOOL "" FORCE)
+    set(MSDF_ATLAS_MSDFGEN_EXTERNAL OFF CACHE BOOL "" FORCE)
+    # The rest of the project links the dynamic MSVC runtime; msdf-atlas-gen
+    # defaults to the static one and mismatched runtimes fail at link.
+    set(MSDF_ATLAS_DYNAMIC_RUNTIME  ON  CACHE BOOL "" FORCE)
+    # Drops the libpng dependency from both msdfgen and msdf-atlas-gen. We hand
+    # the baked bitmap to stb through FileManager::createImageFile instead.
+    set(MSDFGEN_DISABLE_PNG         ON  CACHE BOOL "" FORCE)
+    set(MSDFGEN_DISABLE_SVG         ON  CACHE BOOL "" FORCE)
+    add_subdirectory(msdf-atlas-gen)
+endif()

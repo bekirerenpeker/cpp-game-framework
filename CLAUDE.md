@@ -15,9 +15,15 @@ A 2D Terraria-style game written in C++20, built on a custom engine. The repo is
 The project uses CMake. VS Code is configured to use the **Ninja** generator and copies `compile_commands.json` to the repo root for clangd.
 
 ```bash
-# First-time setup: init the git submodules (glfw, miniaudio, nlohmann_json)
+# First-time setup: init the git submodules (glfw, miniaudio, nlohmann_json,
+# freetype, msdf-atlas-gen — the last one pulls msdfgen recursively)
 git submodule update --init --recursive
 ```
+
+`freetype` + `msdf-atlas-gen` are only needed to **bake** a font atlas. They are
+gated behind the `ENGINE_BUILD_FONT_BAKER` CMake option (default `ON`); with it
+`OFF` neither library is configured or linked, and `Font` still loads any atlas
+already present in `.cache/fonts/`.
 
 Two dependencies are **NOT** submodules and must be placed manually or the CMake configure step fails with a FATAL_ERROR:
 - `lib/glad/` — generate from the GLAD web service (OpenGL loader), place its `include/` and `src/` folders here.
@@ -34,7 +40,7 @@ cmake --build build
 ./build/game/game.exe
 ```
 
-There is **no test framework**. The "tests" in `game/src/tests_scenes/` are interactive demo `main`-like functions (`ecs_test`, `piano_demo`, `file_management_test`, `batch_renderer_test`) declared in `game/include/test_funcs.hpp`. To switch which scene runs, edit the call in [game/src/main.cpp](game/src/main.cpp). Only one runs per build.
+There is **no test framework**. The "tests" in `game/src/tests_scenes/` are interactive demo `main`-like functions (`ecs_test`, `piano_demo`, `file_management_test`, `batch_renderer_test`, `tilemap_test`, `ui_test`) declared in `game/include/test_funcs.hpp`. To switch which scene runs, edit the call in [game/src/main.cpp](game/src/main.cpp). Only one runs per build.
 
 `DEBUG` is defined unconditionally in the root [CMakeLists.txt](CMakeLists.txt); logging macros compile to no-ops when it is absent. OS is injected as the `OS_NAME` macro (compared against `OS_WINDOWS`/`OS_MACOS`/`OS_LINUX`).
 
@@ -75,6 +81,8 @@ Rendering goes through an offscreen FBO then a post-processing pass to the windo
 - **Input** ([core/input](engine/include/core/input)): `Input::get().update()` per window, after `ViewContext::setActiveWindow(id)`; axis-based via `addAxis("Name", {posKeys..., negKeys...})` then `getAxis("Name")`; also `keyPressed(KeyCode::...)`.
 - **File management** ([core/file_management](engine/include/core/file_management)): typed file entries (`TextFile`, `BinaryFile`, `JsonFile`, `ImageFile`) under an `IFileEntry`/`Folder` tree via `FileManager`.
 - **Audio** ([audio](engine/include/audio)): miniaudio-backed `AudioManager` with buses, streams, and instances (`piano_demo` scene exercises it).
+- **Fonts** ([graphics/text](engine/include/graphics/text)): `Font` is an `IResource` built from a `.ttf`/`.otf`. Pick `FontAtlasType::Mtsdf` (scales/rotates cleanly) or `FontAtlasType::Bitmap` (crisp at its native `emPixelSize`) via `FontBakeSettings`; the type selects the texture filtering internally. Glyph data comes back as `Glyph`/`FontMetrics` structs in **em units** — multiply by a pixel size. `getUnitRange()` gives the per-vertex factor an MSDF shader needs (`VEC2_ZERO` for a bitmap atlas). Bakes are cached in `.cache/fonts/` as a `.png` + `.json` pair and rebuilt only when the font file's bytes actually change; `FontBaker` is the only code that touches msdf-atlas-gen.
+- **Text rendering** ([graphics/text](engine/include/graphics/text)): `TextRenderer` is a Singleton owning its own `BatchRenderer<TextVertex>` (init it with `TextShader.glsl`), layered as `draw` (parses `/s` style tags, delegates), `drawSpan` (baseline pen in → pen out, the chaining primitive, handles `\n`/`\t`/kerning), `drawGlyph` (one quad) and `measure`. `draw` takes a **top-left** origin; `drawSpan` is baseline-relative. `flush()` is explicit — call it once after all text so everything shares one draw call. One `TextStyle` covers both atlas types and every effect: colour, `letterSpacing`/`lineSpacing`, `italicSkew`, `underline`, `strikethrough`, plus the distance-field ones — `outlineWidth`/`outlineColor`, `boldness` (±weight), `softness` (blur), and `shadowColor`/`shadowWidth`/`shadowSoftness`/`shadowOffset` (a zero offset makes it a centred glow). A `Bitmap` font silently ignores the distance-field ones but keeps colour, spacing, skew and the decorations, since those are geometry. **Every measurement except `size` is in em**, so a style holds its proportions under camera zoom — do not put these in pixels, or effects drift with zoom and a wide glow floods the glyph quad. Outline/glow width is capped by the baked field: see `Font::getMaxEffectEm()`, and raise `FontBakeSettings::distanceRangePixels` (default 4) for wider effects. Positional styling: `"a /sb/s c"` plus a `{styleB}` list; `//s` escapes a literal `/s`, a short style list falls back to the default, and note `"m/s"` reads as a tag. Style-varying data is **per-vertex, never a uniform**, so a uniform would cost one draw call per style. Text is drawn in world space (`ViewContext`'s matrix); a screen-space pass and wrapping are still TODO. Iterate strings with `Utf8::next` — Latin-1 glyphs are multi-byte.
 - **Math** ([utils/math](engine/include/utils/math)): custom `Vec2/3/4`, `Mat4`, `Random`, `MathFuncs` — do not pull in GLM.
 
 ## What to reach for
@@ -96,7 +104,7 @@ Use the engine's, not the raw version:
 
 **Ownership**: managers use **raw owning pointers with manual `new`/`delete`** (e.g. `ResourceManager`, per-context FBOs/VAOs) — smart pointers are not the norm. Match that; don't introduce `unique_ptr`/`shared_ptr` unless extending code that already uses them.
 
-**Third-party libraries**, each reached only through its wrapper: glfw → `WindowManager`/`GlfwContext`; glad → `gl_wrappers/*`/`GladContext`; stb → `ImageFile` + `Math::perlin2D/3D`; miniaudio → `AudioManager`; nlohmann_json → `JsonFile`.
+**Third-party libraries**, each reached only through its wrapper: glfw → `WindowManager`/`GlfwContext`; glad → `gl_wrappers/*`/`GladContext`; stb → `ImageFile` + `Math::perlin2D/3D`; miniaudio → `AudioManager`; nlohmann_json → `JsonFile`; freetype/msdf-atlas-gen → `Font` (only ever included by `FontBaker.cpp`).
 
 ## Conventions
 - Members prefixed `m_`; constants `ALL_CAPS`; types `PascalCase`; methods `camelCase`.

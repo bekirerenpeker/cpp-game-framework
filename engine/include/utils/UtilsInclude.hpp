@@ -6,3 +6,4 @@
 #include "TypeRegistery.hpp"
 #include "IdIndexedVector.hpp"
 #include "ImageData.hpp"
+#include "Utf8.hpp"

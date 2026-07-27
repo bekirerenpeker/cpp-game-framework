@@ -19,3 +19,15 @@ target_link_libraries(engine PUBLIC
 )
 
 target_compile_definitions(engine PUBLIC GLFW_INCLUDE_NONE)
+
+# The font cache evicts stale atlases through IFileEntry::deleteFromDisk, which is
+# compiled out unless this is defined. Engine-scoped, so it un-gates deletion for
+# engine code only -- game code still gets the safe no-op.
+target_compile_definitions(engine PRIVATE ALLOW_DELETE_FROM_DISK)
+
+# PRIVATE: only FontBaker.cpp touches msdf-atlas-gen, and the game must never see
+# a third-party header. Font.hpp is identical with or without the baker.
+if(ENGINE_BUILD_FONT_BAKER)
+    target_link_libraries(engine PRIVATE msdf-atlas-gen::msdf-atlas-gen)
+    target_compile_definitions(engine PRIVATE ENGINE_HAS_FONT_BAKER)
+endif()

@@ -49,7 +49,10 @@ void applyContextOptions()
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
 
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    // Alpha needs its own factors: everything is drawn into a transparent-cleared
+    // offscreen FBO and then composited to the window, so a plain SRC_ALPHA func
+    // would multiply the source alpha in twice and eat antialiased edges.
+    glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
     glDisable(GL_DEPTH_TEST);
 }

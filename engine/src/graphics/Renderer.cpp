@@ -1,7 +1,6 @@
 #include "graphics/Renderer.hpp"
 #include "components/TransformComponent.hpp"
 #include "components/SpriteComponent.hpp"
-#include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/WindowManager.hpp"
 #include "ecs/registry/View.hpp"

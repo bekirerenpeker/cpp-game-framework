@@ -105,6 +105,7 @@ template<typename Vertex> class BatchRenderer
         if (shader) m_shader = shader;
     }
     GlShader* getShader() const { return m_shader; }
+    size_t getQuadCount() const { return m_quadCount; }
     void setViewProjMat(const Mat4& viewProj) { m_viewProjMat = viewProj; }
     const Mat4& getViewProjMat() const { return m_viewProjMat; }
 
