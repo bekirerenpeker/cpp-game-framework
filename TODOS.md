@@ -9,6 +9,41 @@ rather than leaving a stale description.
 
 ## In progress / next up
 
+- [ ] **UI interaction (one-frame-late hit testing)** — the layout solver lands
+  boxes but nothing is clickable. Keep a persistent `id -> rect` map (hash the
+  builder's call-site string, store in an `IdIndexedVector`) holding *last*
+  frame's rect plus hover/press/focus, so `addButton` can return an
+  `Interaction{hovered, pressed, released}` read from the previous frame and
+  `if (ui.addButton(...))` works inline. Layout is stable frame to frame so the
+  one-frame lag is invisible; a widget's first frame simply has no rect. Do not
+  route this through `Delegate` — a return value has no lifetime problem and
+  needs no per-widget object.
+
+- [ ] **Hover/press styling** — split in two. Style-only changes (colour, border,
+  alpha, and a *draw-time* scale about the element's centre) cost nothing and
+  cannot oscillate; make them the default. Layout-affecting changes (padding,
+  size, font size) are legal — hover state is known before the tree is built, so
+  they just emit a bigger box — but they can feed back: the element grows, the
+  growth moves it out from under the cursor, it un-hovers, shrinks, re-hovers,
+  flickering at 60Hz. Hit-test against the *un-hovered* rect and animate the
+  transition if this is ever opted into.
+
+- [ ] **Grid** — a track list where each track carries the same `SizeSpec`, run
+  through `LayoutComputer`'s existing distribution routine, then row-major
+  auto-placement into cells with an optional span. That is ~80% of grid's value
+  for a fraction of CSS Grid's algorithm; auto-fit/minmax/dense packing are not
+  worth it.
+
+- [ ] **Widget rendering + theming** — `UiDebugDrawer` draws boxes through the
+  sprite batch as a placeholder. The real drawer wants `TextRenderer`'s batch
+  (see "Plain quads in the text batch" below), a `UiStyle` -> draw mapping, and
+  a theme the styles resolve against rather than literal colours at call sites.
+
+- [ ] **Scroll + clip** — `LayoutConfig::clipX/clipY` and `scrollOffset` are
+  honoured by the solver already (a clipped axis reports `minW = 0`, which is
+  what lets it shrink below its content), but nothing sets a scissor rect or
+  drives the offset from input.
+
 - [ ] **Terrain-type tilemap rework** — `Tileset::tilesConnect(a, b)` is
   currently just `a != 0 && a == b` ([Tileset.cpp](engine/src/graphics/tilemap/Tileset.cpp)),
   so a rule tile only autotiles against itself. Add a terrain-type concept
@@ -36,12 +71,17 @@ rather than leaving a stale description.
   by sprites, applied on the shader switch in `Renderer::renderSprites` —
   rather than per-entity uniform blobs.
 
-- [ ] **Word wrapping + overflow** — `TextRenderer::measure` and the
-  `walkSpan` advance arithmetic are already the right hooks; add a max-width to
-  `TextStyle` (or a draw-in-rect entry point), break on word boundaries, and
-  support clip/ellipsis overflow. Wrapping across a span boundary is the fiddly
-  part: a `/s` span can start mid-word, so the break search has to run over the
-  span list rather than one span's text.
+- [ ] **Wrapped text *drawing*** — `TextMeasure::wrap`
+  ([TextMeasure.hpp](engine/include/graphics/ui/TextMeasure.hpp)) already
+  computes the break positions and `LayoutNode` carries them as a
+  `lineStart`/`lineCount` slice, but `TextRenderer` still only breaks on an
+  explicit `\n`. Teach it to draw a `LayoutLine` span list so wrapped text can
+  actually be rendered, then fold `TextMeasure` and `walkSpan` together —
+  `TAB_SPACES` and `FALLBACK_SPACE_ADVANCE` are currently declared in both, and
+  if they ever diverge the measured width stops matching the drawn width. Both
+  constants should end up on `TextStyle.hpp`. Ellipsis/clip overflow is still
+  open, as is wrapping across a `/s` span boundary (a span can start mid-word,
+  so the break search has to run over the span list, not one span's text).
 
 - [ ] **Screen-space text pass** — `TextRenderer` currently always takes its
   matrix from `ViewContext`, so text lives in world space. UI wants a pixel
@@ -69,9 +109,6 @@ rather than leaving a stale description.
 
 ## Later
 
-- [ ] **UI system** — layout + widgets, built on top of text rendering and
-  the sprite/quad batch. Custom-shader effects (9-slice, blur, etc.) go
-  through `SpriteComponent::shader`, plus the material uniforms item above.
 - [ ] **Docs pass** — no `docs/` currently exists; CLAUDE.md is the only
   source of truth. Once the above systems stabilize, either expand
   CLAUDE.md's "Other subsystems" section or split into a `docs/` folder per
@@ -79,6 +116,42 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **UI layout solver** — `LayoutComputer`
+  ([LayoutComputer.hpp](engine/include/graphics/ui/LayoutComputer.hpp)) plus an
+  immediate-mode `UiSystem` singleton
+  ([UiSystem.hpp](engine/include/graphics/ui/UiSystem.hpp)) under the new
+  `graphics/ui/`. Five sequential passes over a **flat preorder array** — so
+  `for (i = n; i-- > 0;)` is the bottom-up pass and `for (i = 0; ...)` is
+  top-down, with no recursion anywhere: intrinsic widths -> final widths ->
+  intrinsic heights -> final heights -> position/align. The axes are two
+  separate cycles rather than one, because a text leaf's height is a *function
+  of* its final width; width never reads height, so nothing loops and no
+  iteration-to-convergence is needed. Distribution is one routine shared by
+  passes 2 and 4, parameterized by axis: surplus levels the smallest growers up,
+  a deficit levels the largest children down toward their `contentMin`.
+  `LayoutComputer` holds its **own** node struct carrying only layout data and a
+  `sourceIndex` back to `UiElement`, so styling never enters the solver and the
+  returned array is pure geometry. Leaves plug in through `ILeafMeasurer`
+  (`measureWidths` / `measureHeight(contentWidth, lines)`) — `TextLeaf` and
+  `ImageLeaf` ship; the leaf objects live in reusable pools on `UiSystem`
+  because `LayoutInput::measurer` is a bare pointer held from `addText` all the
+  way through pass 3. Layout space is **Y-down, top-left origin, unitless**;
+  the single Y flip lives in `UiDebugDrawer::uiToWorld`. Verified numerically in
+  `ui_layout_test` across all 10 cases (75 nodes): Fit row = 222 exactly, two
+  growers 234/234, `sizing.max` capping at 120 with the leftover going to
+  `alignMain`, a floating child leaving its parent at 222 (identical to the same
+  row without one), an image at 388x194 from a 2:1 aspect, and text shrunk to
+  120 wrapping to 7 lines.
+  Gotchas that are handled and must stay handled: `Grow` seeds at **max**-content
+  (seeding at min lets two growers in a `Fit` parent split evenly, wrapping the
+  long one while the short one keeps slack); floating children are excluded from
+  the sum, the max **and** the `n-1` gap fence-post; a clipped axis reports
+  `minW = 0` or a scroll container could never shrink; `NO_NODE` is `(uint)-1`
+  and deliberately **not** `INVALID_ID`, because index 0 is the root.
+  Deviation from plan worth knowing: `Percent` aggregates upward like `Fit`
+  rather than contributing 0, which is what CSS does for percentages in
+  intrinsic sizing and removes a silent collapse-to-zero inside a `Fit` parent.
 
 - [x] **Text renderer** — `TextRenderer`
   ([TextRenderer.hpp](engine/include/graphics/text/TextRenderer.hpp)), a

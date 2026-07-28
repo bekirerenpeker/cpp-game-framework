@@ -3,6 +3,7 @@
 #include "gl_wrappers/GlWrappersInclude.hpp"
 #include "text/TextInclude.hpp"
 #include "tilemap/TilemapInclude.hpp"
+#include "ui/UiInclude.hpp"
 #include "BatchRenderer.hpp"
 #include "Color.hpp"
 #include "Renderer.hpp"
