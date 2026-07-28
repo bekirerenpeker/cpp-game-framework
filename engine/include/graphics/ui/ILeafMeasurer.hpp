@@ -11,14 +11,15 @@ struct LeafWidths
     float max = 0.0f;
 };
 
-// byteOffset/byteCount index into the leaf's own source string, so a later content
-// pass can redraw a wrapped line without repeating the break search.
+// One laid-out line. height is the step to the next line, which is the tallest
+// style on this line rather than any single style's; ascent places the baseline
+// inside that step. descent is positive downwards.
 struct LayoutLine
 {
-    uint byteOffset = 0;
-    uint byteCount = 0;
     float width = 0.0f;
     float height = 0.0f;
+    float ascent = 0.0f;
+    float descent = 0.0f;
 };
 
 class ILeafMeasurer

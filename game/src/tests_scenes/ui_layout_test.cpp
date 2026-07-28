@@ -11,7 +11,7 @@ const char* FALLBACK_FONT = "C:/Windows/Fonts/segoeui.ttf";
 // Layout is unitless; this scene treats one UI unit as one pixel of a 1000-wide
 // design and scales the whole thing into world space for the debug boxes.
 constexpr float ROOT_WIDTH = 1000.0f;
-constexpr float ROOT_HEIGHT = 1560.0f;
+constexpr float ROOT_HEIGHT = 2200.0f;
 constexpr float WORLD_PER_UI = 0.01f;
 
 fs::path findFontFile()
@@ -74,13 +74,17 @@ struct Probes
     uint deepInner = NO_NODE;
     uint alignBox[3] = {NO_NODE, NO_NODE, NO_NODE};
     uint alignChild[3] = {NO_NODE, NO_NODE, NO_NODE};
+    uint styledLines = NO_NODE;
+    uint styledWrap = NO_NODE;
+    uint fixedLine = NO_NODE;
 };
 
 }   // namespace
 
-// Exercises the five-pass layout solver and draws every computed box. Boxes are
-// tinted by tree depth, floating nodes are red. WASD pans, Q/E zooms -- the box
-// tree must be identical at every zoom, since layout is unitless.
+// Exercises the five-pass layout solver, drawing every computed box and the text
+// laid out inside it. Boxes are tinted by tree depth and floating nodes are red.
+// WASD pans, Q/E zooms, Tab swaps the mtsdf/bitmap atlas, Space hides the boxes.
+// The box tree must be identical at every zoom, since layout is unitless.
 int ui_layout_test()
 {
     IdType windowId = WindowManager::get().createWindow({900, 900, "UI Layout Test"});
@@ -90,36 +94,52 @@ int ui_layout_test()
     camera.emplace<TransformComponent>();
     camera.emplace<CameraComponent>().windowId = windowId;
 
-    Font font(findFontFile(), {.atlasType = FontAtlasType::Mtsdf, .emPixelSize = 48});
-    if (!font.isValid()) {
+    fs::path fontPath = findFontFile();
+    Font mtsdfFont(fontPath, {.atlasType = FontAtlasType::Mtsdf, .emPixelSize = 48});
+    Font bitmapFont(fontPath, {.atlasType = FontAtlasType::Bitmap, .emPixelSize = 32});
+    if (!mtsdfFont.isValid()) {
         LOG_ERROR("no usable font; text leaves would all measure as empty");
         return 1;
     }
 
     GlShader quadShader("game/assets/shaders/QuadShader.glsl");
+    GlShader textShader("game/assets/shaders/TextShader.glsl");
     Renderer::get().init(6000, &quadShader);
+    TextRenderer::get().init(&textShader, 8000);
 
     Input::get().addAxis("Horizontal", {KeyCode::D, KeyCode::A});
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
     Input::get().addAxis("Zoom", {KeyCode::E, KeyCode::Q});
 
     const TextStyle bodyStyle {.color = COLOR_WHITE, .size = 22.0f};
-    const TextStyle labelStyle {.color = COLOR_GRAY, .size = 18.0f};
+    const TextStyle labelStyle {.color = Color(0.62f, 0.66f, 0.74f), .size = 17.0f};
+
+    // The span styles the /s tags in the styled cases below resolve against.
+    const TextStyle bigStyle {.color = COLOR_CYAN, .size = 46.0f};
+    const TextStyle smallStyle {.color = Color(1.0f, 0.7f, 0.3f), .size = 13.0f};
+    const std::vector<TextStyle> mixedStyles {bigStyle, smallStyle};
 
     UiSystem& ui = UiSystem::get();
-    ui.setDefaultFont(&font);
+    ui.setDefaultFont(&mtsdfFont);
     ui.setDefaultTextStyle(bodyStyle);
-    ui.setDebugViewport(
+    UiRenderer::get().setViewport(
         Vec2(-ROOT_WIDTH * 0.5f * WORLD_PER_UI, ROOT_HEIGHT * 0.5f * WORLD_PER_UI), WORLD_PER_UI
     );
-    ui.getDebugDrawer().setOutlineThickness(2.0f);
+    UiRenderer::get().setOutlineThickness(1.5f);
 
-    const float fittedOrthoSize = ROOT_HEIGHT * WORLD_PER_UI * 1.04f;
+    // Fitted to the layout's width rather than its height: the tree is tall and
+    // narrow, so fitting the height would shrink the text to an illegible size.
+    // W/S pans down to the cases below the fold.
+    const float fittedOrthoSize = ROOT_WIDTH * WORLD_PER_UI * 1.04f;
+    const float fittedY = ROOT_HEIGHT * WORLD_PER_UI * 0.5f - fittedOrthoSize * 0.5f;
     camera.get<CameraComponent>().orthoSize = fittedOrthoSize;
+    camera.get<TransformComponent>().position.y = fittedY;
 
     Probes probes;
     bool logged = false;
     bool inputSettled = false;
+    bool showBitmap = false;
+    bool showBoxes = true;
 
     auto buildUi = [&]() {
         LayoutConfig rootConfig = makeColumn(16.0f, LayoutEdges(16.0f));
@@ -299,7 +319,8 @@ int ui_layout_test()
 
             LayoutConfig imageConfig;
             imageConfig.width = SizeSpec::grow();
-            probes.image = ui.addImage(font.getTexture(), Vec2(200.0f, 100.0f), 2.0f, imageConfig);
+            probes.image =
+                ui.addImage(mtsdfFont.getTexture(), Vec2(200.0f, 100.0f), 2.0f, imageConfig);
             ui.closeContainer();
         }
         ui.closeContainer();
@@ -316,6 +337,69 @@ int ui_layout_test()
             ui.closeContainer();
             ui.openContainer(makeBox(80.0f, 26.0f));
             ui.closeContainer();
+            ui.closeContainer();
+        }
+        ui.closeContainer();
+
+        // 11 -- a line is as tall as the tallest style on it, so an oversized span
+        // pushes its own line down without colliding with the one below.
+        caseBlock("11  styled spans: the big span sets its line's height");
+        {
+            LayoutConfig config = makeColumn(0.0f, LayoutEdges(6.0f));
+            config.width = SizeSpec::fixed(620.0f);
+            ui.openContainer(config);
+
+            LayoutConfig textConfig;
+            textConfig.width = SizeSpec::grow();
+            probes.styledLines = ui.addText(
+                "first line is plain\nsecond has a /sBIG/s word in it\nthird /stiny/s and plain\n"
+                "fourth line is plain again",
+                bodyStyle, mixedStyles, textConfig
+            );
+            ui.closeContainer();
+        }
+        ui.closeContainer();
+
+        // 12 -- the same styled text wrapped narrow: line heights now vary per line
+        // and a word is still allowed to straddle a span boundary.
+        caseBlock("12  styled + wrapped: per-line heights vary down the block");
+        {
+            ui.openContainer(makeRow(12.0f, LayoutEdges(0.0f)));
+            const float widths[] = {420.0f, 240.0f};
+            for (int i = 0; i < 2; i++) {
+                LayoutConfig column = makeColumn(0.0f, LayoutEdges(6.0f));
+                column.width = SizeSpec::fixed(widths[i]);
+                ui.openContainer(column);
+
+                LayoutConfig textConfig;
+                textConfig.width = SizeSpec::grow();
+                uint index = ui.addText(
+                    "the quick /sbrown/s fox jumps over the /slazy/s dog and keeps running "
+                    "along the riverbank",
+                    bodyStyle, mixedStyles, textConfig
+                );
+                ui.closeContainer();
+                if (i == 1) probes.styledWrap = index;
+            }
+            ui.closeContainer();
+        }
+        ui.closeContainer();
+
+        // 13 -- the fixed-line-height escape hatch: same text, uniform steps, so the
+        // big span overlaps on purpose instead of pushing its line apart.
+        caseBlock("13  same text with fixedLineHeight: uniform steps, big span overlaps");
+        {
+            LayoutConfig config = makeColumn(0.0f, LayoutEdges(6.0f));
+            config.width = SizeSpec::fixed(620.0f);
+            ui.openContainer(config);
+
+            LayoutConfig textConfig;
+            textConfig.width = SizeSpec::grow();
+            probes.fixedLine = ui.addText(
+                "first line is plain\nsecond has a /sBIG/s word in it\nthird /stiny/s and plain\n"
+                "fourth line is plain again",
+                bodyStyle, mixedStyles, textConfig, true, true
+            );
             ui.closeContainer();
         }
         ui.closeContainer();
@@ -378,6 +462,21 @@ int ui_layout_test()
                 child.pos.x - box.pos.x, child.pos.y - box.pos.y
             );
         }
+
+        auto logLines = [&](const char* label, uint index) {
+            const UiElement& element = ui.getElements()[index];
+            const TextLeaf* leaf = static_cast<const TextLeaf*>(element.measurer);
+            std::string steps;
+            for (const LayoutLine& line : leaf->getLines())
+                steps += std::format("{:.1f} ", line.height);
+            LOG_INFO(
+                "{}: box {}x{}, {} lines, {} runs, steps [{}]", label, node(index).size.x,
+                node(index).size.y, leaf->getLines().size(), leaf->getRuns().size(), steps
+            );
+        };
+        logLines("11 styled", probes.styledLines);
+        logLines("12 styled+wrapped", probes.styledWrap);
+        logLines("13 fixedLineHeight", probes.fixedLine);
     };
 
     auto onWindowUpdate = [&](IdType id, float dt) {
@@ -394,11 +493,22 @@ int ui_layout_test()
             if (hAxis == 0 && vAxis == 0 && zoomAxis == 0) inputSettled = true;
             cam.orthoSize = fittedOrthoSize;
             transform.position.x = 0.0f;
-            transform.position.y = 0.0f;
+            transform.position.y = fittedY;
         } else {
             transform.position.x += hAxis * dt * cam.orthoSize;
             transform.position.y += vAxis * dt * cam.orthoSize;
             cam.orthoSize -= zoomAxis * dt * cam.orthoSize;
+        }
+
+        if (Input::get().keyPressed(KeyCode::Tab)) {
+            showBitmap = !showBitmap;
+            ui.setDefaultFont(showBitmap ? &bitmapFont : &mtsdfFont);
+            LOG_INFO("using the {} font", showBitmap ? "bitmap" : "mtsdf");
+        }
+        if (Input::get().keyPressed(KeyCode::Space)) {
+            showBoxes = !showBoxes;
+            UiRenderer::get().setDrawBoxes(showBoxes);
+            LOG_INFO("debug boxes {}", showBoxes ? "on" : "off");
         }
     };
 

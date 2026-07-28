@@ -1,13 +1,10 @@
 #include "graphics/ui/UiSystem.hpp"
 #include "core/logging/LoggerMacros.hpp"
-#include "graphics/Renderer.hpp"
+#include "graphics/ui/UiRenderer.hpp"
 
 namespace Engine {
 
-void UiSystem::setDebugViewport(Vec2 worldTopLeft, float worldUnitsPerUiUnit)
-{
-    m_debugDrawer.setViewport(worldTopLeft, worldUnitsPerUiUnit);
-}
+static const std::vector<TextStyle> NO_SPAN_STYLES;
 
 void UiSystem::begin(Vec2 rootSize, const LayoutConfig& rootLayout)
 {
@@ -57,10 +54,7 @@ void UiSystem::draw()
     }
 
     m_layout.compute(m_rootSize);
-    m_debugDrawer.draw(m_layout.getNodes());
-    // The debug boxes go through the sprite batch, so they have to be flushed before
-    // any text the scene submits afterwards.
-    Renderer::get().endScene();
+    UiRenderer::get().render(m_elements, m_elementCount, m_layout.getNodes());
 }
 
 void UiSystem::shutdown()
@@ -72,7 +66,7 @@ void UiSystem::shutdown()
     m_textLeafCount = 0;
     m_imageLeafCount = 0;
 
-    m_debugDrawer.release();
+    UiRenderer::get().release();
 }
 
 uint UiSystem::openContainer(const LayoutConfig& layout, const UiStyle& style)
@@ -90,13 +84,21 @@ void UiSystem::closeContainer()
     m_openStack.pop_back();
 }
 
-uint UiSystem::addText(std::string_view text, const LayoutConfig& layout, bool wrap)
+uint UiSystem::addText(std::string_view text, const LayoutConfig& layout)
 {
-    return addText(text, m_defaultTextStyle, layout, wrap);
+    return addText(text, m_defaultTextStyle, NO_SPAN_STYLES, layout);
 }
 
 uint UiSystem::addText(
-    std::string_view text, const TextStyle& textStyle, const LayoutConfig& layout, bool wrap
+    std::string_view text, const TextStyle& textStyle, const LayoutConfig& layout
+)
+{
+    return addText(text, textStyle, NO_SPAN_STYLES, layout);
+}
+
+uint UiSystem::addText(
+    std::string_view text, const TextStyle& textStyle, const std::vector<TextStyle>& spanStyles,
+    const LayoutConfig& layout, bool wrap, bool fixedLineHeight
 )
 {
     uint index = pushElement(UiElementType::Text, layout, UiStyle {});
@@ -111,8 +113,13 @@ uint UiSystem::addText(
     }
 
     TextLeaf* leaf = acquireTextLeaf();
-    leaf->set(m_defaultFont, element.text, textStyle, wrap);
+    leaf->set(m_defaultFont, element.text, textStyle, spanStyles, wrap, fixedLineHeight);
     element.measurer = leaf;
+
+    if (!leaf->areTagsClosed() && !m_warnedUnclosedTag) {
+        LOG_WARNING("UiSystem: unclosed /s tag in \"{}\"; it styles to end of string", text);
+        m_warnedUnclosedTag = true;
+    }
     return index;
 }
 

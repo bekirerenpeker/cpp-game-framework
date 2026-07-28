@@ -34,10 +34,13 @@ rather than leaving a stale description.
   for a fraction of CSS Grid's algorithm; auto-fit/minmax/dense packing are not
   worth it.
 
-- [ ] **Widget rendering + theming** — `UiDebugDrawer` draws boxes through the
-  sprite batch as a placeholder. The real drawer wants `TextRenderer`'s batch
-  (see "Plain quads in the text batch" below), a `UiStyle` -> draw mapping, and
-  a theme the styles resolve against rather than literal colours at call sites.
+- [ ] **Widget rendering + theming** — `UiRenderer` draws text properly but its
+  boxes are still depth-tinted debug outlines through the sprite batch. What is
+  missing is a `UiStyle` -> draw mapping (background, border, radius) and a theme
+  those styles resolve against instead of literal colours at call sites. Moving
+  the rects into `TextRenderer`'s batch (see "Plain quads in the text batch"
+  below) would then let a panel and its label share one draw call, which is the
+  whole reason that batch has a solid-fill branch.
 
 - [ ] **Scroll + clip** — `LayoutConfig::clipX/clipY` and `scrollOffset` are
   honoured by the solver already (a clipped axis reports `minW = 0`, which is
@@ -71,17 +74,24 @@ rather than leaving a stale description.
   by sprites, applied on the shader switch in `Renderer::renderSprites` —
   rather than per-entity uniform blobs.
 
-- [ ] **Wrapped text *drawing*** — `TextMeasure::wrap`
-  ([TextMeasure.hpp](engine/include/graphics/ui/TextMeasure.hpp)) already
-  computes the break positions and `LayoutNode` carries them as a
-  `lineStart`/`lineCount` slice, but `TextRenderer` still only breaks on an
-  explicit `\n`. Teach it to draw a `LayoutLine` span list so wrapped text can
-  actually be rendered, then fold `TextMeasure` and `walkSpan` together —
-  `TAB_SPACES` and `FALLBACK_SPACE_ADVANCE` are currently declared in both, and
-  if they ever diverge the measured width stops matching the drawn width. Both
-  constants should end up on `TextStyle.hpp`. Ellipsis/clip overflow is still
-  open, as is wrapping across a `/s` span boundary (a span can start mid-word,
-  so the break search has to run over the span list, not one span's text).
+- [ ] **`TextRenderer` line stepping ignores the *next* line's ascent** —
+  `walkSpan` steps `pen.pos.y -= pen.maxLineStep` where `maxLineStep` is the max
+  over the line being *left*. That is right when the oversized span is on the
+  current line, but a line whose content is much taller than the previous line's
+  max rides up into it: 22pt line 1 gives a ~29 step, and a 46pt span opening
+  line 2 has a ~35 ascender, so it overlaps line 1 by ~6 units. The fix is the
+  one `TextMeasure::wrapSpans` already uses — accumulate a line *top*, and place
+  each baseline at `lineTop + thatLine'sMaxAscent` instead of stepping
+  baseline-to-baseline. Do this when folding the two walks together (item
+  below), since that is where the two implementations converge anyway.
+
+- [ ] **Fold `TextMeasure` and `TextRenderer::walkSpan` together** — wrapping now
+  works end to end through the UI path (`TextMeasure::wrapSpans` -> `TextRun`s ->
+  `TextRenderer::drawSpan`), but `TextRenderer::draw` on its own still only
+  breaks on an explicit `\n`, so world-space text outside the UI cannot wrap.
+  `TAB_SPACES` and `FALLBACK_SPACE_ADVANCE` are declared in both files and must
+  not diverge or measured width stops matching drawn width; both belong on
+  `TextStyle.hpp`. Ellipsis/clip overflow is still open.
 
 - [ ] **Screen-space text pass** — `TextRenderer` currently always takes its
   matrix from `ViewContext`, so text lives in world space. UI wants a pixel
@@ -116,6 +126,30 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **UI renderer + styled/wrapped text** — `UiRenderer`
+  ([UiRenderer.hpp](engine/include/graphics/ui/UiRenderer.hpp)) is the Singleton
+  `UiSystem::draw()` hands the solved tree to; it replaced the throwaway
+  `UiDebugDrawer` and owns the UI->world transform, the 1x1 white texture, the
+  debug boxes and the text pass. `TextMeasure` went span-aware: `measureSpanWidths`
+  and `wrapSpans` walk a `TextTags::parse` span list, so a UI text element takes
+  `/s` tags plus a style list exactly like `TextRenderer::draw` does. `wrapSpans`
+  emits `TextRun`s carrying x **and the baseline y**, so `UiRenderer` renders by
+  calling `TextRenderer::drawSpan` per run with no second walk of the string.
+  **Line height is the max over every style on that line** (the CSS line-box
+  rule) — verified as steps `[29.3, 61.2, 29.3, 29.3]` for a block whose second
+  line holds a 46pt span among 22pt body text, and a 13pt span correctly failing
+  to shrink its line. `addText(..., fixedLineHeight = true)` opts out and steps
+  uniformly (same block: `[29.3 x4]`, 117.0 tall instead of 149.0) for the case
+  where one oversized word should not push its line apart. Wrapping backtracks
+  to the last space even when it is several spans back, and a word may straddle
+  a span boundary. Only `TextStyle::size` is scaled UI->world; every other
+  measurement is em and scales itself. Verified identical layout under both the
+  MTSDF and Bitmap atlas (Tab in `ui_layout_test`), which is the check that the
+  pipeline is font-agnostic.
+  Note: `TextRenderer`'s own `TextPen::maxLineStep` does take the max across
+  every span touching a line, but it steps by the max of the line it is
+  *leaving* — see the separate item below for the case that still breaks.
 
 - [x] **UI layout solver** — `LayoutComputer`
   ([LayoutComputer.hpp](engine/include/graphics/ui/LayoutComputer.hpp)) plus an

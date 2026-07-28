@@ -1,7 +1,6 @@
 #pragma once
 
 #include "graphics/ui/LayoutComputer.hpp"
-#include "graphics/ui/UiDebugDrawer.hpp"
 #include "graphics/ui/UiElement.hpp"
 #include "graphics/ui/UiLeaves.hpp"
 #include "utils/Singleton.hpp"
@@ -21,7 +20,6 @@ class UiSystem : public Singleton<UiSystem>
     std::vector<ImageLeaf*> m_imageLeaves;
 
     LayoutComputer m_layout;
-    UiDebugDrawer m_debugDrawer;
 
     const Font* m_defaultFont = nullptr;
     TextStyle m_defaultTextStyle;
@@ -34,12 +32,13 @@ class UiSystem : public Singleton<UiSystem>
     bool m_isBuilding = false;
     bool m_warnedUnbalanced = false;
     bool m_warnedNoFont = false;
+    bool m_warnedUnclosedTag = false;
 
   public:
     void setDefaultFont(const Font* font) { m_defaultFont = font; }
     void setDefaultTextStyle(const TextStyle& style) { m_defaultTextStyle = style; }
     void setDefaultButtonPadding(const LayoutEdges& padding) { m_defaultButtonPadding = padding; }
-    void setDebugViewport(Vec2 worldTopLeft, float worldUnitsPerUiUnit);
+    const Font* getDefaultFont() const { return m_defaultFont; }
 
     void begin(Vec2 rootSize, const LayoutConfig& rootLayout = {});
     void draw();
@@ -48,10 +47,12 @@ class UiSystem : public Singleton<UiSystem>
     uint openContainer(const LayoutConfig& layout = {}, const UiStyle& style = {});
     void closeContainer();
 
-    uint addText(std::string_view text, const LayoutConfig& layout = {}, bool wrap = true);
+    uint addText(std::string_view text, const LayoutConfig& layout = {});
+    uint
+    addText(std::string_view text, const TextStyle& textStyle, const LayoutConfig& layout = {});
     uint addText(
-        std::string_view text, const TextStyle& textStyle, const LayoutConfig& layout = {},
-        bool wrap = true
+        std::string_view text, const TextStyle& textStyle, const std::vector<TextStyle>& spanStyles,
+        const LayoutConfig& layout = {}, bool wrap = true, bool fixedLineHeight = false
     );
     uint
     addButton(std::string_view label, const LayoutConfig& layout = {}, const UiStyle& style = {});
@@ -60,7 +61,6 @@ class UiSystem : public Singleton<UiSystem>
         const LayoutConfig& layout = {}, const UiStyle& style = {}
     );
 
-    UiDebugDrawer& getDebugDrawer() { return m_debugDrawer; }
     const std::vector<UiElement>& getElements() const { return m_elements; }
     const std::vector<LayoutNode>& getLayoutNodes() const { return m_layout.getNodes(); }
     const std::vector<LayoutLine>& getLayoutLines() const { return m_layout.getLines(); }
