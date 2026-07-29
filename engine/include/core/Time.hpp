@@ -2,6 +2,7 @@
 
 #include "utils/Singleton.hpp"
 #include <chrono>
+#include <cstdint>
 #include <string>
 
 namespace Engine {
@@ -30,12 +31,14 @@ class Time : public Singleton<Time>
 
     double m_deltaTime;
     double m_lastFrameTime;
+    uint64_t m_frameCount;
 
   public:
     void update();
 
     float deltaTime() const;
     float currTime() const;
+    uint64_t getFrameCount() const { return m_frameCount; }
 
     DateTime getCurrentDateTime() const;
 

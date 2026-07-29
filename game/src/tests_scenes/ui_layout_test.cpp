@@ -15,9 +15,14 @@ const char* FALLBACK_FONT = "C:/Windows/Fonts/segoeui.ttf";
 constexpr float ROOT_A_WIDTH = 560.0f;
 constexpr float ROOT_A_HEIGHT = 1440.0f;
 constexpr float ROOT_B_WIDTH = 560.0f;
-constexpr float ROOT_B_HEIGHT = 1180.0f;
+constexpr float ROOT_B_HEIGHT = 1480.0f;
 constexpr float ROOT_GAP = 60.0f;
 constexpr float WORLD_PER_UI = 0.01f;
+constexpr float ROOT_MIN_WIDTH = 260.0f;
+constexpr float ROOT_MIN_HEIGHT = 300.0f;
+// Narrower than a root's 16 unit padding, so the grab band never overlaps a child and
+// the root always wins the hit there.
+constexpr float ROOT_GRAB = 14.0f;
 
 fs::path findFontFile()
 {
@@ -139,8 +144,9 @@ int ui_layout_test()
 
     const float totalWidth = ROOT_A_WIDTH + ROOT_GAP + ROOT_B_WIDTH;
     const float topWorldY = Math::max(ROOT_A_HEIGHT, ROOT_B_HEIGHT) * 0.5f * WORLD_PER_UI;
+    // Root A's origin is pinned so dragging its right edge grows it rightward instead of
+    // sliding it; root B's follows root A's live width, so the pair stays side by side.
     const Vec2 rootAOrigin(-totalWidth * 0.5f * WORLD_PER_UI, topWorldY);
-    const Vec2 rootBOrigin(rootAOrigin.x + (ROOT_A_WIDTH + ROOT_GAP) * WORLD_PER_UI, topWorldY);
 
     // Fitted to the pair's combined width; the roots are taller than the view, so
     // W/S pans down to the cases below the fold.
@@ -149,12 +155,94 @@ int ui_layout_test()
     camera.get<CameraComponent>().orthoSize = fittedOrthoSize;
     camera.get<TransformComponent>().position.y = fittedY;
 
+    // Only backgroundColor/borderColor/borderWidth/contentColor are drawable today, and
+    // overrides are deliberately style-only: a size or padding override could grow the
+    // element out from under the cursor and flicker between the two states at 60Hz.
+    UiStyles buttonStyles;
+    buttonStyles.normal.backgroundColor = Color(0.18f, 0.20f, 0.26f);
+    buttonStyles.normal.borderColor = Color(0.35f, 0.38f, 0.46f);
+    buttonStyles.normal.borderWidth = 1.0f;
+    buttonStyles.hovered.backgroundColor = Color(0.28f, 0.32f, 0.42f);
+    buttonStyles.hovered.borderColor = Color(0.60f, 0.66f, 0.80f);
+    buttonStyles.pressed.backgroundColor = Color(0.10f, 0.11f, 0.15f);
+    buttonStyles.pressed.contentColor = COLOR_YELLOW;
+
+    UiStyles panelStyles;
+    panelStyles.normal.backgroundColor = Color(0.14f, 0.16f, 0.20f);
+    panelStyles.normal.borderColor = Color(0.40f, 0.44f, 0.52f);
+    panelStyles.normal.borderWidth = 1.0f;
+    panelStyles.hovered.borderColor = Color(0.95f, 0.75f, 0.35f);
+    panelStyles.hovered.borderWidth = 2.0f;
+    panelStyles.pressed.backgroundColor = Color(0.20f, 0.24f, 0.30f);
+
+    // A visible edge for the root, since its grab band is otherwise just empty padding.
+    UiStyles rootStyles;
+    rootStyles.normal.borderColor = Color(0.30f, 0.33f, 0.40f);
+    rootStyles.normal.borderWidth = 2.0f;
+    rootStyles.pressed.borderColor = Color(0.95f, 0.75f, 0.35f);
+    rootStyles.pressed.borderWidth = 3.0f;
+
     LayoutProbes layoutProbes;
     TextProbes textProbes;
+    Vec2 rootASize(ROOT_A_WIDTH, ROOT_A_HEIGHT);
+    Vec2 rootBSize(ROOT_B_WIDTH, ROOT_B_HEIGHT);
+    Vec2 resizableSize(220.0f, 90.0f);
+    int clickCount = 0;
+    bool grabbedCorner = false;
     bool logged = false;
     bool inputSettled = false;
     bool showBitmap = false;
     bool showBoxes = true;
+
+    // Logged on change rather than per frame, so the scene reports what it is doing
+    // without drowning the console at 60Hz.
+    std::unordered_map<std::string, uint> reportedFlags;
+    auto reportInteraction = [&](const std::string& name, const UiState& state) {
+        uint flags = (state.isHovered ? 1u : 0u) | (state.isHoveredDirect ? 2u : 0u) |
+                     (state.isHeld ? 4u : 0u) | (state.isDragging ? 8u : 0u) |
+                     (state.hasRect ? 16u : 0u);
+        if (state.isClicked)
+            LOG_INFO(
+                "interaction: CLICK {} at local ({}, {})", name, state.mouseLocal.x,
+                state.mouseLocal.y
+            );
+        auto reported = reportedFlags.find(name);
+        if (reported != reportedFlags.end() && reported->second == flags) return;
+
+        reportedFlags[name] = flags;
+
+        // The element's centre in window pixels, so the rect can be checked against
+        // where the cursor actually has to be rather than only against layout units.
+        Window* window = WindowManager::get().getWindow(windowId);
+        Vec2 center = UiRenderer::get().uiToWorld(state.pos + state.size * 0.5f);
+        Vec2 screen = ViewContext::get().worldToScreen(center);
+        Vec2 client(screen.x + window->getWidth() * 0.5f, window->getHeight() * 0.5f - screen.y);
+
+        LOG_INFO(
+            "interaction: {} hovered {} direct {} held {} dragging {} rect ({}, {}) {}x{} client "
+            "({}, {})",
+            name, state.isHovered, state.isHoveredDirect, state.isHeld, state.isDragging,
+            state.pos.x, state.pos.y, state.size.x, state.size.y, client.x, client.y
+        );
+    };
+
+    // Drag a root's right or bottom edge. The root is the one element whose size is a
+    // plain argument rather than something the solver derives, so resizing it is just
+    // editing that argument -- and shrinking the width is what re-wraps every text
+    // block inside it, which is the property the whole solver is built around.
+    // Latched on the press: once the box moves, the cursor is no longer on the band.
+    bool grabbedRootX[2] = {false, false};
+    bool grabbedRootY[2] = {false, false};
+    auto dragRootEdges = [&](int slot, const UiState& root, Vec2& size) {
+        if (root.isPressed) {
+            grabbedRootX[slot] = root.mouseLocal.x > root.size.x - ROOT_GRAB;
+            grabbedRootY[slot] = root.mouseLocal.y > root.size.y - ROOT_GRAB;
+        }
+        if (!root.isHeld) return;
+
+        if (grabbedRootX[slot]) size.x = Math::max(ROOT_MIN_WIDTH, size.x + root.mouseDelta.x);
+        if (grabbedRootY[slot]) size.y = Math::max(ROOT_MIN_HEIGHT, size.y + root.mouseDelta.y);
+    };
 
     auto caseBlock = [&](const char* title) {
         ui.openContainer(makeColumn(4.0f, LayoutEdges(0.0f)));
@@ -162,12 +250,15 @@ int ui_layout_test()
     };
 
     auto buildLayoutRoot = [&]() {
-        ui.begin(Vec2(ROOT_A_WIDTH, ROOT_A_HEIGHT), makeColumn(14.0f, LayoutEdges(16.0f)));
+        UiState root =
+            ui.begin(rootASize, makeColumn(14.0f, LayoutEdges(16.0f)), rootStyles, "rootA");
+        dragRootEdges(0, root, rootASize);
+        reportInteraction("rootA", root);
         ui.addText("ROOT A - sizing, alignment, floating, overflow", titleStyle);
 
         // 1 -- a Fit row hugs its children plus padding and gaps.
         caseBlock("1  fit row: hugs 3 fixed children + padding + gaps");
-        layoutProbes.fitRow = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)));
+        layoutProbes.fitRow = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f))).index;
         ui.openContainer(makeBox(60.0f, 30.0f));
         ui.closeContainer();
         ui.openContainer(makeBox(90.0f, 30.0f));
@@ -190,9 +281,9 @@ int ui_layout_test()
             LayoutConfig grower;
             grower.width = SizeSpec::grow();
             grower.height = SizeSpec::fixed(30.0f);
-            layoutProbes.growA = ui.openContainer(grower);
+            layoutProbes.growA = ui.openContainer(grower).index;
             ui.closeContainer();
-            layoutProbes.growB = ui.openContainer(grower);
+            layoutProbes.growB = ui.openContainer(grower).index;
             ui.closeContainer();
             ui.closeContainer();
         }
@@ -210,9 +301,9 @@ int ui_layout_test()
             capped.width = SizeSpec::grow();
             capped.width.max = 120.0f;
             capped.height = SizeSpec::fixed(30.0f);
-            layoutProbes.cappedA = ui.openContainer(capped);
+            layoutProbes.cappedA = ui.openContainer(capped).index;
             ui.closeContainer();
-            layoutProbes.cappedB = ui.openContainer(capped);
+            layoutProbes.cappedB = ui.openContainer(capped).index;
             ui.closeContainer();
             ui.closeContainer();
         }
@@ -222,12 +313,13 @@ int ui_layout_test()
         // than splitting evenly, or the long one wraps while the short one has slack.
         caseBlock("4  two growers in a fit parent: each keeps its own content width");
         {
-            layoutProbes.fitParent = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)));
+            layoutProbes.fitParent = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f))).index;
 
             LayoutConfig grower;
             grower.width = SizeSpec::grow();
-            layoutProbes.fitGrowShort = ui.addText("short", bodyStyle, grower);
-            layoutProbes.fitGrowLong = ui.addText("a much longer label here", bodyStyle, grower);
+            layoutProbes.fitGrowShort = ui.addText("short", bodyStyle, grower).index;
+            layoutProbes.fitGrowLong =
+                ui.addText("a much longer label here", bodyStyle, grower).index;
             ui.closeContainer();
         }
         ui.closeContainer();
@@ -240,7 +332,7 @@ int ui_layout_test()
                 ui.openContainer(makeColumn(6.0f, LayoutEdges(6.0f)));
                 for (int inner = 0; inner < 2; inner++) {
                     ui.openContainer(makeRow(4.0f, LayoutEdges(4.0f)));
-                    uint first = ui.openContainer(makeBox(50.0f, 22.0f));
+                    uint first = ui.openContainer(makeBox(50.0f, 22.0f)).index;
                     ui.closeContainer();
                     ui.openContainer(makeBox(70.0f, 22.0f));
                     ui.closeContainer();
@@ -266,8 +358,8 @@ int ui_layout_test()
                 config.height = SizeSpec::fixed(70.0f);
                 config.alignMain = aligns[i];
                 config.alignCross = aligns[i];
-                layoutProbes.alignBox[i] = ui.openContainer(config);
-                layoutProbes.alignChild[i] = ui.openContainer(makeBox(50.0f, 24.0f));
+                layoutProbes.alignBox[i] = ui.openContainer(config).index;
+                layoutProbes.alignChild[i] = ui.openContainer(makeBox(50.0f, 24.0f)).index;
                 ui.closeContainer();
                 ui.closeContainer();
             }
@@ -278,7 +370,7 @@ int ui_layout_test()
         // 7 -- a floating child must not inflate its parent or consume a gap.
         caseBlock("7  floating child (red): parent width matches case 1's row exactly");
         {
-            layoutProbes.floatParent = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)));
+            layoutProbes.floatParent = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f))).index;
             ui.openContainer(makeBox(60.0f, 30.0f));
             ui.closeContainer();
             ui.openContainer(makeBox(90.0f, 30.0f));
@@ -292,7 +384,7 @@ int ui_layout_test()
             floater.floating.anchorY = LayoutAlign::End;
             floater.floating.selfX = LayoutAlign::Center;
             floater.floating.selfY = LayoutAlign::Center;
-            layoutProbes.floatChild = ui.openContainer(floater);
+            layoutProbes.floatChild = ui.openContainer(floater).index;
             ui.closeContainer();
             ui.closeContainer();
         }
@@ -308,7 +400,7 @@ int ui_layout_test()
             LayoutConfig imageConfig;
             imageConfig.width = SizeSpec::grow();
             layoutProbes.image =
-                ui.addImage(mtsdfFont.getTexture(), Vec2(200.0f, 100.0f), 2.0f, imageConfig);
+                ui.addImage(mtsdfFont.getTexture(), Vec2(200.0f, 100.0f), 2.0f, imageConfig).index;
             ui.closeContainer();
         }
         ui.closeContainer();
@@ -318,8 +410,8 @@ int ui_layout_test()
         {
             LayoutConfig config = makeRow(6.0f, LayoutEdges(6.0f));
             config.width = SizeSpec::fixed(150.0f);
-            layoutProbes.overflowRow = ui.openContainer(config);
-            layoutProbes.overflowFirst = ui.openContainer(makeBox(80.0f, 26.0f));
+            layoutProbes.overflowRow = ui.openContainer(config).index;
+            layoutProbes.overflowFirst = ui.openContainer(makeBox(80.0f, 26.0f)).index;
             ui.closeContainer();
             ui.openContainer(makeBox(80.0f, 26.0f));
             ui.closeContainer();
@@ -333,8 +425,53 @@ int ui_layout_test()
     };
 
     auto buildTextRoot = [&]() {
-        ui.begin(Vec2(ROOT_B_WIDTH, ROOT_B_HEIGHT), makeColumn(14.0f, LayoutEdges(16.0f)));
-        ui.addText("ROOT B - wrapping, styled spans, line height", titleStyle);
+        UiState root =
+            ui.begin(rootBSize, makeColumn(14.0f, LayoutEdges(16.0f)), rootStyles, "rootB");
+        dragRootEdges(1, root, rootBSize);
+        reportInteraction("rootB", root);
+        ui.addText("ROOT B - interaction, wrapping, styled spans, line height", titleStyle);
+
+        // 0 -- interaction. Every state is read from last frame's rects, so it is known
+        // before the element is pushed and the style override resolves inline. First in
+        // the root rather than last, because it is the one case the mouse has to reach
+        // without panning the camera off it.
+        caseBlock("0  interaction: hover/press styles, inline clicks, drag to resize");
+        {
+            ui.openContainer(makeColumn(10.0f, LayoutEdges(0.0f)));
+
+            ui.openContainer(makeRow(10.0f, LayoutEdges(0.0f)));
+            UiState count = ui.addButton("Count", {}, buttonStyles);
+            UiState reset = ui.addButton("Reset", {}, buttonStyles);
+            if (count.isClicked) clickCount++;
+            if (reset.isClicked) clickCount = 0;
+            ui.addText(std::format("clicks: {}", clickCount), bodyStyle);
+            ui.closeContainer();
+            reportInteraction("Count", count);
+            reportInteraction("Reset", reset);
+
+            LayoutConfig panelConfig = makeRow(0.0f, LayoutEdges(10.0f));
+            panelConfig.width = SizeSpec::fixed(resizableSize.x);
+            panelConfig.height = SizeSpec::fixed(resizableSize.y);
+            UiState panel = ui.openContainer("resizable", panelConfig, panelStyles);
+            ui.addText(panel.isHeld ? "resizing" : "drag my bottom-right corner", labelStyle);
+            ui.closeContainer();
+            reportInteraction("resizable", panel);
+
+            // The engine never writes a size back into LayoutConfig -- it reports the drag
+            // in layout units and the scene owns the value. Latched on the press, because
+            // the cursor leaves the corner as soon as the box grows under it.
+            constexpr float GRAB = 18.0f;
+            if (panel.isPressed)
+                grabbedCorner = panel.mouseLocal.x > panel.size.x - GRAB &&
+                                panel.mouseLocal.y > panel.size.y - GRAB;
+            if (panel.isHeld && grabbedCorner) {
+                resizableSize.x = Math::max(120.0f, resizableSize.x + panel.mouseDelta.x);
+                resizableSize.y = Math::max(60.0f, resizableSize.y + panel.mouseDelta.y);
+            }
+
+            ui.closeContainer();
+        }
+        ui.closeContainer();
 
         // 10 -- shrinking is what drives the wrap, and the box grows taller for it.
         caseBlock("10  wrap: same text at 230 / 150 / 95 wide");
@@ -345,11 +482,11 @@ int ui_layout_test()
             for (int i = 0; i < 3; i++) {
                 LayoutConfig column = makeColumn(0.0f, LayoutEdges(6.0f));
                 column.width = SizeSpec::fixed(widths[i]);
-                uint index = ui.openContainer(column);
+                uint index = ui.openContainer(column).index;
 
                 LayoutConfig textConfig;
                 textConfig.width = SizeSpec::grow();
-                uint textIndex = ui.addText(sample, bodyStyle, textConfig);
+                uint textIndex = ui.addText(sample, bodyStyle, textConfig).index;
                 ui.closeContainer();
 
                 if (i == 2) {
@@ -372,10 +509,11 @@ int ui_layout_test()
             LayoutConfig textConfig;
             textConfig.width = SizeSpec::grow();
             textProbes.styledLines = ui.addText(
-                "first line is plain\nsecond has a /sBIG/s word in it\nthird /stiny/s and plain\n"
-                "fourth line is plain again",
-                bodyStyle, mixedStyles, textConfig
-            );
+                                           "first line is plain\nsecond has a /sBIG/s word in it\n"
+                                           "third /stiny/s and plain\nfourth line is plain again",
+                                           bodyStyle, mixedStyles, textConfig
+            )
+                                         .index;
             ui.closeContainer();
         }
         ui.closeContainer();
@@ -393,11 +531,13 @@ int ui_layout_test()
 
                 LayoutConfig textConfig;
                 textConfig.width = SizeSpec::grow();
-                uint index = ui.addText(
-                    "the quick /sbrown/s fox jumps over the /slazy/s dog and keeps running "
-                    "along the riverbank",
-                    bodyStyle, mixedStyles, textConfig
-                );
+                uint index =
+                    ui.addText(
+                          "the quick /sbrown/s fox jumps over the /slazy/s dog and keeps running "
+                          "along the riverbank",
+                          bodyStyle, mixedStyles, textConfig
+                    )
+                        .index;
                 ui.closeContainer();
                 if (i == 1) textProbes.styledWrap = index;
             }
@@ -416,10 +556,11 @@ int ui_layout_test()
             LayoutConfig textConfig;
             textConfig.width = SizeSpec::grow();
             textProbes.fixedLine = ui.addText(
-                "first line is plain\nsecond has a /sBIG/s word in it\nthird /stiny/s and plain\n"
-                "fourth line is plain again",
-                bodyStyle, mixedStyles, textConfig, true, true
-            );
+                                         "first line is plain\nsecond has a /sBIG/s word in it\n"
+                                         "third /stiny/s and plain\nfourth line is plain again",
+                                         bodyStyle, mixedStyles, textConfig, true, true
+            )
+                                       .index;
             ui.closeContainer();
         }
         ui.closeContainer();
@@ -561,6 +702,8 @@ int ui_layout_test()
         buildLayoutRoot();
         if (!logged) logLayoutRoot();
 
+        // Recomputed every frame, since root A's width is now draggable.
+        Vec2 rootBOrigin(rootAOrigin.x + (rootASize.x + ROOT_GAP) * WORLD_PER_UI, topWorldY);
         UiRenderer::get().setViewport(rootBOrigin, WORLD_PER_UI);
         buildTextRoot();
         if (!logged) {

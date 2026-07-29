@@ -15,6 +15,7 @@ Time::Time()
 
     m_deltaTime = 0.0;
     m_lastFrameTime = m_glfwTimeOffset;
+    m_frameCount = 0;
 }
 
 float Time::deltaTime() const { return m_deltaTime; }
@@ -26,6 +27,7 @@ void Time::update()
     float currentFrameTime = static_cast<float>(glfwGetTime());
     m_deltaTime = currentFrameTime - m_lastFrameTime;
     m_lastFrameTime = currentFrameTime;
+    m_frameCount++;
 }
 
 DateTime Time::getCurrentDateTime() const

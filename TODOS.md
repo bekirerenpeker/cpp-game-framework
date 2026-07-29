@@ -9,24 +9,17 @@ rather than leaving a stale description.
 
 ## In progress / next up
 
-- [ ] **UI interaction (one-frame-late hit testing)** — the layout solver lands
-  boxes but nothing is clickable. Keep a persistent `id -> rect` map (hash the
-  builder's call-site string, store in an `IdIndexedVector`) holding *last*
-  frame's rect plus hover/press/focus, so `addButton` can return an
-  `Interaction{hovered, pressed, released}` read from the previous frame and
-  `if (ui.addButton(...))` works inline. Layout is stable frame to frame so the
-  one-frame lag is invisible; a widget's first frame simply has no rect. Do not
-  route this through `Delegate` — a return value has no lifetime problem and
-  needs no per-widget object.
-
-- [ ] **Hover/press styling** — split in two. Style-only changes (colour, border,
-  alpha, and a *draw-time* scale about the element's centre) cost nothing and
-  cannot oscillate; make them the default. Layout-affecting changes (padding,
-  size, font size) are legal — hover state is known before the tree is built, so
-  they just emit a bigger box — but they can feed back: the element grows, the
-  growth moves it out from under the cursor, it un-hovers, shrinks, re-hovers,
-  flickering at 60Hz. Hit-test against the *un-hovered* rect and animate the
-  transition if this is ever opted into.
+- [ ] **Engine-handled resizable containers** — `UiState` already reports
+  `isHeld` + `dragDelta` + `mouseLocal` + last frame's rect, which is all a scene
+  needs to resize a panel itself (see case 0 in `ui_layout_test`). Doing it
+  *inside* the engine needs three things that are not free: a second hit pass
+  that prefers a container's resize border over its own children (under
+  "topmost wins" the border loses the hit to any overlapping child, so the
+  container never becomes active), a long-lived `key -> size` map with its own
+  frame-age eviction since immediate mode has no destroy event, and a builder
+  that overwrites the caller's `LayoutConfig.width/height` with
+  `SizeSpec::fixed(...)`, which breaks the rule that `LayoutConfig` is purely
+  the caller's data. Only worth it once several call sites want it.
 
 - [ ] **Grid** — a track list where each track carries the same `SizeSpec`, run
   through `LayoutCalculator`'s existing distribution routine, then row-major
@@ -34,9 +27,9 @@ rather than leaving a stale description.
   for a fraction of CSS Grid's algorithm; auto-fit/minmax/dense packing are not
   worth it.
 
-- [ ] **Widget rendering + theming** — `UiRenderer` draws text properly but its
-  boxes are still depth-tinted debug outlines through the sprite batch. What is
-  missing is a `UiStyle` -> draw mapping (background, border, radius) and a theme
+- [ ] **Widget theming** — `UiRenderer` now maps `UiStyle` to real draw calls
+  (background fill, border colour + width), so styling is no longer invisible.
+  What is still missing is `cornerRadius`, which needs shader work, and a theme
   those styles resolve against instead of literal colours at call sites. Moving
   the rects into `TextRenderer`'s batch (see "Plain quads in the text batch"
   below) would then let a panel and its label share one draw call, which is the
@@ -45,7 +38,11 @@ rather than leaving a stale description.
 - [ ] **Scroll + clip** — `LayoutConfig::clipX/clipY` and `scrollOffset` are
   honoured by the solver already (a clipped axis reports `minW = 0`, which is
   what lets it shrink below its content), but nothing sets a scissor rect or
-  drives the offset from input.
+  drives the offset from input. Hit testing must be clipped in the same change,
+  not before it: `UiSystem`'s cached rects are currently full rects, and
+  clipping the hit test while the renderer still draws everything unclipped
+  would produce visible elements that cannot be clicked — a worse bug than the
+  one it fixes.
 
 - [ ] **Terrain-type tilemap rework** — `Tileset::tilesConnect(a, b)` is
   currently just `a != 0 && a == b` ([Tileset.cpp](engine/src/graphics/tilemap/Tileset.cpp)),
@@ -126,6 +123,52 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **UI interaction + hover/press styling** — every builder now returns a
+  `UiState` ([UiInteraction.hpp](engine/include/graphics/ui/UiInteraction.hpp))
+  read from the **previous** frame's solved rects, so
+  `if (ui.addButton("Save", {}, styles).isClicked)` works inline. Identity is a
+  64-bit FNV-1a chain, `key = hash(parentKey, id)`, with the id being an explicit
+  string when given and the sibling ordinal within the parent otherwise; the root
+  seeds from the window id plus a per-frame root ordinal. `addButton` uses its
+  label as the id, so two same-labelled buttons under one parent share state —
+  pass an explicit id there. A dynamic list needs explicit ids for the same
+  reason; ordinals only hold while the tree shape does.
+  `UiSystem` keeps two rect buffers swapped at the frame boundary, and `draw()`
+  **appends** to the write buffer rather than clearing it, because one frame can
+  hold several `begin`/`draw` cycles. Rects stay in layout units with a parallel
+  per-root `{windowId, worldTopLeft, worldPerUiUnit}`, so the mouse is converted
+  once per root instead of every rect being converted to world space.
+  Three things had to be right or this silently misbehaves: the boundary keys on
+  **`(Time::getFrameCount(), activeWindowId)`** — the buffer swap on frame, the
+  mouse sample / hover resolve / press machine on window — because `Time::update`
+  runs once for all windows while `Input`'s cursor and button edges are
+  per-window; mouse **deltas come from screen pixels**, not world, or panning the
+  camera folds into the drag; and hit resolution walks the cached rects
+  **backwards** because that is exactly the reverse of `UiRenderer`'s paint order
+  (a z-index or floating-last pass there would have to be mirrored here).
+  `isHovered` is ancestor-inclusive (a button hovers when the cursor is on its
+  label) and `isHoveredDirect` is the exact hit; text is never hit-testable so a
+  label cannot steal its button's hit. `m_activeKey` survives the cursor leaving
+  the element, which is what makes dragging work, and is cleared on release even
+  when the element was not rebuilt that frame.
+  Styling resolves `normal -> hovered -> pressed` inside the builder, from
+  `UiStyleOverride`'s `std::optional` fields, and is **style-only** on purpose —
+  a size or padding override would grow the element out from under the cursor and
+  flicker between states at 60Hz. Label colour comes from the resolved
+  `contentColor` and has to be baked into the `TextStyle` *before* `TextLeaf::set`,
+  since `UiRenderer` reads a text element's style off its leaf, not off
+  `UiElement::textStyle`. `Time` gained a frame counter for the boundary; the
+  `UiStyle` -> draw mapping landed with it, since hover styling was invisible
+  before.
+  `begin()` returns a `UiState` too, which is what makes a **root** resizable:
+  the root is the one element whose size is a plain argument rather than
+  something the solver derives, so dragging its edge is just editing the `Vec2`
+  passed in next frame — and shrinking its width re-wraps every text block
+  inside it. Both roots in `ui_layout_test` do this from a 14 unit right/bottom
+  band, which stays inside the root's 16 unit padding so no child ever steals
+  the hit. Verified in `ui_layout_test` case 0: hover/press styling, inline
+  click counting, panel corner drag, and both roots resizing.
 
 - [x] **UI renderer + styled/wrapped text** — `UiRenderer`
   ([UiRenderer.hpp](engine/include/graphics/ui/UiRenderer.hpp)) is the Singleton

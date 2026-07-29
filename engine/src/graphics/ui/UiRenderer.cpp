@@ -28,6 +28,14 @@ Vec2 UiRenderer::uiToWorld(Vec2 uiPos) const
     return m_worldTopLeft + Vec2(uiPos.x, -uiPos.y) * m_worldPerUiUnit;
 }
 
+Vec2 UiRenderer::worldToUi(Vec2 worldPos) const
+{
+    if (m_worldPerUiUnit == 0.0f) return VEC2_ZERO;
+
+    Vec2 offset = (worldPos - m_worldTopLeft) / m_worldPerUiUnit;
+    return Vec2(offset.x, -offset.y);
+}
+
 void UiRenderer::render(
     const std::vector<UiElement>& elements, uint elementCount, const std::vector<LayoutNode>& nodes
 )
@@ -35,13 +43,13 @@ void UiRenderer::render(
     if (nodes.empty()) return;
     ensureTexture();
 
-    if (m_drawBoxes) {
-        renderBoxes(nodes);
-        // The boxes go through the sprite batch and the glyphs through the text
-        // batch, so the first has to be flushed or the two resolve in whichever
-        // order they happen to flush.
-        Renderer::get().endScene();
-    }
+    if (m_drawStyles) renderStyles(elements, elementCount, nodes);
+    if (m_drawBoxes) renderDebugBoxes(nodes);
+
+    // The rects go through the sprite batch and the glyphs through the text batch, so
+    // the first has to be flushed or the two resolve in whichever order they happen to
+    // flush. Unconditional: styles alone still fill that batch.
+    Renderer::get().endScene();
 
     if (m_drawText) {
         renderText(elements, elementCount, nodes);
@@ -62,12 +70,28 @@ void UiRenderer::ensureTexture()
     if (!m_whiteTexture) m_whiteTexture = new GlTexture(COLOR_WHITE);
 }
 
-void UiRenderer::renderBoxes(const std::vector<LayoutNode>& nodes)
+void UiRenderer::renderStyles(
+    const std::vector<UiElement>& elements, uint elementCount, const std::vector<LayoutNode>& nodes
+)
+{
+    // Preorder, so a child's background lands on top of its parent's without needing
+    // any depth sorting -- the same order the debug boxes and the solver use.
+    for (uint i = 0; i < elementCount && i < nodes.size(); i++) {
+        const UiStyle& style = elements[i].style;
+        const LayoutNode& node = nodes[i];
+
+        if (style.backgroundColor.a > 0.0f) fillRect(node.pos, node.size, style.backgroundColor);
+        if (style.borderWidth > 0.0f && style.borderColor.a > 0.0f)
+            outlineRect(node.pos, node.size, style.borderColor, style.borderWidth);
+    }
+}
+
+void UiRenderer::renderDebugBoxes(const std::vector<LayoutNode>& nodes)
 {
     for (const LayoutNode& node : nodes) {
         Color color = node.isFloating ? FLOATING_COLOR : depthColor(node.depth);
         fillRect(node.pos, node.size, Color(color.r, color.g, color.b, m_fillAlpha));
-        outlineRect(node.pos, node.size, color);
+        outlineRect(node.pos, node.size, color, m_outlineThickness);
     }
 }
 
@@ -108,11 +132,11 @@ void UiRenderer::fillRect(Vec2 uiMin, Vec2 uiSize, Color color)
     Renderer::get().addQuad(center, uiSize * m_worldPerUiUnit, color, m_whiteTexture);
 }
 
-void UiRenderer::outlineRect(Vec2 uiMin, Vec2 uiSize, Color color)
+void UiRenderer::outlineRect(Vec2 uiMin, Vec2 uiSize, Color color, float requestedThickness)
 {
     if (uiSize.x <= 0.0f || uiSize.y <= 0.0f) return;
 
-    float thickness = Math::min(m_outlineThickness, Math::min(uiSize.x, uiSize.y) * 0.5f);
+    float thickness = Math::min(requestedThickness, Math::min(uiSize.x, uiSize.y) * 0.5f);
     // Drawn inside the box so a child's border never sits on top of its parent's.
     fillRect(uiMin, Vec2(uiSize.x, thickness), color);
     fillRect(Vec2(uiMin.x, uiMin.y + uiSize.y - thickness), Vec2(uiSize.x, thickness), color);

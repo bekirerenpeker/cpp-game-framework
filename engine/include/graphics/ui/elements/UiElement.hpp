@@ -5,6 +5,7 @@
 #include "graphics/ui/layout/ILeafMeasurer.hpp"
 #include "graphics/ui/layout/LayoutTypes.hpp"
 #include <cstdint>
+#include <optional>
 #include <string>
 
 namespace Engine {
@@ -27,6 +28,32 @@ struct UiStyle
     Color contentColor = COLOR_WHITE;
     float borderWidth = 0.0f;
     float cornerRadius = 0.0f;
+};
+
+struct UiStyleOverride
+{
+    std::optional<Color> backgroundColor;
+    std::optional<Color> borderColor;
+    std::optional<Color> contentColor;
+    std::optional<float> borderWidth;
+
+    void applyTo(UiStyle& style) const
+    {
+        if (backgroundColor) style.backgroundColor = *backgroundColor;
+        if (borderColor) style.borderColor = *borderColor;
+        if (contentColor) style.contentColor = *contentColor;
+        if (borderWidth) style.borderWidth = *borderWidth;
+    }
+};
+
+struct UiStyles
+{
+    UiStyle normal;
+    UiStyleOverride hovered;
+    UiStyleOverride pressed;
+
+    UiStyles() = default;
+    UiStyles(const UiStyle& style) : normal(style) {}
 };
 
 struct UiElement

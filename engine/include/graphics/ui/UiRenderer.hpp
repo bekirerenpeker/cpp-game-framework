@@ -20,6 +20,7 @@ class UiRenderer : public Singleton<UiRenderer>
     float m_worldPerUiUnit = 1.0f;
     float m_outlineThickness = 1.0f;
     float m_fillAlpha = 0.07f;
+    bool m_drawStyles = true;
     bool m_drawBoxes = true;
     bool m_drawText = true;
 
@@ -27,9 +28,14 @@ class UiRenderer : public Singleton<UiRenderer>
     void setViewport(Vec2 worldTopLeft, float worldPerUiUnit);
     void setOutlineThickness(float thickness) { m_outlineThickness = thickness; }
     void setFillAlpha(float alpha) { m_fillAlpha = alpha; }
+    void setDrawStyles(bool value) { m_drawStyles = value; }
     void setDrawBoxes(bool value) { m_drawBoxes = value; }
     void setDrawText(bool value) { m_drawText = value; }
+    bool getDrawStyles() const { return m_drawStyles; }
     bool getDrawBoxes() const { return m_drawBoxes; }
+
+    Vec2 getWorldTopLeft() const { return m_worldTopLeft; }
+    float getWorldPerUiUnit() const { return m_worldPerUiUnit; }
 
     void render(
         const std::vector<UiElement>& elements, uint elementCount,
@@ -38,6 +44,7 @@ class UiRenderer : public Singleton<UiRenderer>
     void release();
 
     Vec2 uiToWorld(Vec2 uiPos) const;
+    Vec2 worldToUi(Vec2 worldPos) const;
     float uiToWorldScale(float uiLength) const { return uiLength * m_worldPerUiUnit; }
 
   private:
@@ -45,13 +52,17 @@ class UiRenderer : public Singleton<UiRenderer>
     ~UiRenderer() = default;
 
     void ensureTexture();
-    void renderBoxes(const std::vector<LayoutNode>& nodes);
+    void renderStyles(
+        const std::vector<UiElement>& elements, uint elementCount,
+        const std::vector<LayoutNode>& nodes
+    );
+    void renderDebugBoxes(const std::vector<LayoutNode>& nodes);
     void renderText(
         const std::vector<UiElement>& elements, uint elementCount,
         const std::vector<LayoutNode>& nodes
     );
     void fillRect(Vec2 uiMin, Vec2 uiSize, Color color);
-    void outlineRect(Vec2 uiMin, Vec2 uiSize, Color color);
+    void outlineRect(Vec2 uiMin, Vec2 uiSize, Color color, float thickness);
     static Color depthColor(uint depth);
 };
 
