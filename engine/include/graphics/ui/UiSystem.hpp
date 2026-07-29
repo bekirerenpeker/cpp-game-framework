@@ -117,6 +117,11 @@ class UiSystem : public Singleton<UiSystem>
     void closeContainer();
     void setHitTestable(uint index, bool value);
 
+    UiState addDivider(
+        float thickness = 1.0f, const UiStyles& styles = UiPresets::divider(),
+        std::string_view id = {}
+    );
+
     UiState addText(std::string_view text, const LayoutConfig& layout = {});
     UiState
     addText(std::string_view text, const TextStyle& textStyle, const LayoutConfig& layout = {});

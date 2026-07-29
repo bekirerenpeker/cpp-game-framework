@@ -36,6 +36,7 @@ struct UiStyleOverride
     std::optional<Color> borderColor;
     std::optional<Color> contentColor;
     std::optional<float> borderWidth;
+    std::optional<float> cornerRadius;
 
     void applyTo(UiStyle& style) const
     {
@@ -43,6 +44,7 @@ struct UiStyleOverride
         if (borderColor) style.borderColor = *borderColor;
         if (contentColor) style.contentColor = *contentColor;
         if (borderWidth) style.borderWidth = *borderWidth;
+        if (cornerRadius) style.cornerRadius = *cornerRadius;
     }
 };
 
@@ -98,6 +100,15 @@ inline UiStyles outline(Color tint = Color(0.45f, 0.50f, 0.60f))
     styles.normal.borderColor = tint;
     styles.normal.borderWidth = 1.0f;
     styles.normal.cornerRadius = 4.0f;
+    return styles;
+}
+
+// A fill rather than a border: a divider is thinner than most border widths, and the
+// shader insets a border from both edges, so a bordered rule would draw twice.
+inline UiStyles divider(Color tint = Color(0.32f, 0.35f, 0.42f))
+{
+    UiStyles styles;
+    styles.normal.backgroundColor = tint;
     return styles;
 }
 

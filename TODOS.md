@@ -9,8 +9,6 @@ rather than leaving a stale description.
 
 ## In progress / next up
 
-- [ ] add divider, border radius, width, color styling etc.
-
 - [ ] **Engine-handled resizable containers** — `UiState` already reports
   `isHeld` + `dragDelta` + `mouseLocal` + last frame's rect, which is all a scene
   needs to resize a panel itself (see case 0 in `ui_layout_test`). Doing it
@@ -30,7 +28,7 @@ rather than leaving a stale description.
   worth it.
 
 - [ ] **Widget theming** — `UiRenderer` draws `UiStyle` for real now, corner
-  radius included, and `UiPresets::panel/button/outline` give starting points.
+  radius included, and `UiPresets::panel/button/outline/divider` give starting points.
   What is still missing is a *theme*: a named palette + role mapping those
   presets resolve against, so a call site says "surface" or "accent" rather than
   a literal `Color`. Only then is restyling a whole UI one edit.
@@ -120,6 +118,23 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **Dividers + fully overridable container styling** — `UiSystem::addDivider(thickness, styles, id)`
+  pushes a leafless container with `SizeSpec::grow()` width and `SizeSpec::fixed(thickness)`
+  height, so it is a full-width rule in a column and takes the leftover main-axis
+  space in a row. `Grow`, deliberately **not** `Percent(100)`: a percent is measured
+  against a parent content box that does not exist yet when the parent is `Fit`, so
+  the rule would collapse there. It paints as a **background fill**, not a border —
+  the shader insets a border from both edges, so a 1-unit rule with a 1-unit border
+  draws itself twice; `UiPresets::divider(tint)` is the matching preset.
+  `UiStyleOverride` gained `cornerRadius`, so every `UiStyle` field is now
+  per-state overridable (it is purely visual, so it does not break the
+  style-only rule that keeps an element from resizing out from under the cursor).
+  `cornerRadius` itself already worked — the CLAUDE.md note saying it needed shader
+  work was stale from before the SDF shader landed. Verified in `ui_layout_test`
+  case 15: three rules at 1/3/8 thick, all 344 wide inside a 360 column, the 8-thick
+  one rounding into a capsule because the shader clamps the radius to the shorter
+  half-extent.
 
 - [x] **UI renders in window space, from a rounded-rect shader** — `UiRenderer`
   owns a `BatchRenderer<UiVertex>` over

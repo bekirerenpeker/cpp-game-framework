@@ -5,6 +5,7 @@
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/Window.hpp"
 #include "graphics/ui/UiRenderer.hpp"
+#include "utils/math/MathFuncs.hpp"
 
 namespace Engine {
 
@@ -351,6 +352,20 @@ void UiSystem::closeContainer()
 void UiSystem::setHitTestable(uint index, bool value)
 {
     if (index < m_elementCount) m_elementInteractions[index].hitTestable = value;
+}
+
+UiState UiSystem::addDivider(float thickness, const UiStyles& styles, std::string_view id)
+{
+    // Grow, not Percent(100): a percent width is measured against the parent's content
+    // box before the parent has one when that parent is Fit, so a rule in a Fit column
+    // would collapse. Grow seeds at max-content -- zero here -- and takes what is left.
+    LayoutConfig config;
+    config.width = SizeSpec::grow();
+    config.height = SizeSpec::fixed(Math::max(0.0f, thickness));
+
+    UiState state = openContainer(id, config, styles);
+    closeContainer();
+    return state;
 }
 
 UiState UiSystem::addText(std::string_view text, const LayoutConfig& layout)

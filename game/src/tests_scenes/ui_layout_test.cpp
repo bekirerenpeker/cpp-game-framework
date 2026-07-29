@@ -15,7 +15,7 @@ const char* FALLBACK_FONT = "C:/Windows/Fonts/segoeui.ttf";
 constexpr float ROOT_A_WIDTH = 560.0f;
 constexpr float ROOT_A_HEIGHT = 1440.0f;
 constexpr float ROOT_B_WIDTH = 560.0f;
-constexpr float ROOT_B_HEIGHT = 1480.0f;
+constexpr float ROOT_B_HEIGHT = 1660.0f;
 constexpr float ROOT_GAP = 60.0f;
 constexpr float WORLD_PER_UI = 0.01f;
 constexpr float ROOT_MIN_WIDTH = 260.0f;
@@ -93,6 +93,13 @@ struct TextProbes
     uint styledLines = NO_NODE;
     uint styledWrap = NO_NODE;
     uint fixedLine = NO_NODE;
+};
+
+struct DividerProbes
+{
+    uint thin = NO_NODE;
+    uint thick = NO_NODE;
+    uint rounded = NO_NODE;
 };
 
 }   // namespace
@@ -187,8 +194,15 @@ int ui_layout_test()
     rootStyles.pressed.borderColor = Color(0.95f, 0.75f, 0.35f);
     rootStyles.pressed.borderWidth = 3.0f;
 
+    // A rule thick enough for the radius to read; the shader clamps it to the shorter
+    // half-extent, so anything at or above half the thickness draws the same capsule.
+    UiStyles roundedDividerStyles = UiPresets::divider(Color(0.95f, 0.75f, 0.35f));
+    roundedDividerStyles.normal.cornerRadius = 4.0f;
+    roundedDividerStyles.hovered.backgroundColor = COLOR_WHITE;
+
     LayoutProbes layoutProbes;
     TextProbes textProbes;
+    DividerProbes dividerProbes;
     Vec2 rootASize(ROOT_A_WIDTH, ROOT_A_HEIGHT);
     Vec2 rootBSize(ROOT_B_WIDTH, ROOT_B_HEIGHT);
     Vec2 resizableSize(220.0f, 90.0f);
@@ -583,6 +597,25 @@ int ui_layout_test()
         }
         ui.closeContainer();
 
+        // 15 -- dividers take the full cross width of a column and only the thickness
+        // they are given, and a thick one rounds into a capsule since the shader clamps
+        // the radius to the shorter half-extent.
+        caseBlock("15  dividers: 1 / 3 / 8 thick, the last one rounded");
+        {
+            LayoutConfig column = makeColumn(10.0f, LayoutEdges(8.0f));
+            column.width = SizeSpec::fixed(360.0f);
+            ui.openContainer(column, caseStyles);
+
+            ui.addText("above the rule", labelStyle);
+            dividerProbes.thin = ui.addDivider().index;
+            ui.addText("between two rules", labelStyle);
+            dividerProbes.thick = ui.addDivider(3.0f, UiPresets::divider(COLOR_CYAN)).index;
+            ui.addText("below the rule", labelStyle);
+            dividerProbes.rounded = ui.addDivider(8.0f, roundedDividerStyles).index;
+            ui.closeContainer();
+        }
+        ui.closeContainer();
+
         ui.draw();
     };
 
@@ -663,6 +696,12 @@ int ui_layout_test()
         logLines("11 styled", textProbes.styledLines);
         logLines("12 styled+wrapped", textProbes.styledWrap);
         logLines("13 fixedLineHeight", textProbes.fixedLine);
+        LOG_INFO(
+            "15 dividers {}x{} / {}x{} / {}x{} (expect 344 wide, heights 1/3/8)",
+            node(dividerProbes.thin).size.x, node(dividerProbes.thin).size.y,
+            node(dividerProbes.thick).size.x, node(dividerProbes.thick).size.y,
+            node(dividerProbes.rounded).size.x, node(dividerProbes.rounded).size.y
+        );
     };
 
     auto onWindowUpdate = [&](IdType id, float dt) {
