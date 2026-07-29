@@ -33,8 +33,8 @@ class UiSystem : public Singleton<UiSystem>
     struct RootViewport
     {
         IdType windowId = INVALID_ID;
-        Vec2 worldTopLeft = VEC2_ZERO;
-        float worldPerUiUnit = 1.0f;
+        Vec2 screenTopLeft = VEC2_ZERO;
+        float pixelsPerUiUnit = 1.0f;
     };
 
     struct CachedRect
@@ -71,11 +71,9 @@ class UiSystem : public Singleton<UiSystem>
     LayoutEdges m_defaultButtonPadding {10.0f, 10.0f, 6.0f, 6.0f};
 
     Vec2 m_rootSize = VEC2_ZERO;
-    Vec2 m_mouseWorldPos = VEC2_ZERO;
     Vec2 m_mouseScreenPos = VEC2_ZERO;
     Vec2 m_mouseScreenDelta = VEC2_ZERO;
     Vec2 m_pressScreenPos = VEC2_ZERO;
-    Vec2 m_worldOrigin = VEC2_ZERO;
 
     UiKey m_rootKey = NO_UI_KEY;
     UiKey m_hotKey = NO_UI_KEY;
@@ -97,7 +95,7 @@ class UiSystem : public Singleton<UiSystem>
     bool m_warnedUnbalanced = false;
     bool m_warnedNoFont = false;
     bool m_warnedUnclosedTag = false;
-    bool m_warnedNoCamera = false;
+    bool m_warnedNoWindow = false;
 
   public:
     void setDefaultFont(const Font* font) { m_defaultFont = font; }

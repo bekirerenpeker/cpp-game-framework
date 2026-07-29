@@ -26,6 +26,22 @@ void TextRenderer::init(GlShader* shader, size_t maxQuadCount)
     m_initialized = true;
 }
 
+// Text drawn in a different space cannot share a draw call with text already queued,
+// so switching flushes. Submit all world text, then all screen text.
+void TextRenderer::setViewProjOverride(const Mat4& viewProj)
+{
+    if (m_initialized) flush();
+    m_viewProjOverride = viewProj;
+    m_hasViewProjOverride = true;
+}
+
+void TextRenderer::clearViewProjOverride()
+{
+    if (!m_hasViewProjOverride) return;
+    if (m_initialized) flush();
+    m_hasViewProjOverride = false;
+}
+
 bool TextRenderer::ensureReady()
 {
     if (!m_initialized) {
@@ -47,7 +63,9 @@ bool TextRenderer::ensureReady()
         m_batch.configureVao(*vao);
     }
     m_batch.setVao(vao);
-    m_batch.setViewProjMat(ViewContext::get().getViewProjMat());
+    m_batch.setViewProjMat(
+        m_hasViewProjOverride ? m_viewProjOverride : ViewContext::get().getViewProjMat()
+    );
     return true;
 }
 

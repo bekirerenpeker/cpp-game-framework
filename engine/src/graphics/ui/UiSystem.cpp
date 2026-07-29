@@ -3,21 +3,20 @@
 #include "core/input/Input.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/ViewContext.hpp"
+#include "core/window_management/Window.hpp"
 #include "graphics/ui/UiRenderer.hpp"
 
 namespace Engine {
 
 static const std::vector<TextStyle> NO_SPAN_STYLES;
 
-// A root's viewport is the only thing that maps its layout units into the world, so a
-// mouse hit test is that map run backwards -- see UiRenderer::worldToUi, which does the
-// same thing for the renderer's own live viewport.
-static Vec2 worldToRootUi(Vec2 worldPos, Vec2 worldTopLeft, float worldPerUiUnit)
+// Both spaces are Y-down from a top-left origin -- the single flip the UI needs lives
+// in UiRenderer::uiToScreen, on the way to a Y-up GL viewport -- so a hit test is just
+// the root's viewport undone.
+static Vec2 screenToRootUi(Vec2 clientPos, Vec2 screenTopLeft, float pixelsPerUiUnit)
 {
-    if (worldPerUiUnit == 0.0f) return Vec2(-UNBOUNDED, -UNBOUNDED);
-
-    Vec2 offset = (worldPos - worldTopLeft) / worldPerUiUnit;
-    return Vec2(offset.x, -offset.y);
+    if (pixelsPerUiUnit == 0.0f) return Vec2(-UNBOUNDED, -UNBOUNDED);
+    return (clientPos - screenTopLeft) / pixelsPerUiUnit;
 }
 
 UiState UiSystem::begin(
@@ -91,8 +90,8 @@ void UiSystem::draw()
     // all have to survive into the next frame's hit test. Only the frame boundary clears.
     RootViewport root;
     root.windowId = m_lastWindowId;
-    root.worldTopLeft = UiRenderer::get().getWorldTopLeft();
-    root.worldPerUiUnit = UiRenderer::get().getWorldPerUiUnit();
+    root.screenTopLeft = UiRenderer::get().getScreenTopLeft();
+    root.pixelsPerUiUnit = UiRenderer::get().getPixelsPerUiUnit();
 
     uint rootIndex = (uint)m_currRoots.size();
     uint entryBase = (uint)m_currRects.size();
@@ -121,8 +120,6 @@ void UiSystem::shutdown()
     m_imageLeaves.clear();
     m_textLeafCount = 0;
     m_imageLeafCount = 0;
-
-    UiRenderer::get().release();
 }
 
 void UiSystem::beginFrameIfNeeded()
@@ -158,28 +155,26 @@ void UiSystem::beginFrameIfNeeded()
 
 void UiSystem::sampleMouse()
 {
-    ViewContext& view = ViewContext::get();
-
-    // screenToWorld has no zero-guard, so with no camera it returns the camera position
-    // for every input -- a fixed world point that would read as a permanent hover.
-    m_mouseValid = view.getActiveCamera() != NULL_ENTITY;
+    Window* window = ViewContext::get().getActiveWindow();
+    m_mouseValid = window != nullptr;
     if (!m_mouseValid) {
         m_mouseScreenDelta = VEC2_ZERO;
-        if (!m_warnedNoCamera) {
-            LOG_WARNING("UiSystem: no active camera; UI interaction is disabled this frame");
-            m_warnedNoCamera = true;
+        if (!m_warnedNoWindow) {
+            LOG_WARNING("UiSystem: no active window; UI interaction is disabled");
+            m_warnedNoWindow = true;
         }
         return;
     }
 
-    Vec2 screenPos = Input::get().getMousePos();
-    auto it = m_lastMouseScreenPos.find(m_lastWindowId);
-    m_mouseScreenDelta = it == m_lastMouseScreenPos.end() ? VEC2_ZERO : screenPos - it->second;
-    m_lastMouseScreenPos[m_lastWindowId] = screenPos;
+    // Input reports window-centred pixels with +Y up; the UI works in client pixels
+    // from the top-left with +Y down, which is the same orientation as layout space.
+    Vec2 raw = Input::get().getMousePos();
+    Vec2 clientPos(raw.x + window->getWidth() * 0.5f, window->getHeight() * 0.5f - raw.y);
 
-    m_mouseScreenPos = screenPos;
-    m_mouseWorldPos = view.getMouseWorldPos();
-    m_worldOrigin = view.screenToWorld(VEC2_ZERO);
+    auto it = m_lastMouseScreenPos.find(m_lastWindowId);
+    m_mouseScreenDelta = it == m_lastMouseScreenPos.end() ? VEC2_ZERO : clientPos - it->second;
+    m_lastMouseScreenPos[m_lastWindowId] = clientPos;
+    m_mouseScreenPos = clientPos;
 }
 
 void UiSystem::resolveHover()
@@ -189,8 +184,8 @@ void UiSystem::resolveHover()
 
     m_rootMouseUi.resize(m_prevRoots.size());
     for (uint i = 0; i < m_prevRoots.size(); i++)
-        m_rootMouseUi[i] = worldToRootUi(
-            m_mouseWorldPos, m_prevRoots[i].worldTopLeft, m_prevRoots[i].worldPerUiUnit
+        m_rootMouseUi[i] = screenToRootUi(
+            m_mouseScreenPos, m_prevRoots[i].screenTopLeft, m_prevRoots[i].pixelsPerUiUnit
         );
 
     if (!m_mouseValid) return;
@@ -313,13 +308,12 @@ bool UiSystem::isInHoverChain(UiKey key) const
 
 Vec2 UiSystem::screenToUiDelta(Vec2 screenDelta, uint rootIndex) const
 {
-    float worldPerUiUnit = m_prevRoots[rootIndex].worldPerUiUnit;
-    if (worldPerUiUnit == 0.0f) return VEC2_ZERO;
+    float pixelsPerUiUnit = m_prevRoots[rootIndex].pixelsPerUiUnit;
+    if (pixelsPerUiUnit == 0.0f) return VEC2_ZERO;
 
-    // Mapped through the *current* camera rather than differenced across frames: a
-    // world-space difference would fold camera panning into the mouse's own motion.
-    Vec2 worldDelta = ViewContext::get().screenToWorld(screenDelta) - m_worldOrigin;
-    return Vec2(worldDelta.x, -worldDelta.y) / worldPerUiUnit;
+    // A pure scale, not a difference of two mapped points: the viewport can move
+    // between frames and that must not read as the cursor having moved.
+    return screenDelta / pixelsPerUiUnit;
 }
 
 UiStyle UiSystem::resolveStyle(const UiStyles& styles, const UiState& state)

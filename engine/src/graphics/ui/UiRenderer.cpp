@@ -1,97 +1,136 @@
 #include "graphics/ui/UiRenderer.hpp"
-#include "graphics/Renderer.hpp"
-#include "graphics/gl_wrappers/GlTexture.hpp"
+#include "core/logging/LoggerMacros.hpp"
+#include "core/window_management/ViewContext.hpp"
+#include "core/window_management/Window.hpp"
 #include "graphics/text/TextRenderer.hpp"
 #include "graphics/ui/elements/UiLeaves.hpp"
-#include "utils/math/MathFuncs.hpp"
 
 namespace Engine {
 
-static const Color DEPTH_COLORS[] = {
-    Color(0.45f, 0.72f, 1.00f), Color(0.55f, 0.92f, 0.60f), Color(1.00f, 0.80f, 0.35f),
-    Color(0.95f, 0.55f, 0.80f), Color(0.60f, 0.65f, 1.00f), Color(0.50f, 0.92f, 0.90f),
-};
-static constexpr uint DEPTH_COLOR_COUNT = sizeof(DEPTH_COLORS) / sizeof(DEPTH_COLORS[0]);
-
-static const Color FLOATING_COLOR = Color(1.00f, 0.35f, 0.35f);
-
-void UiRenderer::setViewport(Vec2 worldTopLeft, float worldPerUiUnit)
+void UiRenderer::init(GlShader* shader, size_t maxQuadCount)
 {
-    m_worldTopLeft = worldTopLeft;
-    m_worldPerUiUnit = worldPerUiUnit;
+    m_batch.init(
+        maxQuadCount,
+        {
+            {GlDataType::Float, 2},
+            {GlDataType::Float, 2},
+            {GlDataType::Float, 2},
+            {GlDataType::Float, 4},
+            {GlDataType::Float, 4},
+            {GlDataType::Float, 1},
+            {GlDataType::Float, 1},
+    },
+        shader
+    );
+    m_initialized = true;
 }
 
-Vec2 UiRenderer::uiToWorld(Vec2 uiPos) const
+void UiRenderer::setViewport(Vec2 screenTopLeft, float pixelsPerUiUnit)
 {
-    // The only Y flip in the subsystem: layout is Y-down from a top-left origin,
-    // the engine's world is Y-up.
-    return m_worldTopLeft + Vec2(uiPos.x, -uiPos.y) * m_worldPerUiUnit;
+    m_screenTopLeft = screenTopLeft;
+    m_pixelsPerUiUnit = pixelsPerUiUnit;
 }
 
-Vec2 UiRenderer::worldToUi(Vec2 worldPos) const
+Vec2 UiRenderer::uiToScreen(Vec2 uiPos) const
 {
-    if (m_worldPerUiUnit == 0.0f) return VEC2_ZERO;
+    // The only Y flip in the subsystem: layout is Y-down from a top-left origin, the
+    // GL viewport is Y-up from a bottom-left one. Text is drawn baseline-up, so it is
+    // the projection that has to stay Y-up rather than the layout that gets flipped.
+    return Vec2(
+        m_screenTopLeft.x + uiPos.x * m_pixelsPerUiUnit,
+        m_windowHeight - (m_screenTopLeft.y + uiPos.y * m_pixelsPerUiUnit)
+    );
+}
 
-    Vec2 offset = (worldPos - m_worldTopLeft) / m_worldPerUiUnit;
-    return Vec2(offset.x, -offset.y);
+bool UiRenderer::ensureReady()
+{
+    if (!m_initialized) {
+        LOG_WARNING("UiRenderer used before init(); skipping");
+        return false;
+    }
+
+    Window* context = ViewContext::get().getActiveWindow();
+    if (!context) {
+        LOG_WARNING("UiRenderer used with no active window; skipping");
+        return false;
+    }
+
+    float width = (float)context->getWidth();
+    m_windowHeight = (float)context->getHeight();
+    if (width <= 0.0f || m_windowHeight <= 0.0f) return false;
+
+    // VAOs are not shared across GL contexts, so use this context's own, created and
+    // configured the first time we draw into this window.
+    GlVertexArray*& vao = context->vertexArray(this);
+    if (!vao) {
+        vao = new GlVertexArray();
+        m_batch.configureVao(*vao);
+    }
+    m_batch.setVao(vao);
+
+    m_viewProjMat = Mat4::ortho(0.0f, width, 0.0f, m_windowHeight, -1.0f, 1.0f);
+    m_batch.setViewProjMat(m_viewProjMat);
+    return true;
 }
 
 void UiRenderer::render(
     const std::vector<UiElement>& elements, uint elementCount, const std::vector<LayoutNode>& nodes
 )
 {
-    if (nodes.empty()) return;
-    ensureTexture();
+    if (nodes.empty() || !ensureReady()) return;
 
-    if (m_drawStyles) renderStyles(elements, elementCount, nodes);
-    if (m_drawBoxes) renderDebugBoxes(nodes);
+    renderRects(elements, elementCount, nodes);
+    // Rects and glyphs are separate batches, so this has to resolve before any glyph is
+    // submitted or the two draw in whichever order they happen to flush.
+    m_batch.flush();
 
-    // The rects go through the sprite batch and the glyphs through the text batch, so
-    // the first has to be flushed or the two resolve in whichever order they happen to
-    // flush. Unconditional: styles alone still fill that batch.
-    Renderer::get().endScene();
-
-    if (m_drawText) {
-        renderText(elements, elementCount, nodes);
-        TextRenderer::get().flush();
-    }
+    if (m_drawText) renderText(elements, elementCount, nodes);
 }
 
-void UiRenderer::release()
+void UiRenderer::flush()
 {
-    delete m_whiteTexture;
-    m_whiteTexture = nullptr;
+    if (!ensureReady()) return;
+    m_batch.flush();
 }
 
-void UiRenderer::ensureTexture()
-{
-    // Built on first use rather than in a constructor: this lives inside a Singleton,
-    // whose instance can exist before any GL context does.
-    if (!m_whiteTexture) m_whiteTexture = new GlTexture(COLOR_WHITE);
-}
-
-void UiRenderer::renderStyles(
+void UiRenderer::renderRects(
     const std::vector<UiElement>& elements, uint elementCount, const std::vector<LayoutNode>& nodes
 )
 {
-    // Preorder, so a child's background lands on top of its parent's without needing
-    // any depth sorting -- the same order the debug boxes and the solver use.
-    for (uint i = 0; i < elementCount && i < nodes.size(); i++) {
-        const UiStyle& style = elements[i].style;
-        const LayoutNode& node = nodes[i];
-
-        if (style.backgroundColor.a > 0.0f) fillRect(node.pos, node.size, style.backgroundColor);
-        if (style.borderWidth > 0.0f && style.borderColor.a > 0.0f)
-            outlineRect(node.pos, node.size, style.borderColor, style.borderWidth);
-    }
+    // Preorder, so a child's rect lands on top of its parent's with no depth sorting --
+    // the same order the solver and the hit test use.
+    for (uint i = 0; i < elementCount && i < nodes.size(); i++)
+        addRect(nodes[i].pos, nodes[i].size, elements[i].style);
 }
 
-void UiRenderer::renderDebugBoxes(const std::vector<LayoutNode>& nodes)
+void UiRenderer::addRect(Vec2 uiMin, Vec2 uiSize, const UiStyle& style)
 {
-    for (const LayoutNode& node : nodes) {
-        Color color = node.isFloating ? FLOATING_COLOR : depthColor(node.depth);
-        fillRect(node.pos, node.size, Color(color.r, color.g, color.b, m_fillAlpha));
-        outlineRect(node.pos, node.size, color, m_outlineThickness);
+    if (uiSize.x <= 0.0f || uiSize.y <= 0.0f) return;
+
+    bool hasFill = style.backgroundColor.a > 0.0f;
+    bool hasBorder = style.borderWidth > 0.0f && style.borderColor.a > 0.0f;
+    // A container with neither is pure layout scaffolding, which is most of them --
+    // it must cost no geometry at all, not a transparent quad.
+    if (!hasFill && !hasBorder) return;
+
+    Vec2 halfSize = uiSize * 0.5f * m_pixelsPerUiUnit;
+    Vec2 center = uiToScreen(uiMin + uiSize * 0.5f);
+
+    auto quad = m_batch.nextQuad();
+    const Vec2 corners[4] = {
+        Vec2(-halfSize.x, -halfSize.y), Vec2(halfSize.x, -halfSize.y), Vec2(halfSize.x, halfSize.y),
+        Vec2(-halfSize.x, halfSize.y)
+    };
+
+    for (int i = 0; i < 4; i++) {
+        UiVertex& vertex = quad.verts[i];
+        vertex.pos = center + corners[i];
+        vertex.localPos = corners[i];
+        vertex.halfSize = halfSize;
+        vertex.fillColor = hasFill ? style.backgroundColor : COLOR_CLEAR;
+        vertex.borderColor = hasBorder ? style.borderColor : COLOR_CLEAR;
+        vertex.cornerRadius = style.cornerRadius * m_pixelsPerUiUnit;
+        vertex.borderWidth = hasBorder ? style.borderWidth * m_pixelsPerUiUnit : 0.0f;
     }
 }
 
@@ -99,6 +138,8 @@ void UiRenderer::renderText(
     const std::vector<UiElement>& elements, uint elementCount, const std::vector<LayoutNode>& nodes
 )
 {
+    TextRenderer::get().setViewProjOverride(m_viewProjMat);
+
     for (uint i = 0; i < elementCount && i < nodes.size(); i++) {
         const UiElement& element = elements[i];
         if (element.type != UiElementType::Text || !element.measurer) continue;
@@ -112,43 +153,18 @@ void UiRenderer::renderText(
         for (const TextRun& run : leaf->getRuns()) {
             if (run.text.empty()) continue;
 
-            // Every TextStyle measurement except size is in em, so scaling size is
-            // the whole conversion from layout units into world units.
+            // Every TextStyle measurement except size is in em, so scaling size is the
+            // whole conversion from layout units into pixels.
             TextStyle style = leaf->styleFor(run.styleIndex);
-            style.size *= m_worldPerUiUnit;
+            style.size *= m_pixelsPerUiUnit;
 
-            Vec2 pen = uiToWorld(contentTopLeft + run.offset);
+            Vec2 pen = uiToScreen(contentTopLeft + run.offset);
             TextRenderer::get().drawSpan(*font, run.text, style, pen, pen.x);
         }
     }
+
+    TextRenderer::get().flush();
+    TextRenderer::get().clearViewProjOverride();
 }
-
-void UiRenderer::fillRect(Vec2 uiMin, Vec2 uiSize, Color color)
-{
-    if (uiSize.x <= 0.0f || uiSize.y <= 0.0f) return;
-
-    // addQuad takes a centre and a full size, not a min/max pair.
-    Vec2 center = uiToWorld(uiMin + uiSize * 0.5f);
-    Renderer::get().addQuad(center, uiSize * m_worldPerUiUnit, color, m_whiteTexture);
-}
-
-void UiRenderer::outlineRect(Vec2 uiMin, Vec2 uiSize, Color color, float requestedThickness)
-{
-    if (uiSize.x <= 0.0f || uiSize.y <= 0.0f) return;
-
-    float thickness = Math::min(requestedThickness, Math::min(uiSize.x, uiSize.y) * 0.5f);
-    // Drawn inside the box so a child's border never sits on top of its parent's.
-    fillRect(uiMin, Vec2(uiSize.x, thickness), color);
-    fillRect(Vec2(uiMin.x, uiMin.y + uiSize.y - thickness), Vec2(uiSize.x, thickness), color);
-    fillRect(
-        Vec2(uiMin.x, uiMin.y + thickness), Vec2(thickness, uiSize.y - thickness * 2.0f), color
-    );
-    fillRect(
-        Vec2(uiMin.x + uiSize.x - thickness, uiMin.y + thickness),
-        Vec2(thickness, uiSize.y - thickness * 2.0f), color
-    );
-}
-
-Color UiRenderer::depthColor(uint depth) { return DEPTH_COLORS[depth % DEPTH_COLOR_COUNT]; }
 
 }   // namespace Engine

@@ -56,6 +56,53 @@ struct UiStyles
     UiStyles(const UiStyle& style) : normal(style) {}
 };
 
+// Starting points, not a theme -- copy one and edit the fields you care about. A
+// default-constructed UiStyles already draws nothing, which is what a pure layout
+// container wants, so there is no preset for that.
+namespace UiPresets {
+
+inline Color shifted(Color color, float amount)
+{
+    auto channel = [amount](float v) {
+        return v + amount < 0.0f ? 0.0f : (v + amount > 1.0f ? 1.0f : v + amount);
+    };
+    return Color(channel(color.r), channel(color.g), channel(color.b), color.a);
+}
+
+inline UiStyles panel(Color tint = Color(0.14f, 0.16f, 0.20f))
+{
+    UiStyles styles;
+    styles.normal.backgroundColor = tint;
+    styles.normal.borderColor = shifted(tint, 0.14f);
+    styles.normal.borderWidth = 1.0f;
+    styles.normal.cornerRadius = 8.0f;
+    return styles;
+}
+
+inline UiStyles button(Color tint = Color(0.20f, 0.23f, 0.30f))
+{
+    UiStyles styles;
+    styles.normal.backgroundColor = tint;
+    styles.normal.borderColor = shifted(tint, 0.16f);
+    styles.normal.borderWidth = 1.0f;
+    styles.normal.cornerRadius = 6.0f;
+    styles.hovered.backgroundColor = shifted(tint, 0.09f);
+    styles.hovered.borderColor = shifted(tint, 0.34f);
+    styles.pressed.backgroundColor = shifted(tint, -0.09f);
+    return styles;
+}
+
+inline UiStyles outline(Color tint = Color(0.45f, 0.50f, 0.60f))
+{
+    UiStyles styles;
+    styles.normal.borderColor = tint;
+    styles.normal.borderWidth = 1.0f;
+    styles.normal.cornerRadius = 4.0f;
+    return styles;
+}
+
+}   // namespace UiPresets
+
 struct UiElement
 {
     LayoutConfig layout;

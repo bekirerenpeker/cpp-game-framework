@@ -121,6 +121,16 @@ template<typename Vertex> class BatchRenderer
         return quad;
     }
 
+    // For batches whose shader samples nothing (a shape drawn from its own SDF, say).
+    // Such a shader declares no uTextures, so flush() must not go looking for it.
+    Quad nextQuad()
+    {
+        if (m_quadCount >= m_maxQuadCount) flush();
+        Quad quad {m_vertices + m_quadCount * 4, -1};
+        m_quadCount++;
+        return quad;
+    }
+
     void flush()
     {
         if (!m_vao || !m_shader || !m_vertices || m_quadCount == 0) {
@@ -137,7 +147,9 @@ template<typename Vertex> class BatchRenderer
 
         m_shader->bind();
         m_shader->setUniform<Mat4>("uMVP", m_viewProjMat);
-        m_shader->setUniformArr("uTextures", m_textureCount, texSlots);
+        // Guarded: looking up a uniform a texture-less shader never declares warns on
+        // every flush, since a missing location is deliberately not cached.
+        if (m_textureCount > 0) m_shader->setUniformArr("uTextures", m_textureCount, texSlots);
 
         m_vao->bind();
         m_indexBuffer.bind();

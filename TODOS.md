@@ -9,6 +9,8 @@ rather than leaving a stale description.
 
 ## In progress / next up
 
+- [ ] add divider, border radius, width, color styling etc.
+
 - [ ] **Engine-handled resizable containers** — `UiState` already reports
   `isHeld` + `dragDelta` + `mouseLocal` + last frame's rect, which is all a scene
   needs to resize a panel itself (see case 0 in `ui_layout_test`). Doing it
@@ -27,13 +29,11 @@ rather than leaving a stale description.
   for a fraction of CSS Grid's algorithm; auto-fit/minmax/dense packing are not
   worth it.
 
-- [ ] **Widget theming** — `UiRenderer` now maps `UiStyle` to real draw calls
-  (background fill, border colour + width), so styling is no longer invisible.
-  What is still missing is `cornerRadius`, which needs shader work, and a theme
-  those styles resolve against instead of literal colours at call sites. Moving
-  the rects into `TextRenderer`'s batch (see "Plain quads in the text batch"
-  below) would then let a panel and its label share one draw call, which is the
-  whole reason that batch has a solid-fill branch.
+- [ ] **Widget theming** — `UiRenderer` draws `UiStyle` for real now, corner
+  radius included, and `UiPresets::panel/button/outline` give starting points.
+  What is still missing is a *theme*: a named palette + role mapping those
+  presets resolve against, so a call site says "surface" or "accent" rather than
+  a literal `Color`. Only then is restyling a whole UI one edit.
 
 - [ ] **Scroll + clip** — `LayoutConfig::clipX/clipY` and `scrollOffset` are
   honoured by the solver already (a clipped axis reports `minW = 0`, which is
@@ -90,16 +90,13 @@ rather than leaving a stale description.
   not diverge or measured width stops matching drawn width; both belong on
   `TextStyle.hpp`. Ellipsis/clip overflow is still open.
 
-- [ ] **Screen-space text pass** — `TextRenderer` currently always takes its
-  matrix from `ViewContext`, so text lives in world space. UI wants a pixel
-  ortho matrix (origin top-left). Add a space selector; switching spaces has to
-  flush, so submit all world text then all UI text.
-
-- [ ] **Plain quads in the text batch** — the shader's `unitRange == 0` branch
-  and `TextVertex` already accommodate a non-distance-field quad. Adding a
-  `drawRect` to `TextRenderer` would let a panel and its label share one draw
-  call, which is the whole reason the batch is shaped this way. Probably the
-  point at which `TextRenderer` becomes the UI renderer.
+- [ ] **One batch for UI rects and UI glyphs** — the UI now submits two batches
+  per root (rounded rects through `UiShader`, glyphs through `TextShader`), so a
+  panel and its label cost two draw calls. They cannot merge as things stand:
+  the rect shader is a rounded-box SDF with its own vertex layout and the glyph
+  shader is a distance-field sampler. Merging means one shader branching on a
+  per-vertex mode flag and one vertex format wide enough for both — worth it
+  only once a real UI shows the draw calls actually matter.
 
 - [ ] **Named style tags** — the parser only knows `/s`. `TextTags::isTagAt`
   is the single extension point; `/b`, `/i` or `/color=red` slot in without
@@ -124,6 +121,33 @@ rather than leaving a stale description.
 
 ## Done
 
+- [x] **UI renders in window space, from a rounded-rect shader** — `UiRenderer`
+  owns a `BatchRenderer<UiVertex>` over
+  [UiShader.glsl](game/assets/shaders/UiShader.glsl) instead of borrowing the
+  sprite batch, and `setViewport(screenTopLeft, pixelsPerUiUnit)` places a root
+  in **window pixels**, so the camera no longer moves or scales the UI. Every
+  container is one quad whose fragment shader evaluates a rounded-box signed
+  distance field, which is where `cornerRadius`, `borderWidth`/`borderColor` and
+  antialiased edges all come from — no texture is bound at all, hence
+  `BatchRenderer::nextQuad()` (the texture-less overload) and a guard so `flush`
+  skips the `uTextures` lookup a texture-less shader never declares, which would
+  otherwise warn every frame since missing locations are deliberately not cached.
+  A container with no visible background *and* no visible border emits **zero
+  geometry**, so layout-only containers — most of them — cost nothing.
+  Text joined the same space through `TextRenderer::setViewProjOverride`, which
+  flushes on change. The projection stays **Y-up** (`ortho(0, w, 0, h)`) rather
+  than the more obvious Y-down: glyph quads are built baseline-up, so a Y-down
+  matrix renders every string mirrored. The single Y flip therefore stays in
+  `UiRenderer::uiToScreen`, exactly where `uiToWorld` used to hold it, and hit
+  testing needs no flip at all now that client pixels and layout units share an
+  orientation — which also dropped `UiSystem`'s whole camera dependency
+  (`getMouseWorldPos`, the world-origin probe, the no-camera phantom-hover
+  guard).
+  The debug-box pass is gone: `UiStyle` is the only thing drawn.
+  `UiPresets::panel/button/outline` give starting points. `ui_layout_test` styles
+  its demo boxes rather than relying on debug outlines, and WASD/QE now pan and
+  zoom the UI viewport instead of the camera.
+
 - [x] **UI interaction + hover/press styling** — every builder now returns a
   `UiState` ([UiInteraction.hpp](engine/include/graphics/ui/UiInteraction.hpp))
   read from the **previous** frame's solved rects, so
@@ -137,7 +161,7 @@ rather than leaving a stale description.
   `UiSystem` keeps two rect buffers swapped at the frame boundary, and `draw()`
   **appends** to the write buffer rather than clearing it, because one frame can
   hold several `begin`/`draw` cycles. Rects stay in layout units with a parallel
-  per-root `{windowId, worldTopLeft, worldPerUiUnit}`, so the mouse is converted
+  per-root `{windowId, screenTopLeft, pixelsPerUiUnit}`, so the mouse is converted
   once per root instead of every rect being converted to world space.
   Three things had to be right or this silently misbehaves: the boundary keys on
   **`(Time::getFrameCount(), activeWindowId)`** — the buffer swap on frame, the
@@ -214,7 +238,7 @@ rather than leaving a stale description.
   `ImageLeaf` ship; the leaf objects live in reusable pools on `UiSystem`
   because `LayoutInput::measurer` is a bare pointer held from `addText` all the
   way through pass 3. Layout space is **Y-down, top-left origin, unitless**;
-  the single Y flip lives in `UiRenderer::uiToWorld`. Verified numerically in
+  the single Y flip lives in `UiRenderer::uiToScreen`. Verified numerically in
   `ui_layout_test` across all 10 cases (75 nodes): Fit row = 222 exactly, two
   growers 234/234, `sizing.max` capping at 120 with the leftover going to
   `alignMain`, a floating child leaving its parent at 222 (identical to the same

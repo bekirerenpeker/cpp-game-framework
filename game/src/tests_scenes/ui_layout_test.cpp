@@ -121,8 +121,10 @@ int ui_layout_test()
 
     GlShader quadShader("game/assets/shaders/QuadShader.glsl");
     GlShader textShader("game/assets/shaders/TextShader.glsl");
+    GlShader uiShader("game/assets/shaders/UiShader.glsl");
     Renderer::get().init(6000, &quadShader);
     TextRenderer::get().init(&textShader, 8000);
+    UiRenderer::get().init(&uiShader, 2000);
 
     Input::get().addAxis("Horizontal", {KeyCode::D, KeyCode::A});
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
@@ -140,23 +142,15 @@ int ui_layout_test()
     UiSystem& ui = UiSystem::get();
     ui.setDefaultFont(&mtsdfFont);
     ui.setDefaultTextStyle(bodyStyle);
-    UiRenderer::get().setOutlineThickness(1.5f);
 
+    // The UI lives in window space now, so the camera no longer moves it -- WASD/QE pan
+    // and zoom the UI viewport itself, which is what reaches the cases below the fold.
     const float totalWidth = ROOT_A_WIDTH + ROOT_GAP + ROOT_B_WIDTH;
-    const float topWorldY = Math::max(ROOT_A_HEIGHT, ROOT_B_HEIGHT) * 0.5f * WORLD_PER_UI;
-    // Root A's origin is pinned so dragging its right edge grows it rightward instead of
-    // sliding it; root B's follows root A's live width, so the pair stays side by side.
-    const Vec2 rootAOrigin(-totalWidth * 0.5f * WORLD_PER_UI, topWorldY);
+    float uiScale = 1.0f;
+    Vec2 uiPan(8.0f, 8.0f);
+    bool viewportFitted = false;
 
-    // Fitted to the pair's combined width; the roots are taller than the view, so
-    // W/S pans down to the cases below the fold.
-    const float fittedOrthoSize = totalWidth * WORLD_PER_UI * 1.05f;
-    const float fittedY = topWorldY - fittedOrthoSize * 0.5f;
-    camera.get<CameraComponent>().orthoSize = fittedOrthoSize;
-    camera.get<TransformComponent>().position.y = fittedY;
-
-    // Only backgroundColor/borderColor/borderWidth/contentColor are drawable today, and
-    // overrides are deliberately style-only: a size or padding override could grow the
+    // Overrides are deliberately style-only: a size or padding override could grow the
     // element out from under the cursor and flicker between the two states at 60Hz.
     UiStyles buttonStyles;
     buttonStyles.normal.backgroundColor = Color(0.18f, 0.20f, 0.26f);
@@ -167,13 +161,24 @@ int ui_layout_test()
     buttonStyles.pressed.backgroundColor = Color(0.10f, 0.11f, 0.15f);
     buttonStyles.pressed.contentColor = COLOR_YELLOW;
 
-    UiStyles panelStyles;
-    panelStyles.normal.backgroundColor = Color(0.14f, 0.16f, 0.20f);
-    panelStyles.normal.borderColor = Color(0.40f, 0.44f, 0.52f);
-    panelStyles.normal.borderWidth = 1.0f;
+    UiStyles panelStyles = UiPresets::panel();
     panelStyles.hovered.borderColor = Color(0.95f, 0.75f, 0.35f);
     panelStyles.hovered.borderWidth = 2.0f;
     panelStyles.pressed.backgroundColor = Color(0.20f, 0.24f, 0.30f);
+
+    // The demo boxes carry a real style now that there is no debug outline pass; the
+    // caseBlock columns around them stay unstyled, which is the layout-only case.
+    UiStyles boxStyles = UiPresets::outline(Color(0.45f, 0.72f, 1.00f));
+    boxStyles.normal.backgroundColor = Color(0.45f, 0.72f, 1.00f, 0.10f);
+    boxStyles.hovered.backgroundColor = Color(0.45f, 0.72f, 1.00f, 0.28f);
+
+    UiStyles floaterStyles = UiPresets::outline(Color(1.00f, 0.35f, 0.35f));
+    floaterStyles.normal.backgroundColor = Color(1.00f, 0.35f, 0.35f, 0.14f);
+
+    UiStyles caseStyles;
+    caseStyles.normal.borderColor = Color(0.30f, 0.34f, 0.42f);
+    caseStyles.normal.borderWidth = 1.0f;
+    caseStyles.normal.cornerRadius = 6.0f;
 
     // A visible edge for the root, since its grab band is otherwise just empty padding.
     UiStyles rootStyles;
@@ -192,7 +197,7 @@ int ui_layout_test()
     bool logged = false;
     bool inputSettled = false;
     bool showBitmap = false;
-    bool showBoxes = true;
+    bool showText = true;
 
     // Logged on change rather than per frame, so the scene reports what it is doing
     // without drowning the console at 60Hz.
@@ -213,10 +218,9 @@ int ui_layout_test()
 
         // The element's centre in window pixels, so the rect can be checked against
         // where the cursor actually has to be rather than only against layout units.
-        Window* window = WindowManager::get().getWindow(windowId);
-        Vec2 center = UiRenderer::get().uiToWorld(state.pos + state.size * 0.5f);
-        Vec2 screen = ViewContext::get().worldToScreen(center);
-        Vec2 client(screen.x + window->getWidth() * 0.5f, window->getHeight() * 0.5f - screen.y);
+        Vec2 center = state.pos + state.size * 0.5f;
+        Vec2 client =
+            UiRenderer::get().getScreenTopLeft() + center * UiRenderer::get().getPixelsPerUiUnit();
 
         LOG_INFO(
             "interaction: {} hovered {} direct {} held {} dragging {} rect ({}, {}) {}x{} client "
@@ -258,12 +262,12 @@ int ui_layout_test()
 
         // 1 -- a Fit row hugs its children plus padding and gaps.
         caseBlock("1  fit row: hugs 3 fixed children + padding + gaps");
-        layoutProbes.fitRow = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f))).index;
-        ui.openContainer(makeBox(60.0f, 30.0f));
+        layoutProbes.fitRow = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)), caseStyles).index;
+        ui.openContainer(makeBox(60.0f, 30.0f), boxStyles);
         ui.closeContainer();
-        ui.openContainer(makeBox(90.0f, 30.0f));
+        ui.openContainer(makeBox(90.0f, 30.0f), boxStyles);
         ui.closeContainer();
-        ui.openContainer(makeBox(40.0f, 30.0f));
+        ui.openContainer(makeBox(40.0f, 30.0f), boxStyles);
         ui.closeContainer();
         ui.closeContainer();
         ui.closeContainer();
@@ -273,17 +277,17 @@ int ui_layout_test()
         {
             LayoutConfig config = makeRow(8.0f, LayoutEdges(8.0f));
             config.width = SizeSpec::fixed(440.0f);
-            ui.openContainer(config);
+            ui.openContainer(config, caseStyles);
 
-            ui.openContainer(makeBox(100.0f, 30.0f));
+            ui.openContainer(makeBox(100.0f, 30.0f), boxStyles);
             ui.closeContainer();
 
             LayoutConfig grower;
             grower.width = SizeSpec::grow();
             grower.height = SizeSpec::fixed(30.0f);
-            layoutProbes.growA = ui.openContainer(grower).index;
+            layoutProbes.growA = ui.openContainer(grower, boxStyles).index;
             ui.closeContainer();
-            layoutProbes.growB = ui.openContainer(grower).index;
+            layoutProbes.growB = ui.openContainer(grower, boxStyles).index;
             ui.closeContainer();
             ui.closeContainer();
         }
@@ -295,15 +299,15 @@ int ui_layout_test()
             LayoutConfig config = makeRow(8.0f, LayoutEdges(8.0f));
             config.width = SizeSpec::fixed(440.0f);
             config.alignMain = LayoutAlign::Center;
-            ui.openContainer(config);
+            ui.openContainer(config, caseStyles);
 
             LayoutConfig capped;
             capped.width = SizeSpec::grow();
             capped.width.max = 120.0f;
             capped.height = SizeSpec::fixed(30.0f);
-            layoutProbes.cappedA = ui.openContainer(capped).index;
+            layoutProbes.cappedA = ui.openContainer(capped, boxStyles).index;
             ui.closeContainer();
-            layoutProbes.cappedB = ui.openContainer(capped).index;
+            layoutProbes.cappedB = ui.openContainer(capped, boxStyles).index;
             ui.closeContainer();
             ui.closeContainer();
         }
@@ -313,7 +317,8 @@ int ui_layout_test()
         // than splitting evenly, or the long one wraps while the short one has slack.
         caseBlock("4  two growers in a fit parent: each keeps its own content width");
         {
-            layoutProbes.fitParent = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f))).index;
+            layoutProbes.fitParent =
+                ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)), caseStyles).index;
 
             LayoutConfig grower;
             grower.width = SizeSpec::grow();
@@ -332,9 +337,9 @@ int ui_layout_test()
                 ui.openContainer(makeColumn(6.0f, LayoutEdges(6.0f)));
                 for (int inner = 0; inner < 2; inner++) {
                     ui.openContainer(makeRow(4.0f, LayoutEdges(4.0f)));
-                    uint first = ui.openContainer(makeBox(50.0f, 22.0f)).index;
+                    uint first = ui.openContainer(makeBox(50.0f, 22.0f), boxStyles).index;
                     ui.closeContainer();
-                    ui.openContainer(makeBox(70.0f, 22.0f));
+                    ui.openContainer(makeBox(70.0f, 22.0f), boxStyles);
                     ui.closeContainer();
                     ui.closeContainer();
                     if (outer == 0 && inner == 0) layoutProbes.deepInner = first;
@@ -358,8 +363,9 @@ int ui_layout_test()
                 config.height = SizeSpec::fixed(70.0f);
                 config.alignMain = aligns[i];
                 config.alignCross = aligns[i];
-                layoutProbes.alignBox[i] = ui.openContainer(config).index;
-                layoutProbes.alignChild[i] = ui.openContainer(makeBox(50.0f, 24.0f)).index;
+                layoutProbes.alignBox[i] = ui.openContainer(config, caseStyles).index;
+                layoutProbes.alignChild[i] =
+                    ui.openContainer(makeBox(50.0f, 24.0f), boxStyles).index;
                 ui.closeContainer();
                 ui.closeContainer();
             }
@@ -370,12 +376,13 @@ int ui_layout_test()
         // 7 -- a floating child must not inflate its parent or consume a gap.
         caseBlock("7  floating child (red): parent width matches case 1's row exactly");
         {
-            layoutProbes.floatParent = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f))).index;
-            ui.openContainer(makeBox(60.0f, 30.0f));
+            layoutProbes.floatParent =
+                ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)), caseStyles).index;
+            ui.openContainer(makeBox(60.0f, 30.0f), boxStyles);
             ui.closeContainer();
-            ui.openContainer(makeBox(90.0f, 30.0f));
+            ui.openContainer(makeBox(90.0f, 30.0f), boxStyles);
             ui.closeContainer();
-            ui.openContainer(makeBox(40.0f, 30.0f));
+            ui.openContainer(makeBox(40.0f, 30.0f), boxStyles);
             ui.closeContainer();
 
             LayoutConfig floater = makeBox(70.0f, 20.0f);
@@ -384,7 +391,7 @@ int ui_layout_test()
             floater.floating.anchorY = LayoutAlign::End;
             floater.floating.selfX = LayoutAlign::Center;
             floater.floating.selfY = LayoutAlign::Center;
-            layoutProbes.floatChild = ui.openContainer(floater).index;
+            layoutProbes.floatChild = ui.openContainer(floater, floaterStyles).index;
             ui.closeContainer();
             ui.closeContainer();
         }
@@ -395,7 +402,7 @@ int ui_layout_test()
         {
             LayoutConfig config = makeRow(0.0f, LayoutEdges(6.0f));
             config.width = SizeSpec::fixed(380.0f);
-            ui.openContainer(config);
+            ui.openContainer(config, caseStyles);
 
             LayoutConfig imageConfig;
             imageConfig.width = SizeSpec::grow();
@@ -410,12 +417,12 @@ int ui_layout_test()
         {
             LayoutConfig config = makeRow(6.0f, LayoutEdges(6.0f));
             config.width = SizeSpec::fixed(150.0f);
-            layoutProbes.overflowRow = ui.openContainer(config).index;
-            layoutProbes.overflowFirst = ui.openContainer(makeBox(80.0f, 26.0f)).index;
+            layoutProbes.overflowRow = ui.openContainer(config, caseStyles).index;
+            layoutProbes.overflowFirst = ui.openContainer(makeBox(80.0f, 26.0f), boxStyles).index;
             ui.closeContainer();
-            ui.openContainer(makeBox(80.0f, 26.0f));
+            ui.openContainer(makeBox(80.0f, 26.0f), boxStyles);
             ui.closeContainer();
-            ui.openContainer(makeBox(80.0f, 26.0f));
+            ui.openContainer(makeBox(80.0f, 26.0f), boxStyles);
             ui.closeContainer();
             ui.closeContainer();
         }
@@ -659,24 +666,28 @@ int ui_layout_test()
     };
 
     auto onWindowUpdate = [&](IdType id, float dt) {
-        TransformComponent& transform = camera.get<TransformComponent>();
-        CameraComponent& cam = camera.get<CameraComponent>();
-
         int hAxis = Input::get().getAxis("Horizontal");
         int vAxis = Input::get().getAxis("Vertical");
         int zoomAxis = Input::get().getAxis("Zoom");
 
-        // GLFW reports a phantom held key for the first frames after the window
-        // opens, which would drift the fitted camera before anything is touched.
+        // GLFW reports a phantom held key for the first frames after the window opens,
+        // which would drift the fitted viewport before anything is touched.
         if (!inputSettled) {
             if (hAxis == 0 && vAxis == 0 && zoomAxis == 0) inputSettled = true;
-            cam.orthoSize = fittedOrthoSize;
-            transform.position.x = 0.0f;
-            transform.position.y = fittedY;
         } else {
-            transform.position.x += hAxis * dt * cam.orthoSize;
-            transform.position.y += vAxis * dt * cam.orthoSize;
-            cam.orthoSize -= zoomAxis * dt * cam.orthoSize;
+            Window* window = WindowManager::get().getWindow(id);
+            Vec2 center(window->getWidth() * 0.5f, window->getHeight() * 0.5f);
+
+            uiPan.x -= hAxis * dt * 600.0f;
+            uiPan.y += vAxis * dt * 600.0f;
+
+            // Zoom about the window centre, so the thing being looked at stays put
+            // instead of sliding away from the top-left origin.
+            if (zoomAxis != 0) {
+                Vec2 anchor = (center - uiPan) / uiScale;
+                uiScale = Math::max(0.15f, uiScale * (1.0f + zoomAxis * dt));
+                uiPan = center - anchor * uiScale;
+            }
         }
 
         if (Input::get().keyPressed(KeyCode::Tab)) {
@@ -685,9 +696,9 @@ int ui_layout_test()
             LOG_INFO("using the {} font", showBitmap ? "bitmap" : "mtsdf");
         }
         if (Input::get().keyPressed(KeyCode::Space)) {
-            showBoxes = !showBoxes;
-            UiRenderer::get().setDrawBoxes(showBoxes);
-            LOG_INFO("debug boxes {}", showBoxes ? "on" : "off");
+            showText = !showText;
+            UiRenderer::get().setDrawText(showText);
+            LOG_INFO("ui text {}", showText ? "on" : "off");
         }
     };
 
@@ -696,15 +707,24 @@ int ui_layout_test()
         Renderer::get().setShader(&quadShader);
         Renderer::get().clearColor(Color(0.08f, 0.08f, 0.1f, 1.0f));
 
+        // Fitted to the real client width rather than the requested one, since the
+        // window manager can hand back something smaller (DPI scaling, for one).
+        if (!viewportFitted) {
+            Window* window = WindowManager::get().getWindow(id);
+            uiScale = (window->getWidth() - 16.0f) / totalWidth;
+            viewportFitted = true;
+        }
+
         // Each root is its own begin/draw cycle, so the viewport moves between them
-        // and the two trees never share a solve.
-        UiRenderer::get().setViewport(rootAOrigin, WORLD_PER_UI);
+        // and the two trees never share a solve. Viewports are window pixels now, so
+        // panning the UI is what explores the roots, not moving the camera.
+        UiRenderer::get().setViewport(uiPan, uiScale);
         buildLayoutRoot();
         if (!logged) logLayoutRoot();
 
-        // Recomputed every frame, since root A's width is now draggable.
-        Vec2 rootBOrigin(rootAOrigin.x + (rootASize.x + ROOT_GAP) * WORLD_PER_UI, topWorldY);
-        UiRenderer::get().setViewport(rootBOrigin, WORLD_PER_UI);
+        // Recomputed every frame, since root A's width is draggable.
+        Vec2 rootBPan(uiPan.x + (rootASize.x + ROOT_GAP) * uiScale, uiPan.y);
+        UiRenderer::get().setViewport(rootBPan, uiScale);
         buildTextRoot();
         if (!logged) {
             logTextRoot();

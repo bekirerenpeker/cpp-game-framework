@@ -47,12 +47,17 @@ class TextRenderer : public Singleton<TextRenderer>
 
     BatchRenderer<TextVertex> m_batch;
     std::vector<TextSpan> m_spans;
+    Mat4 m_viewProjOverride;
+    bool m_hasViewProjOverride = false;
     bool m_initialized = false;
     bool m_warnedMissingGlyph = false;
     bool m_warnedUnclosedTag = false;
 
   public:
     void init(GlShader* shader, size_t maxQuadCount = 4000);
+
+    void setViewProjOverride(const Mat4& viewProj);
+    void clearViewProjOverride();
 
     Vec2 draw(
         const Font& font, std::string_view text, Vec2 origin, const TextStyle& style = {},
