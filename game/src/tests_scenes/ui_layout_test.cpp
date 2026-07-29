@@ -8,10 +8,15 @@ namespace {
 const char* FONT_FOLDER = "game/assets/fonts";
 const char* FALLBACK_FONT = "C:/Windows/Fonts/segoeui.ttf";
 
-// Layout is unitless; this scene treats one UI unit as one pixel of a 1000-wide
-// design and scales the whole thing into world space for the debug boxes.
-constexpr float ROOT_WIDTH = 1000.0f;
-constexpr float ROOT_HEIGHT = 2200.0f;
+// Two independent roots laid out side by side, each solved and rendered by its own
+// begin/draw cycle -- the same thing two real windows or two floating panels would
+// do. Layout is unitless; this scene treats one UI unit as one pixel of the design
+// and scales into world space at draw time.
+constexpr float ROOT_A_WIDTH = 560.0f;
+constexpr float ROOT_A_HEIGHT = 1440.0f;
+constexpr float ROOT_B_WIDTH = 560.0f;
+constexpr float ROOT_B_HEIGHT = 1180.0f;
+constexpr float ROOT_GAP = 60.0f;
 constexpr float WORLD_PER_UI = 0.01f;
 
 fs::path findFontFile()
@@ -53,8 +58,10 @@ LayoutConfig makeBox(float width, float height)
     return config;
 }
 
-// Every case index that gets checked numerically rather than only by eye.
-struct Probes
+// Node indices of the cases checked numerically rather than only by eye. Node index
+// equals element index, so a builder's return value indexes straight into the
+// solved node array -- but only until the next begin(), hence one set per root.
+struct LayoutProbes
 {
     uint fitRow = NO_NODE;
     uint growA = NO_NODE;
@@ -64,16 +71,20 @@ struct Probes
     uint fitParent = NO_NODE;
     uint fitGrowShort = NO_NODE;
     uint fitGrowLong = NO_NODE;
-    uint wrapNarrow = NO_NODE;
-    uint wrapText = NO_NODE;
+    uint deepInner = NO_NODE;
+    uint alignBox[3] = {NO_NODE, NO_NODE, NO_NODE};
+    uint alignChild[3] = {NO_NODE, NO_NODE, NO_NODE};
     uint floatParent = NO_NODE;
     uint floatChild = NO_NODE;
     uint image = NO_NODE;
     uint overflowRow = NO_NODE;
     uint overflowFirst = NO_NODE;
-    uint deepInner = NO_NODE;
-    uint alignBox[3] = {NO_NODE, NO_NODE, NO_NODE};
-    uint alignChild[3] = {NO_NODE, NO_NODE, NO_NODE};
+};
+
+struct TextProbes
+{
+    uint wrapNarrow = NO_NODE;
+    uint wrapText = NO_NODE;
     uint styledLines = NO_NODE;
     uint styledWrap = NO_NODE;
     uint fixedLine = NO_NODE;
@@ -81,10 +92,11 @@ struct Probes
 
 }   // namespace
 
-// Exercises the five-pass layout solver, drawing every computed box and the text
-// laid out inside it. Boxes are tinted by tree depth and floating nodes are red.
-// WASD pans, Q/E zooms, Tab swaps the mtsdf/bitmap atlas, Space hides the boxes.
-// The box tree must be identical at every zoom, since layout is unitless.
+// Exercises the five-pass layout solver across two separate roots, drawing every
+// computed box and the text laid out inside it. Boxes are tinted by tree depth and
+// floating nodes are red. WASD pans, Q/E zooms, Tab swaps the mtsdf/bitmap atlas,
+// Space hides the boxes. The box tree must be identical at every zoom, since
+// layout is unitless.
 int ui_layout_test()
 {
     IdType windowId = WindowManager::get().createWindow({900, 900, "UI Layout Test"});
@@ -113,8 +125,9 @@ int ui_layout_test()
 
     const TextStyle bodyStyle {.color = COLOR_WHITE, .size = 22.0f};
     const TextStyle labelStyle {.color = Color(0.62f, 0.66f, 0.74f), .size = 17.0f};
+    const TextStyle titleStyle {.color = Color(1.0f, 0.85f, 0.45f), .size = 28.0f};
 
-    // The span styles the /s tags in the styled cases below resolve against.
+    // The span styles the /s tags in the styled cases resolve against.
     const TextStyle bigStyle {.color = COLOR_CYAN, .size = 46.0f};
     const TextStyle smallStyle {.color = Color(1.0f, 0.7f, 0.3f), .size = 13.0f};
     const std::vector<TextStyle> mixedStyles {bigStyle, smallStyle};
@@ -122,37 +135,39 @@ int ui_layout_test()
     UiSystem& ui = UiSystem::get();
     ui.setDefaultFont(&mtsdfFont);
     ui.setDefaultTextStyle(bodyStyle);
-    UiRenderer::get().setViewport(
-        Vec2(-ROOT_WIDTH * 0.5f * WORLD_PER_UI, ROOT_HEIGHT * 0.5f * WORLD_PER_UI), WORLD_PER_UI
-    );
     UiRenderer::get().setOutlineThickness(1.5f);
 
-    // Fitted to the layout's width rather than its height: the tree is tall and
-    // narrow, so fitting the height would shrink the text to an illegible size.
+    const float totalWidth = ROOT_A_WIDTH + ROOT_GAP + ROOT_B_WIDTH;
+    const float topWorldY = Math::max(ROOT_A_HEIGHT, ROOT_B_HEIGHT) * 0.5f * WORLD_PER_UI;
+    const Vec2 rootAOrigin(-totalWidth * 0.5f * WORLD_PER_UI, topWorldY);
+    const Vec2 rootBOrigin(rootAOrigin.x + (ROOT_A_WIDTH + ROOT_GAP) * WORLD_PER_UI, topWorldY);
+
+    // Fitted to the pair's combined width; the roots are taller than the view, so
     // W/S pans down to the cases below the fold.
-    const float fittedOrthoSize = ROOT_WIDTH * WORLD_PER_UI * 1.04f;
-    const float fittedY = ROOT_HEIGHT * WORLD_PER_UI * 0.5f - fittedOrthoSize * 0.5f;
+    const float fittedOrthoSize = totalWidth * WORLD_PER_UI * 1.05f;
+    const float fittedY = topWorldY - fittedOrthoSize * 0.5f;
     camera.get<CameraComponent>().orthoSize = fittedOrthoSize;
     camera.get<TransformComponent>().position.y = fittedY;
 
-    Probes probes;
+    LayoutProbes layoutProbes;
+    TextProbes textProbes;
     bool logged = false;
     bool inputSettled = false;
     bool showBitmap = false;
     bool showBoxes = true;
 
-    auto buildUi = [&]() {
-        LayoutConfig rootConfig = makeColumn(16.0f, LayoutEdges(16.0f));
-        ui.begin(Vec2(ROOT_WIDTH, ROOT_HEIGHT), rootConfig);
+    auto caseBlock = [&](const char* title) {
+        ui.openContainer(makeColumn(4.0f, LayoutEdges(0.0f)));
+        ui.addText(title, labelStyle);
+    };
 
-        auto caseBlock = [&](const char* title) {
-            ui.openContainer(makeColumn(4.0f, LayoutEdges(0.0f)));
-            ui.addText(title, labelStyle);
-        };
+    auto buildLayoutRoot = [&]() {
+        ui.begin(Vec2(ROOT_A_WIDTH, ROOT_A_HEIGHT), makeColumn(14.0f, LayoutEdges(16.0f)));
+        ui.addText("ROOT A - sizing, alignment, floating, overflow", titleStyle);
 
         // 1 -- a Fit row hugs its children plus padding and gaps.
         caseBlock("1  fit row: hugs 3 fixed children + padding + gaps");
-        probes.fitRow = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)));
+        layoutProbes.fitRow = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)));
         ui.openContainer(makeBox(60.0f, 30.0f));
         ui.closeContainer();
         ui.openContainer(makeBox(90.0f, 30.0f));
@@ -166,19 +181,18 @@ int ui_layout_test()
         caseBlock("2  fixed | grow | grow: the two growers end equal");
         {
             LayoutConfig config = makeRow(8.0f, LayoutEdges(8.0f));
-            config.width = SizeSpec::fixed(600.0f);
+            config.width = SizeSpec::fixed(440.0f);
             ui.openContainer(config);
 
-            LayoutConfig fixedChild = makeBox(100.0f, 30.0f);
-            ui.openContainer(fixedChild);
+            ui.openContainer(makeBox(100.0f, 30.0f));
             ui.closeContainer();
 
             LayoutConfig grower;
             grower.width = SizeSpec::grow();
             grower.height = SizeSpec::fixed(30.0f);
-            probes.growA = ui.openContainer(grower);
+            layoutProbes.growA = ui.openContainer(grower);
             ui.closeContainer();
-            probes.growB = ui.openContainer(grower);
+            layoutProbes.growB = ui.openContainer(grower);
             ui.closeContainer();
             ui.closeContainer();
         }
@@ -188,7 +202,7 @@ int ui_layout_test()
         caseBlock("3  grow capped by sizing.max: both stop at 120, leftover centred");
         {
             LayoutConfig config = makeRow(8.0f, LayoutEdges(8.0f));
-            config.width = SizeSpec::fixed(600.0f);
+            config.width = SizeSpec::fixed(440.0f);
             config.alignMain = LayoutAlign::Center;
             ui.openContainer(config);
 
@@ -196,9 +210,9 @@ int ui_layout_test()
             capped.width = SizeSpec::grow();
             capped.width.max = 120.0f;
             capped.height = SizeSpec::fixed(30.0f);
-            probes.cappedA = ui.openContainer(capped);
+            layoutProbes.cappedA = ui.openContainer(capped);
             ui.closeContainer();
-            probes.cappedB = ui.openContainer(capped);
+            layoutProbes.cappedB = ui.openContainer(capped);
             ui.closeContainer();
             ui.closeContainer();
         }
@@ -208,44 +222,18 @@ int ui_layout_test()
         // than splitting evenly, or the long one wraps while the short one has slack.
         caseBlock("4  two growers in a fit parent: each keeps its own content width");
         {
-            LayoutConfig config = makeRow(8.0f, LayoutEdges(8.0f));
-            probes.fitParent = ui.openContainer(config);
+            layoutProbes.fitParent = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)));
 
             LayoutConfig grower;
             grower.width = SizeSpec::grow();
-            probes.fitGrowShort = ui.addText("short", bodyStyle, grower);
-            probes.fitGrowLong = ui.addText("a considerably longer label here", bodyStyle, grower);
+            layoutProbes.fitGrowShort = ui.addText("short", bodyStyle, grower);
+            layoutProbes.fitGrowLong = ui.addText("a much longer label here", bodyStyle, grower);
             ui.closeContainer();
         }
         ui.closeContainer();
 
-        // 5 -- shrinking is what drives the wrap, and the box grows taller for it.
-        caseBlock("5  wrap: same text at 460 / 260 / 120 wide");
-        {
-            ui.openContainer(makeRow(12.0f, LayoutEdges(0.0f)));
-            const char* sample = "The quick brown fox jumps over the lazy dog near the riverbank";
-            const float widths[] = {460.0f, 260.0f, 120.0f};
-            for (int i = 0; i < 3; i++) {
-                LayoutConfig column = makeColumn(0.0f, LayoutEdges(6.0f));
-                column.width = SizeSpec::fixed(widths[i]);
-                uint index = ui.openContainer(column);
-
-                LayoutConfig textConfig;
-                textConfig.width = SizeSpec::grow();
-                uint textIndex = ui.addText(sample, bodyStyle, textConfig);
-                ui.closeContainer();
-
-                if (i == 2) {
-                    probes.wrapNarrow = index;
-                    probes.wrapText = textIndex;
-                }
-            }
-            ui.closeContainer();
-        }
-        ui.closeContainer();
-
-        // 6 -- nesting three levels deep, alternating direction.
-        caseBlock("6  nested row > column > row, 3 levels");
+        // 5 -- nesting three levels deep, alternating direction.
+        caseBlock("5  nested row > column > row, 3 levels");
         {
             ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)));
             for (int outer = 0; outer < 2; outer++) {
@@ -257,7 +245,7 @@ int ui_layout_test()
                     ui.openContainer(makeBox(70.0f, 22.0f));
                     ui.closeContainer();
                     ui.closeContainer();
-                    if (outer == 0 && inner == 0) probes.deepInner = first;
+                    if (outer == 0 && inner == 0) layoutProbes.deepInner = first;
                 }
                 ui.closeContainer();
             }
@@ -265,8 +253,8 @@ int ui_layout_test()
         }
         ui.closeContainer();
 
-        // 7 -- main-axis and cross-axis alignment.
-        caseBlock("7  alignment: main start/centre/end, cross start/centre/end");
+        // 6 -- main-axis and cross-axis alignment.
+        caseBlock("6  alignment: main start/centre/end, cross start/centre/end");
         {
             ui.openContainer(makeRow(12.0f, LayoutEdges(0.0f)));
             const LayoutAlign aligns[] = {
@@ -274,12 +262,12 @@ int ui_layout_test()
             };
             for (int i = 0; i < 3; i++) {
                 LayoutConfig config = makeRow(0.0f, LayoutEdges(6.0f));
-                config.width = SizeSpec::fixed(180.0f);
+                config.width = SizeSpec::fixed(160.0f);
                 config.height = SizeSpec::fixed(70.0f);
                 config.alignMain = aligns[i];
                 config.alignCross = aligns[i];
-                probes.alignBox[i] = ui.openContainer(config);
-                probes.alignChild[i] = ui.openContainer(makeBox(50.0f, 24.0f));
+                layoutProbes.alignBox[i] = ui.openContainer(config);
+                layoutProbes.alignChild[i] = ui.openContainer(makeBox(50.0f, 24.0f));
                 ui.closeContainer();
                 ui.closeContainer();
             }
@@ -287,10 +275,10 @@ int ui_layout_test()
         }
         ui.closeContainer();
 
-        // 8 -- a floating child must not inflate its parent or consume a gap.
-        caseBlock("8  floating child (red): parent width matches case 1's row exactly");
+        // 7 -- a floating child must not inflate its parent or consume a gap.
+        caseBlock("7  floating child (red): parent width matches case 1's row exactly");
         {
-            probes.floatParent = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)));
+            layoutProbes.floatParent = ui.openContainer(makeRow(8.0f, LayoutEdges(8.0f)));
             ui.openContainer(makeBox(60.0f, 30.0f));
             ui.closeContainer();
             ui.openContainer(makeBox(90.0f, 30.0f));
@@ -304,39 +292,71 @@ int ui_layout_test()
             floater.floating.anchorY = LayoutAlign::End;
             floater.floating.selfX = LayoutAlign::Center;
             floater.floating.selfY = LayoutAlign::Center;
-            probes.floatChild = ui.openContainer(floater);
+            layoutProbes.floatChild = ui.openContainer(floater);
             ui.closeContainer();
             ui.closeContainer();
         }
         ui.closeContainer();
 
-        // 9 -- a non-text leaf whose height also depends on its final width.
-        caseBlock("9  image, aspect 2:1, grow width: height tracks the final width");
+        // 8 -- a non-text leaf whose height also depends on its final width.
+        caseBlock("8  image, aspect 2:1, grow width: height tracks the final width");
         {
             LayoutConfig config = makeRow(0.0f, LayoutEdges(6.0f));
-            config.width = SizeSpec::fixed(400.0f);
+            config.width = SizeSpec::fixed(380.0f);
             ui.openContainer(config);
 
             LayoutConfig imageConfig;
             imageConfig.width = SizeSpec::grow();
-            probes.image =
+            layoutProbes.image =
                 ui.addImage(mtsdfFont.getTexture(), Vec2(200.0f, 100.0f), 2.0f, imageConfig);
             ui.closeContainer();
         }
         ui.closeContainer();
 
-        // 10 -- every child at its minimum and still not fitting is real overflow.
-        caseBlock("10  overflow: three 80-wide children in a 150-wide row");
+        // 9 -- every child at its minimum and still not fitting is real overflow.
+        caseBlock("9  overflow: three 80-wide children in a 150-wide row");
         {
             LayoutConfig config = makeRow(6.0f, LayoutEdges(6.0f));
             config.width = SizeSpec::fixed(150.0f);
-            probes.overflowRow = ui.openContainer(config);
-            probes.overflowFirst = ui.openContainer(makeBox(80.0f, 26.0f));
+            layoutProbes.overflowRow = ui.openContainer(config);
+            layoutProbes.overflowFirst = ui.openContainer(makeBox(80.0f, 26.0f));
             ui.closeContainer();
             ui.openContainer(makeBox(80.0f, 26.0f));
             ui.closeContainer();
             ui.openContainer(makeBox(80.0f, 26.0f));
             ui.closeContainer();
+            ui.closeContainer();
+        }
+        ui.closeContainer();
+
+        ui.draw();
+    };
+
+    auto buildTextRoot = [&]() {
+        ui.begin(Vec2(ROOT_B_WIDTH, ROOT_B_HEIGHT), makeColumn(14.0f, LayoutEdges(16.0f)));
+        ui.addText("ROOT B - wrapping, styled spans, line height", titleStyle);
+
+        // 10 -- shrinking is what drives the wrap, and the box grows taller for it.
+        caseBlock("10  wrap: same text at 230 / 150 / 95 wide");
+        {
+            ui.openContainer(makeRow(12.0f, LayoutEdges(0.0f)));
+            const char* sample = "The quick brown fox jumps over the lazy dog near the riverbank";
+            const float widths[] = {230.0f, 150.0f, 95.0f};
+            for (int i = 0; i < 3; i++) {
+                LayoutConfig column = makeColumn(0.0f, LayoutEdges(6.0f));
+                column.width = SizeSpec::fixed(widths[i]);
+                uint index = ui.openContainer(column);
+
+                LayoutConfig textConfig;
+                textConfig.width = SizeSpec::grow();
+                uint textIndex = ui.addText(sample, bodyStyle, textConfig);
+                ui.closeContainer();
+
+                if (i == 2) {
+                    textProbes.wrapNarrow = index;
+                    textProbes.wrapText = textIndex;
+                }
+            }
             ui.closeContainer();
         }
         ui.closeContainer();
@@ -346,12 +366,12 @@ int ui_layout_test()
         caseBlock("11  styled spans: the big span sets its line's height");
         {
             LayoutConfig config = makeColumn(0.0f, LayoutEdges(6.0f));
-            config.width = SizeSpec::fixed(620.0f);
+            config.width = SizeSpec::fixed(500.0f);
             ui.openContainer(config);
 
             LayoutConfig textConfig;
             textConfig.width = SizeSpec::grow();
-            probes.styledLines = ui.addText(
+            textProbes.styledLines = ui.addText(
                 "first line is plain\nsecond has a /sBIG/s word in it\nthird /stiny/s and plain\n"
                 "fourth line is plain again",
                 bodyStyle, mixedStyles, textConfig
@@ -365,7 +385,7 @@ int ui_layout_test()
         caseBlock("12  styled + wrapped: per-line heights vary down the block");
         {
             ui.openContainer(makeRow(12.0f, LayoutEdges(0.0f)));
-            const float widths[] = {420.0f, 240.0f};
+            const float widths[] = {300.0f, 200.0f};
             for (int i = 0; i < 2; i++) {
                 LayoutConfig column = makeColumn(0.0f, LayoutEdges(6.0f));
                 column.width = SizeSpec::fixed(widths[i]);
@@ -379,7 +399,7 @@ int ui_layout_test()
                     bodyStyle, mixedStyles, textConfig
                 );
                 ui.closeContainer();
-                if (i == 1) probes.styledWrap = index;
+                if (i == 1) textProbes.styledWrap = index;
             }
             ui.closeContainer();
         }
@@ -390,12 +410,12 @@ int ui_layout_test()
         caseBlock("13  same text with fixedLineHeight: uniform steps, big span overlaps");
         {
             LayoutConfig config = makeColumn(0.0f, LayoutEdges(6.0f));
-            config.width = SizeSpec::fixed(620.0f);
+            config.width = SizeSpec::fixed(500.0f);
             ui.openContainer(config);
 
             LayoutConfig textConfig;
             textConfig.width = SizeSpec::grow();
-            probes.fixedLine = ui.addText(
+            textProbes.fixedLine = ui.addText(
                 "first line is plain\nsecond has a /sBIG/s word in it\nthird /stiny/s and plain\n"
                 "fourth line is plain again",
                 bodyStyle, mixedStyles, textConfig, true, true
@@ -404,68 +424,78 @@ int ui_layout_test()
         }
         ui.closeContainer();
 
+        // 14 -- a button is a padded box wrapping its own label leaf.
+        caseBlock("14  buttons: each hugs its label plus the default padding");
+        {
+            ui.openContainer(makeRow(10.0f, LayoutEdges(0.0f)));
+            ui.addButton("OK");
+            ui.addButton("Cancel");
+            ui.addButton("Apply changes");
+            ui.closeContainer();
+        }
+        ui.closeContainer();
+
         ui.draw();
     };
 
-    auto logResults = [&]() {
+    auto logLayoutRoot = [&]() {
         const std::vector<LayoutNode>& nodes = ui.getLayoutNodes();
         auto node = [&](uint index) -> const LayoutNode& { return nodes[index]; };
 
-        LOG_INFO("--- layout probes ({} nodes) ---", nodes.size());
+        LOG_INFO("--- root A probes ({} nodes) ---", nodes.size());
         LOG_INFO(
             "1  fit row width {} (expect 222 = 16 pad + 190 children + 16 gaps)",
-            node(probes.fitRow).size.x
+            node(layoutProbes.fitRow).size.x
         );
         LOG_INFO(
-            "2  growers {} and {} (expect equal, 234 each)", node(probes.growA).size.x,
-            node(probes.growB).size.x
+            "2  growers {} and {} (expect equal, 154 each)", node(layoutProbes.growA).size.x,
+            node(layoutProbes.growB).size.x
         );
         LOG_INFO(
-            "3  capped growers {} and {} (expect 120 each), first x {}",
-            node(probes.cappedA).size.x, node(probes.cappedB).size.x, node(probes.cappedA).pos.x
+            "3  capped growers {} and {} (expect 120 each), first x {} (expect 112)",
+            node(layoutProbes.cappedA).size.x, node(layoutProbes.cappedB).size.x,
+            node(layoutProbes.cappedA).pos.x
         );
         LOG_INFO(
             "4  fit parent {} = short {} + long {} + 16 pad + 8 gap (the two must differ)",
-            node(probes.fitParent).size.x, node(probes.fitGrowShort).size.x,
-            node(probes.fitGrowLong).size.x
+            node(layoutProbes.fitParent).size.x, node(layoutProbes.fitGrowShort).size.x,
+            node(layoutProbes.fitGrowLong).size.x
         );
         LOG_INFO(
-            "5  narrow column {}x{}, its text {}x{} over {} lines", node(probes.wrapNarrow).size.x,
-            node(probes.wrapNarrow).size.y, node(probes.wrapText).size.x,
-            node(probes.wrapText).size.y, node(probes.wrapText).lineCount
-        );
-        LOG_INFO(
-            "8  floating parent width {} (expect 222, same as case 1), floater at ({}, {})",
-            node(probes.floatParent).size.x, node(probes.floatChild).pos.x,
-            node(probes.floatChild).pos.y
-        );
-        LOG_INFO(
-            "9  image {}x{} (expect height = width / 2)", node(probes.image).size.x,
-            node(probes.image).size.y
-        );
-        LOG_INFO(
-            "10 overflow row {} wide (spans x {} to {}), children spill to x {}",
-            node(probes.overflowRow).size.x, node(probes.overflowRow).pos.x,
-            node(probes.overflowRow).pos.x + node(probes.overflowRow).size.x,
-            node(probes.overflowFirst).pos.x + 3.0f * 80.0f + 2.0f * 6.0f
-        );
-        LOG_INFO(
-            "6  deepest box at depth {} is {}x{} at ({}, {})", node(probes.deepInner).depth,
-            node(probes.deepInner).size.x, node(probes.deepInner).size.y,
-            node(probes.deepInner).pos.x, node(probes.deepInner).pos.y
+            "5  deepest box at depth {} is {}x{}", node(layoutProbes.deepInner).depth,
+            node(layoutProbes.deepInner).size.x, node(layoutProbes.deepInner).size.y
         );
         for (int i = 0; i < 3; i++) {
-            const LayoutNode& box = node(probes.alignBox[i]);
-            const LayoutNode& child = node(probes.alignChild[i]);
+            const LayoutNode& box = node(layoutProbes.alignBox[i]);
+            const LayoutNode& child = node(layoutProbes.alignChild[i]);
             LOG_INFO(
-                "7  align[{}] child inset ({}, {}) inside 180x70 (expect 6/6, 65/23, 124/40)", i,
+                "6  align[{}] child inset ({}, {}) inside 160x70 (expect 6/6, 55/23, 104/40)", i,
                 child.pos.x - box.pos.x, child.pos.y - box.pos.y
             );
         }
+        LOG_INFO(
+            "7  floating parent width {} (expect 222, same as case 1), floater at ({}, {})",
+            node(layoutProbes.floatParent).size.x, node(layoutProbes.floatChild).pos.x,
+            node(layoutProbes.floatChild).pos.y
+        );
+        LOG_INFO(
+            "8  image {}x{} (expect height = width / 2)", node(layoutProbes.image).size.x,
+            node(layoutProbes.image).size.y
+        );
+        LOG_INFO(
+            "9  overflow row {} wide (spans x {} to {}), children spill to x {}",
+            node(layoutProbes.overflowRow).size.x, node(layoutProbes.overflowRow).pos.x,
+            node(layoutProbes.overflowRow).pos.x + node(layoutProbes.overflowRow).size.x,
+            node(layoutProbes.overflowFirst).pos.x + 3.0f * 80.0f + 2.0f * 6.0f
+        );
+    };
+
+    auto logTextRoot = [&]() {
+        const std::vector<LayoutNode>& nodes = ui.getLayoutNodes();
+        auto node = [&](uint index) -> const LayoutNode& { return nodes[index]; };
 
         auto logLines = [&](const char* label, uint index) {
-            const UiElement& element = ui.getElements()[index];
-            const TextLeaf* leaf = static_cast<const TextLeaf*>(element.measurer);
+            const TextLeaf* leaf = static_cast<const TextLeaf*>(ui.getElements()[index].measurer);
             std::string steps;
             for (const LayoutLine& line : leaf->getLines())
                 steps += std::format("{:.1f} ", line.height);
@@ -474,9 +504,17 @@ int ui_layout_test()
                 node(index).size.y, leaf->getLines().size(), leaf->getRuns().size(), steps
             );
         };
-        logLines("11 styled", probes.styledLines);
-        logLines("12 styled+wrapped", probes.styledWrap);
-        logLines("13 fixedLineHeight", probes.fixedLine);
+
+        LOG_INFO("--- root B probes ({} nodes) ---", nodes.size());
+        LOG_INFO(
+            "10 narrow column {}x{}, its text {}x{} over {} lines",
+            node(textProbes.wrapNarrow).size.x, node(textProbes.wrapNarrow).size.y,
+            node(textProbes.wrapText).size.x, node(textProbes.wrapText).size.y,
+            node(textProbes.wrapText).lineCount
+        );
+        logLines("11 styled", textProbes.styledLines);
+        logLines("12 styled+wrapped", textProbes.styledWrap);
+        logLines("13 fixedLineHeight", textProbes.fixedLine);
     };
 
     auto onWindowUpdate = [&](IdType id, float dt) {
@@ -517,10 +555,16 @@ int ui_layout_test()
         Renderer::get().setShader(&quadShader);
         Renderer::get().clearColor(Color(0.08f, 0.08f, 0.1f, 1.0f));
 
-        buildUi();
+        // Each root is its own begin/draw cycle, so the viewport moves between them
+        // and the two trees never share a solve.
+        UiRenderer::get().setViewport(rootAOrigin, WORLD_PER_UI);
+        buildLayoutRoot();
+        if (!logged) logLayoutRoot();
 
+        UiRenderer::get().setViewport(rootBOrigin, WORLD_PER_UI);
+        buildTextRoot();
         if (!logged) {
-            logResults();
+            logTextRoot();
             logged = true;
         }
 

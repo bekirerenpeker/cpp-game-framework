@@ -1,8 +1,8 @@
 #pragma once
 
-#include "graphics/ui/LayoutComputer.hpp"
-#include "graphics/ui/UiElement.hpp"
-#include "graphics/ui/UiLeaves.hpp"
+#include "graphics/ui/layout/LayoutCalculator.hpp"
+#include "graphics/ui/elements/UiElement.hpp"
+#include "graphics/ui/elements/UiLeaves.hpp"
 #include "utils/Singleton.hpp"
 #include <string_view>
 #include <vector>
@@ -19,7 +19,7 @@ class UiSystem : public Singleton<UiSystem>
     std::vector<TextLeaf*> m_textLeaves;
     std::vector<ImageLeaf*> m_imageLeaves;
 
-    LayoutComputer m_layout;
+    LayoutCalculator m_layout;
 
     const Font* m_defaultFont = nullptr;
     TextStyle m_defaultTextStyle;

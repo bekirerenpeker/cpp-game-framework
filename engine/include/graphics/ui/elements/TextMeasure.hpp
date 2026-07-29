@@ -3,7 +3,7 @@
 #include "graphics/text/Font.hpp"
 #include "graphics/text/TextStyle.hpp"
 #include "graphics/text/TextTags.hpp"
-#include "graphics/ui/ILeafMeasurer.hpp"
+#include "graphics/ui/layout/ILeafMeasurer.hpp"
 #include <string_view>
 #include <vector>
 

@@ -1,11 +1,6 @@
 #pragma once
 
-#include "ILeafMeasurer.hpp"
-#include "LayoutComputer.hpp"
-#include "LayoutNode.hpp"
-#include "LayoutTypes.hpp"
-#include "TextMeasure.hpp"
-#include "UiElement.hpp"
-#include "UiLeaves.hpp"
+#include "elements/ElementsInclude.hpp"
+#include "layout/LayoutInclude.hpp"
 #include "UiRenderer.hpp"
 #include "UiSystem.hpp"

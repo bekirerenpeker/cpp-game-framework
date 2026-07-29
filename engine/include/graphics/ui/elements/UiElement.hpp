@@ -2,8 +2,8 @@
 
 #include "graphics/Color.hpp"
 #include "graphics/text/TextStyle.hpp"
-#include "graphics/ui/ILeafMeasurer.hpp"
-#include "graphics/ui/LayoutTypes.hpp"
+#include "graphics/ui/layout/ILeafMeasurer.hpp"
+#include "graphics/ui/layout/LayoutTypes.hpp"
 #include <cstdint>
 #include <string>
 

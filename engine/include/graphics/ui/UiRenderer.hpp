@@ -1,8 +1,8 @@
 #pragma once
 
 #include "graphics/Color.hpp"
-#include "graphics/ui/LayoutNode.hpp"
-#include "graphics/ui/UiElement.hpp"
+#include "graphics/ui/layout/LayoutNode.hpp"
+#include "graphics/ui/elements/UiElement.hpp"
 #include "utils/Singleton.hpp"
 #include <vector>
 

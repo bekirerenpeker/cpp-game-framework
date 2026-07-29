@@ -2,7 +2,7 @@
 #include "graphics/Renderer.hpp"
 #include "graphics/gl_wrappers/GlTexture.hpp"
 #include "graphics/text/TextRenderer.hpp"
-#include "graphics/ui/UiLeaves.hpp"
+#include "graphics/ui/elements/UiLeaves.hpp"
 #include "utils/math/MathFuncs.hpp"
 
 namespace Engine {

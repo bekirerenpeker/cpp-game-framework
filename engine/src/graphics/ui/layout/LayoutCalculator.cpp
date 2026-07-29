@@ -1,10 +1,10 @@
-#include "graphics/ui/LayoutComputer.hpp"
+#include "graphics/ui/layout/LayoutCalculator.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "utils/math/MathFuncs.hpp"
 
 namespace Engine {
 
-void LayoutComputer::reset(size_t expectedNodeCount)
+void LayoutCalculator::reset(size_t expectedNodeCount)
 {
     m_inputs.clear();
     m_nodes.clear();
@@ -16,7 +16,7 @@ void LayoutComputer::reset(size_t expectedNodeCount)
     }
 }
 
-uint LayoutComputer::addNode(const LayoutInput& input)
+uint LayoutCalculator::addNode(const LayoutInput& input)
 {
     uint index = (uint)m_nodes.size();
     bool hasParent = input.parent != NO_NODE && input.parent < index;
@@ -26,7 +26,7 @@ uint LayoutComputer::addNode(const LayoutInput& input)
     // a node before its children have been computed produces silently wrong sizes.
     if (input.parent != NO_NODE && !hasParent && !m_warnedBadParent) {
         LOG_WARNING(
-            "LayoutComputer: node {} declares parent {} which does not precede it; the tree "
+            "LayoutCalculator: node {} declares parent {} which does not precede it; the tree "
             "must be added in preorder",
             index, input.parent
         );
@@ -55,7 +55,7 @@ uint LayoutComputer::addNode(const LayoutInput& input)
     return index;
 }
 
-const std::vector<LayoutNode>& LayoutComputer::compute(Vec2 rootSize)
+const std::vector<LayoutNode>& LayoutCalculator::compute(Vec2 rootSize)
 {
     m_rootSize = rootSize;
     m_lines.clear();
@@ -69,7 +69,7 @@ const std::vector<LayoutNode>& LayoutComputer::compute(Vec2 rootSize)
     return m_nodes;
 }
 
-void LayoutComputer::computeIntrinsicWidths()
+void LayoutCalculator::computeIntrinsicWidths()
 {
     for (size_t i = m_nodes.size(); i-- > 0;) {
         uint index = (uint)i;
@@ -86,7 +86,7 @@ void LayoutComputer::computeIntrinsicWidths()
     }
 }
 
-void LayoutComputer::computeFinalWidths()
+void LayoutCalculator::computeFinalWidths()
 {
     if (m_nodes.empty()) return;
 
@@ -95,7 +95,7 @@ void LayoutComputer::computeFinalWidths()
         distributeChildren((uint)i, LayoutAxis::Horizontal, true);
 }
 
-void LayoutComputer::computeIntrinsicHeights()
+void LayoutCalculator::computeIntrinsicHeights()
 {
     for (size_t i = m_nodes.size(); i-- > 0;) {
         uint index = (uint)i;
@@ -117,7 +117,7 @@ void LayoutComputer::computeIntrinsicHeights()
     }
 }
 
-void LayoutComputer::computeFinalHeights()
+void LayoutCalculator::computeFinalHeights()
 {
     if (m_nodes.empty()) return;
 
@@ -128,7 +128,7 @@ void LayoutComputer::computeFinalHeights()
         distributeChildren((uint)i, LayoutAxis::Vertical, false);
 }
 
-void LayoutComputer::computePositions()
+void LayoutCalculator::computePositions()
 {
     if (m_nodes.empty()) return;
 
@@ -136,7 +136,7 @@ void LayoutComputer::computePositions()
     for (size_t i = 0; i < m_nodes.size(); i++) positionChildren((uint)i);
 }
 
-void LayoutComputer::aggregateIntrinsic(uint index, LayoutAxis axis)
+void LayoutCalculator::aggregateIntrinsic(uint index, LayoutAxis axis)
 {
     const LayoutConfig& config = m_inputs[index].config;
     bool alongMain = axis == mainAxisOf(config.direction);
@@ -169,7 +169,7 @@ void LayoutComputer::aggregateIntrinsic(uint index, LayoutAxis axis)
     axisSet(m_nodes[index].contentMax, axis, max + pad);
 }
 
-void LayoutComputer::finalizeIntrinsic(uint index, LayoutAxis axis)
+void LayoutCalculator::finalizeIntrinsic(uint index, LayoutAxis axis)
 {
     const LayoutConfig& config = m_inputs[index].config;
     const SizeSpec& spec = axisSpec(config, axis);
@@ -195,7 +195,7 @@ void LayoutComputer::finalizeIntrinsic(uint index, LayoutAxis axis)
     axisSet(m_nodes[index].contentMax, axis, max);
 }
 
-void LayoutComputer::distributeChildren(uint index, LayoutAxis axis, bool allowShrink)
+void LayoutCalculator::distributeChildren(uint index, LayoutAxis axis, bool allowShrink)
 {
     if (m_nodes[index].firstChild == NO_NODE) return;
 
@@ -228,7 +228,7 @@ void LayoutComputer::distributeChildren(uint index, LayoutAxis axis, bool allowS
     else if (remaining < -EPSILON && allowShrink) levelDown(axis, -remaining);
 }
 
-void LayoutComputer::resolveCrossAxis(uint index, LayoutAxis axis)
+void LayoutCalculator::resolveCrossAxis(uint index, LayoutAxis axis)
 {
     const LayoutConfig& config = m_inputs[index].config;
     float inner = axisGet(m_nodes[index].size, axis) - axisPadding(config.padding, axis);
@@ -239,7 +239,7 @@ void LayoutComputer::resolveCrossAxis(uint index, LayoutAxis axis)
     }
 }
 
-float LayoutComputer::resolveChildAgainst(uint index, LayoutAxis axis, float inner) const
+float LayoutCalculator::resolveChildAgainst(uint index, LayoutAxis axis, float inner) const
 {
     const SizeSpec& spec = axisSpec(m_inputs[index].config, axis);
     float floorValue = axisGet(m_nodes[index].contentMin, axis);
@@ -256,7 +256,7 @@ float LayoutComputer::resolveChildAgainst(uint index, LayoutAxis axis, float inn
     return clampToSpec(index, axis, size);
 }
 
-void LayoutComputer::positionChildren(uint index)
+void LayoutCalculator::positionChildren(uint index)
 {
     if (m_nodes[index].firstChild == NO_NODE) return;
 
@@ -299,7 +299,7 @@ void LayoutComputer::positionChildren(uint index)
     }
 }
 
-void LayoutComputer::positionFloatingChild(uint parentIndex, uint childIndex)
+void LayoutCalculator::positionFloatingChild(uint parentIndex, uint childIndex)
 {
     const FloatingConfig& floating = m_inputs[childIndex].config.floating;
     const LayoutNode& parent = m_nodes[parentIndex];
@@ -315,7 +315,7 @@ void LayoutComputer::positionFloatingChild(uint parentIndex, uint childIndex)
     child.pos = Vec2(anchorX - selfX + floating.offset.x, anchorY - selfY + floating.offset.y);
 }
 
-void LayoutComputer::levelUp(LayoutAxis axis, float remaining)
+void LayoutCalculator::levelUp(LayoutAxis axis, float remaining)
 {
     size_t write = 0;
     for (size_t i = 0; i < m_scratch.size(); i++) {
@@ -368,7 +368,7 @@ void LayoutComputer::levelUp(LayoutAxis axis, float remaining)
     }
 }
 
-void LayoutComputer::levelDown(LayoutAxis axis, float deficit)
+void LayoutCalculator::levelDown(LayoutAxis axis, float deficit)
 {
     size_t write = 0;
     for (size_t i = 0; i < m_scratch.size(); i++) {
@@ -420,7 +420,7 @@ void LayoutComputer::levelDown(LayoutAxis axis, float deficit)
     }
 }
 
-float LayoutComputer::seedChildSize(uint index, LayoutAxis axis, float available) const
+float LayoutCalculator::seedChildSize(uint index, LayoutAxis axis, float available) const
 {
     const SizeSpec& spec = axisSpec(m_inputs[index].config, axis);
 
@@ -438,7 +438,7 @@ float LayoutComputer::seedChildSize(uint index, LayoutAxis axis, float available
     return clampToSpec(index, axis, size);
 }
 
-float LayoutComputer::clampToSpec(uint index, LayoutAxis axis, float value) const
+float LayoutCalculator::clampToSpec(uint index, LayoutAxis axis, float value) const
 {
     const SizeSpec& spec = axisSpec(m_inputs[index].config, axis);
     float result = Math::max(value, contentFloor(index, axis));
@@ -446,17 +446,17 @@ float LayoutComputer::clampToSpec(uint index, LayoutAxis axis, float value) cons
     return Math::min(result, spec.max);
 }
 
-float LayoutComputer::contentFloor(uint index, LayoutAxis axis) const
+float LayoutCalculator::contentFloor(uint index, LayoutAxis axis) const
 {
     return axisGet(m_nodes[index].contentMin, axis);
 }
 
-float LayoutComputer::upperBound(uint index, LayoutAxis axis) const
+float LayoutCalculator::upperBound(uint index, LayoutAxis axis) const
 {
     return axisSpec(m_inputs[index].config, axis).max;
 }
 
-uint LayoutComputer::layoutChildCount(uint index) const
+uint LayoutCalculator::layoutChildCount(uint index) const
 {
     uint count = 0;
     for (uint child = m_nodes[index].firstChild; child != NO_NODE;
@@ -466,14 +466,14 @@ uint LayoutComputer::layoutChildCount(uint index) const
     return count;
 }
 
-float LayoutComputer::gapTotal(uint index) const
+float LayoutCalculator::gapTotal(uint index) const
 {
     uint count = layoutChildCount(index);
     if (count < 2) return 0.0f;
     return m_inputs[index].config.gap * (float)(count - 1);
 }
 
-float LayoutComputer::alignOffset(LayoutAlign align, float free)
+float LayoutCalculator::alignOffset(LayoutAlign align, float free)
 {
     switch (align) {
     case LayoutAlign::Center: return free * 0.5f;

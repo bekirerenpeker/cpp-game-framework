@@ -1,11 +1,11 @@
 #pragma once
 
-#include "graphics/ui/LayoutNode.hpp"
+#include "graphics/ui/layout/LayoutNode.hpp"
 #include <vector>
 
 namespace Engine {
 
-class LayoutComputer
+class LayoutCalculator
 {
   private:
     static constexpr float EPSILON = 0.0001f;

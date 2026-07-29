@@ -29,7 +29,7 @@ rather than leaving a stale description.
   transition if this is ever opted into.
 
 - [ ] **Grid** — a track list where each track carries the same `SizeSpec`, run
-  through `LayoutComputer`'s existing distribution routine, then row-major
+  through `LayoutCalculator`'s existing distribution routine, then row-major
   auto-placement into cells with an optional span. That is ~80% of grid's value
   for a fraction of CSS Grid's algorithm; auto-fit/minmax/dense packing are not
   worth it.
@@ -151,8 +151,8 @@ rather than leaving a stale description.
   every span touching a line, but it steps by the max of the line it is
   *leaving* — see the separate item below for the case that still breaks.
 
-- [x] **UI layout solver** — `LayoutComputer`
-  ([LayoutComputer.hpp](engine/include/graphics/ui/LayoutComputer.hpp)) plus an
+- [x] **UI layout solver** — `LayoutCalculator`
+  ([LayoutCalculator.hpp](engine/include/graphics/ui/layout/LayoutCalculator.hpp)) plus an
   immediate-mode `UiSystem` singleton
   ([UiSystem.hpp](engine/include/graphics/ui/UiSystem.hpp)) under the new
   `graphics/ui/`. Five sequential passes over a **flat preorder array** — so
@@ -164,14 +164,14 @@ rather than leaving a stale description.
   iteration-to-convergence is needed. Distribution is one routine shared by
   passes 2 and 4, parameterized by axis: surplus levels the smallest growers up,
   a deficit levels the largest children down toward their `contentMin`.
-  `LayoutComputer` holds its **own** node struct carrying only layout data and a
+  `LayoutCalculator` holds its **own** node struct carrying only layout data and a
   `sourceIndex` back to `UiElement`, so styling never enters the solver and the
   returned array is pure geometry. Leaves plug in through `ILeafMeasurer`
   (`measureWidths` / `measureHeight(contentWidth, lines)`) — `TextLeaf` and
   `ImageLeaf` ship; the leaf objects live in reusable pools on `UiSystem`
   because `LayoutInput::measurer` is a bare pointer held from `addText` all the
   way through pass 3. Layout space is **Y-down, top-left origin, unitless**;
-  the single Y flip lives in `UiDebugDrawer::uiToWorld`. Verified numerically in
+  the single Y flip lives in `UiRenderer::uiToWorld`. Verified numerically in
   `ui_layout_test` across all 10 cases (75 nodes): Fit row = 222 exactly, two
   growers 234/234, `sizing.max` capping at 120 with the leftover going to
   `alignMain`, a floating child leaving its parent at 222 (identical to the same

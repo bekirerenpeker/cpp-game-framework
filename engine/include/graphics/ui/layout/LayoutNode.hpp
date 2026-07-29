@@ -1,7 +1,7 @@
 #pragma once
 
-#include "graphics/ui/ILeafMeasurer.hpp"
-#include "graphics/ui/LayoutTypes.hpp"
+#include "graphics/ui/layout/ILeafMeasurer.hpp"
+#include "graphics/ui/layout/LayoutTypes.hpp"
 
 namespace Engine {
 
