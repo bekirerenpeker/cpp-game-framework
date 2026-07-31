@@ -41,7 +41,7 @@ enum class UITransition
     EaseInOut
 };
 
-struct UINodeStyle
+struct UIContainerStyle
 {
     std::optional<Color> backgroundColor;
     // std::optional<Gradient> backgroundGradient;
@@ -62,12 +62,11 @@ struct UINodeStyle
 
     std::optional<Vec2> offset;
     std::optional<Vec2> scale;
-    std::optional<float> rotation;
 
     std::optional<float> transitionDuration;
     std::optional<UITransition> transition;
 
-    void combine(const UINodeStyle& other)
+    void combine(const UIContainerStyle& other)
     {
         if (other.backgroundColor) backgroundColor = other.backgroundColor;
         if (other.backgroundImage) backgroundImage = other.backgroundImage;
@@ -87,7 +86,6 @@ struct UINodeStyle
 
         if (other.offset) offset = other.offset;
         if (other.scale) scale = other.scale;
-        if (other.rotation) rotation = other.rotation;
 
         if (other.transitionDuration) transitionDuration = other.transitionDuration;
         if (other.transition) transition = other.transition;

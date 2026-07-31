@@ -17,7 +17,7 @@ float UINode::measureHeight(float contentWidth) const
 
 void UINode::draw(Vec2 pos, Vec2 size) const
 {
-    if (leafData) leafData->draw(pos, size, style);
+    if (leafData) leafData->draw(pos, size);
 }
 
 }   // namespace Engine

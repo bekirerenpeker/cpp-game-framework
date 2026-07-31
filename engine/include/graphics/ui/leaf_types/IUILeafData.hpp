@@ -1,6 +1,5 @@
 #pragma once
 
-#include "graphics/ui/UINodeStyle.hpp"
 #include "utils/math/Vec2.hpp"
 
 namespace Engine {
@@ -31,7 +30,7 @@ struct IUILeafData
 
     virtual UILeafWidths measureWidths() = 0;
     virtual float measureHeight(float contentWidth) = 0;
-    virtual void draw(Vec2 pos, Vec2 size, const UINodeStyle& style) = 0;
+    virtual void draw(Vec2 pos, Vec2 size) = 0;
 };
 
 }   // namespace Engine

@@ -2,7 +2,7 @@
 
 namespace Engine {
 
-IdType UIManager::addContainer(IdType parent, const UINodeStyle& style)
+IdType UIManager::addContainer(IdType parent, const UIContainerStyle& style)
 {
     IdType id = m_nodes.add();
     UINode* node = m_nodes.get(id);

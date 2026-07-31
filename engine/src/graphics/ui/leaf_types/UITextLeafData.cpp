@@ -26,9 +26,6 @@ float UITextLeafData::measureHeight(float contentWidth)
     return TextLayoutCalculator::get().calculate(m_block, contentWidth);
 }
 
-void UITextLeafData::draw(Vec2 pos, Vec2 size, const UINodeStyle& style)
-{
-    TextRenderer::get().draw(m_block, pos, size);
-}
+void UITextLeafData::draw(Vec2 pos, Vec2 size) { TextRenderer::get().draw(m_block, pos, size); }
 
 }   // namespace Engine

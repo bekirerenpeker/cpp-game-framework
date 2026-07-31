@@ -1,6 +1,6 @@
 #pragma once
 
-#include "graphics/ui/UINodeStyle.hpp"
+#include "graphics/ui/UIContainerStyle.hpp"
 #include "leaf_types/IUILeafData.hpp"
 #include "utils/IdIndexedVector.hpp"
 #include "utils/TypeAliases.hpp"
@@ -15,7 +15,7 @@ struct UINode : IHasId
     IdType nextSibling = INVALID_ID;
     uint childCount = 0;
 
-    UINodeStyle style;
+    UIContainerStyle style;
     IUILeafData* leafData = nullptr;
 
     bool isContainer() const { return leafData == nullptr; }
