@@ -17,6 +17,7 @@ float UINode::measureHeight(float contentWidth) const
 
 void UINode::draw(Vec2 pos, Vec2 size) const
 {
+    if (!isVisible) return;
     if (leafData) leafData->draw(pos, size);
 }
 

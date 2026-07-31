@@ -17,6 +17,7 @@ struct UINode : IHasId
 
     UIContainerStyle style;
     IUILeafData* leafData = nullptr;
+    bool isVisible = true;
 
     bool isContainer() const { return leafData == nullptr; }
 
