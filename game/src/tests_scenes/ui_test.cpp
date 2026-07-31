@@ -53,6 +53,117 @@ void logFont(const Font& font, const char* label)
     );
 }
 
+void logLines(const TextBlock& block, const char* label)
+{
+    const std::vector<TextLine>& lines = block.getLines();
+    LOG_INFO(
+        "  {}: {} lines, bounds ({}, {})", label, lines.size(), block.getBounds().x,
+        block.getBounds().y
+    );
+    for (size_t i = 0; i < lines.size(); i++) {
+        LOG_INFO(
+            "    line {}: top {} width {} height {} ascent {} descent {} runs {}", i, lines[i].top,
+            lines[i].width, lines[i].height, lines[i].ascent, lines[i].descent, lines[i].runCount
+        );
+    }
+}
+
+// Everything the fold is supposed to guarantee, logged once at startup so it can be
+// checked from game/output/log.txt without driving the window.
+void logLayoutProof(
+    const Font& font, const TextStyle& base, const TextStyle& bigCyan, const TextStyle& huge
+)
+{
+    TextLayoutCalculator& calc = TextLayoutCalculator::get();
+
+    LOG_INFO("=== line box: a line is as tall as the tallest style touching it ===");
+    TextBlock mixed(&font, "line one /sHUGE/s here\nline two /sBIG/s too\nplain third line", base);
+    mixed.setSpanStyles({bigCyan, huge});
+    calc.calculate(mixed, 0.0f);
+    logLines(mixed, "per-style line heights");
+
+    // The baseline must sit at lineTop + that line's own ascent. Stepping
+    // baseline-to-baseline instead is what used to let a tall line 2 ride up into
+    // line 1, so a non-negative gap here is the regression check.
+    const std::vector<TextLine>& ml = mixed.getLines();
+    for (size_t i = 0; i + 1 < ml.size(); i++) {
+        float gap = ml[i].height - ml[i].ascent - ml[i].descent;
+        LOG_INFO("    gap below line {}: {} (must be >= 0, no overlap)", i, gap);
+    }
+
+    mixed.setFixedLineHeight(true);
+    calc.calculate(mixed, 0.0f);
+    logLines(mixed, "fixedLineHeight opts out, all steps equal");
+    mixed.setFixedLineHeight(false);
+
+    LOG_INFO("=== wrapping: world-space text can wrap now ===");
+    TextBlock para(
+        &font,
+        "the quick brown fox jumps over the lazy dog while a col/sour/sful span "
+        "straddles a tag boundary and must not break there",
+        base
+    );
+    para.setSpanStyles({bigCyan});
+
+    TextBlockWidths widths = calc.measureMinMaxWidth(para);
+    LOG_INFO(
+        "  min-content (longest word) {}, max-content (longest line) {}", widths.min, widths.max
+    );
+
+    for (float divisor : {1.0f, 2.0f, 4.0f, 12.0f}) {
+        calc.calculate(para, widths.max / divisor);
+        LOG_INFO(
+            "  width {} -> {} lines, bounds ({}, {})", widths.max / divisor, para.getLines().size(),
+            para.getBounds().x, para.getBounds().y
+        );
+    }
+
+    // Non-wrapping text is incompressible, so its min must collapse onto its max.
+    para.setWrapEnabled(false);
+    TextBlockWidths noWrap = calc.measureMinMaxWidth(para);
+    LOG_INFO("  wrap disabled -> min {} max {} (must be equal)", noWrap.min, noWrap.max);
+    para.setWrapEnabled(true);
+
+    LOG_INFO("=== alignment: per line, not per block ===");
+    TextBlock aligned(&font, "a short line\nand a considerably longer second line", base);
+    const float alignWidth = 3.0f;
+    for (auto [name, mode] : {
+             std::pair {  "Left",   TextAlignH::Left},
+             {"Center", TextAlignH::Center},
+             { "Right",  TextAlignH::Right}
+    }) {
+        aligned.setAlignH(mode);
+        calc.calculate(aligned, alignWidth);
+        for (const TextLine& line : aligned.getLines()) {
+            LOG_INFO(
+                "  {} width {} -> offset.x {} (expected {})", name, line.width,
+                aligned.getRuns()[line.firstRun].offset.x,
+                mode == TextAlignH::Left   ? 0.0f :
+                mode == TextAlignH::Center ? (alignWidth - line.width) * 0.5f :
+                                             alignWidth - line.width
+            );
+        }
+    }
+
+    LOG_INFO("=== cache + invalidation ===");
+    TextBlock cached(&font, "cache probe", base);
+    LOG_INFO("  fresh block dirty: {} (expected true)", cached.isDirty());
+    calc.calculate(cached, 2.0f);
+    LOG_INFO("  after calculate dirty: {} (expected false)", cached.isDirty());
+    LOG_INFO("  same width needs rework: {} (expected false)", cached.isDirtyFor(2.0f));
+    LOG_INFO("  new width needs rework: {} (expected true)", cached.isDirtyFor(1.0f));
+    cached.setAlignV(TextAlignV::Middle);
+    LOG_INFO("  after setAlignV dirty: {} (expected false, applied at draw)", cached.isDirty());
+    cached.setAlignH(TextAlignH::Center);
+    LOG_INFO("  after setAlignH dirty: {} (expected true)", cached.isDirty());
+    calc.calculate(cached, 2.0f);
+    cached.setText("a different string");
+    LOG_INFO(
+        "  after setText dirty: {}, runs cleared: {} (both expected true)", cached.isDirty(),
+        cached.getRuns().empty()
+    );
+}
+
 }   // namespace
 
 // Bakes one font file as both an MTSDF and a bitmap atlas, then either draws text
@@ -61,8 +172,6 @@ void logFont(const Font& font, const char* label)
 // channel view, WASD/QE pan and zoom (zoom to check MTSDF edges stay crisp).
 int ui_test()
 {
-    Logger::get().setUseAsync(true);
-
     IdType windowId = WindowManager::get().createWindow({900, 900, "Text Test"});
 
     Registry registry;
@@ -188,17 +297,30 @@ int ui_test()
     const float BLOCK_GAP = 0.04f;
     const float WINDOW_ASPECT = 1.0f;
 
-    std::vector<Vec2> blockSizes;
+    // TextBlock owns its string and holds views into it, so it is deliberately
+    // neither copyable nor movable -- hence pointers rather than a vector of values.
+    std::vector<TextBlock*> blocks;
     float totalHeight = 0.0f, widest = 0.0f;
     for (const TextCase& textCase : cases) {
-        Vec2 size =
-            TextRenderer::get().measure(mtsdfFont, textCase.text, base, textCase.spanStyles);
-        LOG_INFO("measure ({}, {}) for \"{}\"", size.x, size.y, textCase.text);
+        TextBlock* block = new TextBlock(&mtsdfFont, textCase.text, base);
+        block->setSpanStyles(textCase.spanStyles);
 
-        blockSizes.push_back(size);
+        // An unbounded width breaks only on explicit newlines, which is the
+        // shrink-to-fit measurement this camera fit wants.
+        TextLayoutCalculator::get().calculate(*block, 0.0f);
+        Vec2 size = block->getBounds();
+        LOG_INFO("bounds ({}, {}) for \"{}\"", size.x, size.y, textCase.text);
+
+        blocks.push_back(block);
         totalHeight += size.y + BLOCK_GAP;
         if (size.x > widest) widest = size.x;
     }
+
+    logLayoutProof(mtsdfFont, base, bigCyan, huge);
+
+    // Async only from here: the startup proof above has to survive a hard kill, and
+    // the queue is what the frame loop actually needs.
+    Logger::get().setUseAsync(true);
     // Room for the mixed-font line appended after the blocks.
     totalHeight += mtsdfFont.getLineHeight(bigCyan.size);
 
@@ -262,9 +384,15 @@ int ui_test()
             Renderer::get().endScene();
 
             Vec2 origin = blockOrigin;
-            for (size_t i = 0; i < cases.size(); i++) {
-                TextRenderer::get().draw(font, cases[i].text, origin, base, cases[i].spanStyles);
-                origin.y -= blockSizes[i].y + BLOCK_GAP;
+            for (TextBlock* block : blocks) {
+                // Tab swaps the atlas. setFont early-returns when unchanged and
+                // calculate early-outs on a clean block, so the steady state costs
+                // nothing and only an actual swap re-walks the strings.
+                block->setFont(&font);
+                TextLayoutCalculator::get().calculate(*block, 0.0f);
+
+                TextRenderer::get().draw(*block, origin);
+                origin.y -= block->getBounds().y + BLOCK_GAP;
             }
 
             // The last line mixes both fonts to prove a single batch carries two
@@ -287,5 +415,6 @@ int ui_test()
     app.onWindowRender().bind(&onWindowRender);
     app.run();
 
+    for (TextBlock* block : blocks) delete block;
     return 0;
 }

@@ -69,24 +69,15 @@ rather than leaving a stale description.
   by sprites, applied on the shader switch in `Renderer::renderSprites` —
   rather than per-entity uniform blobs.
 
-- [ ] **`TextRenderer` line stepping ignores the *next* line's ascent** —
-  `walkSpan` steps `pen.pos.y -= pen.maxLineStep` where `maxLineStep` is the max
-  over the line being *left*. That is right when the oversized span is on the
-  current line, but a line whose content is much taller than the previous line's
-  max rides up into it: 22pt line 1 gives a ~29 step, and a 46pt span opening
-  line 2 has a ~35 ascender, so it overlaps line 1 by ~6 units. The fix is the
-  one `TextMeasure::wrapSpans` already uses — accumulate a line *top*, and place
-  each baseline at `lineTop + thatLine'sMaxAscent` instead of stepping
-  baseline-to-baseline. Do this when folding the two walks together (item
-  below), since that is where the two implementations converge anyway.
-
-- [ ] **Fold `TextMeasure` and `TextRenderer::walkSpan` together** — wrapping now
-  works end to end through the UI path (`TextMeasure::wrapSpans` -> `TextRun`s ->
-  `TextRenderer::drawSpan`), but `TextRenderer::draw` on its own still only
-  breaks on an explicit `\n`, so world-space text outside the UI cannot wrap.
-  `TAB_SPACES` and `FALLBACK_SPACE_ADVANCE` are declared in both files and must
-  not diverge or measured width stops matching drawn width; both belong on
-  `TextStyle.hpp`. Ellipsis/clip overflow is still open.
+- [ ] **Text overflow: clip + ellipsis** — `TextOverflow` is declared on
+  `TextBlock` and threaded through the setters (it dirties layout), but nothing
+  honours it: every value behaves as `Visible`. `Clip` is a filter in
+  `TextRenderer::draw`'s run loop against the `boxSize` it already takes, using
+  `TextLine::top`/`height`, plus a scissor for the partially visible line.
+  `Ellipsis` additionally needs a `maxLines` consumed by `calculate`'s
+  `closeLine` and one synthesized trailing run, backtracking glyph-by-glyph until
+  the ellipsis fits. `TextLine::firstRun`/`runCount` exist so neither needs a
+  second walk of the runs.
 
 - [ ] **One batch for UI rects and UI glyphs** — the UI now submits two batches
   per root (rounded rects through `UiShader`, glyphs through `TextShader`), so a
@@ -100,10 +91,13 @@ rather than leaving a stale description.
   is the single extension point; `/b`, `/i` or `/color=red` slot in without
   touching the span-emitting loop or any call site.
 
-- [ ] **Layout cache** — immediate mode re-walks every string every frame
-  (~293 quads/frame in `ui_test` is fine, a full UI will not be). Key a cached
-  span list + glyph positions on `hash(text, style, maxWidth)` with frame-age
-  eviction.
+- [ ] **Cross-block layout cache** — the per-block half landed with `TextBlock`:
+  a block caches its parse, its min/max widths and its solved runs, and
+  `calculate` early-outs unless a setter dirtied it or the width actually
+  changed, so a steady-state frame re-walks nothing. What is still open is
+  sharing across blocks — key a cached span list + glyph positions on
+  `hash(text, style, maxWidth)` with frame-age eviction, so N identical labels
+  cost one walk rather than N.
 
 - [ ] **Pack `TextVertex`** — 7 attributes and 68 bytes per vertex, with two
   full `Color`s. Pack both to RGBA8 and consider halving `unitRange`/`params`;
@@ -118,6 +112,48 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **Text layout folded out of `TextRenderer`** — wrapping, line boxes and
+  alignment now live in one stateless `TextLayoutCalculator`
+  ([TextLayoutCalculator.hpp](engine/include/graphics/text/TextLayoutCalculator.hpp))
+  over a `TextBlock` ([TextLayout.hpp](engine/include/graphics/text/TextLayout.hpp))
+  that carries **input and solved output together**. Two entry points replace
+  `measure()`: `measureMinMaxWidth` and `calculate(block, width)`. The algorithm
+  is the deleted `TextMeasure::wrapSpans` ported verbatim — the invariants that
+  had to survive are the CSS line-box rule, the retroactive baseline patch in
+  `closeLine`, the last-space backtrack across span boundaries, and a word being
+  allowed to straddle a `/s`.
+  This closed two open items at once. `TextRenderer::walkSpan`, `measure`,
+  `parseSpans`, `firstLineSize`, `pickStyle` and the shared `m_spans` scratch are
+  gone; `drawGlyph` became the private `appendGlyph` (its return value was a
+  second, kerning-less copy of the advance rule). **World-space text can wrap
+  now**, and the line-stepping bug is fixed structurally rather than patched:
+  baselines are placed at `lineTop + thatLine'sAscent`, so a tall line can no
+  longer ride up into the one above — verified as gaps of 2e-8 and 7e-9 between
+  three lines of heights `[0.319, 0.452, 0.213]` (the 0.24 and 0.34 spans driving
+  lines 1 and 2), collapsing to `[0.213 x3]` under `fixedLineHeight`.
+  The divergence hazard the old code was flagged for is structurally closed:
+  `TAB_SPACES`, `FALLBACK_SPACE_ADVANCE` and the whole codepoint→advance rule
+  live once in [TextMetrics.hpp](engine/include/graphics/text/TextMetrics.hpp),
+  and **both** the measuring and emitting walks call `TextMetrics::step`. That
+  also fixed two real divergences: `\t` now resets the kerning pair everywhere
+  (`wrapSpans` used not to), and `\r` never does.
+  Non-obvious things that had to be right: `TextBlock` is **neither copyable nor
+  movable**, because its runs hold `string_view`s into its own `std::string` and a
+  short string moves by copying into the destination's SSO buffer, silently
+  dangling every view — deleting all four turns `std::vector<TextBlock>` into a
+  compile error instead of a heisenbug; `setText` clears runs **eagerly** so no
+  window exists where a run points into a freed buffer; **horizontal** alignment
+  is baked into run offsets at `calculate` (the width is final there) while
+  **vertical** is applied in `TextRenderer::draw` (only the caller knows the box
+  height); and the calculator holds **no mutable state**, so unlike the `measure()`
+  it replaces it is safe to call mid-draw.
+  Verified from `ui_test`'s startup proof in `game/output/log.txt`: wrap at
+  1/2/4/12 of max-content gives 1/3/5/14 lines with `bounds.x` always within
+  budget; `min = max` with wrapping off; and a two-line block at Left/Center/Right
+  yields **different offsets per line** (`0`/`1.106`/`2.213` vs `0`/`0.166`/`0.331`),
+  which is what proves alignment is per line and not per block. `UITextLeafData`
+  is three one-line forwards onto the calculator.
 
 - [x] **Dividers + fully overridable container styling** — `UiSystem::addDivider(thickness, styles, id)`
   pushes a leafless container with `SizeSpec::grow()` width and `SizeSpec::fixed(thickness)`

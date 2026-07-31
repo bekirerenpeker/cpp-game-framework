@@ -2,8 +2,8 @@
 
 #include "graphics/BatchRenderer.hpp"
 #include "graphics/text/Font.hpp"
+#include "graphics/text/TextLayout.hpp"
 #include "graphics/text/TextStyle.hpp"
-#include "graphics/text/TextTags.hpp"
 #include "utils/Singleton.hpp"
 #include "utils/math/Vec2.hpp"
 #include <string_view>
@@ -38,26 +38,24 @@ class TextRenderer : public Singleton<TextRenderer>
     friend class Singleton<TextRenderer>;
 
   private:
-    static constexpr float TAB_SPACES = 4.0f;
-    static constexpr float FALLBACK_SPACE_ADVANCE = 0.25f;
     // The font exposes no x-height, so the strikethrough rides a fraction of the
     // ascender instead.
     static constexpr float STRIKETHROUGH_ASCENDER_RATIO = 0.28f;
     static constexpr float SOLID_UNIT_RANGE = -1.0f;
 
     BatchRenderer<TextVertex> m_batch;
-    std::vector<TextSpan> m_spans;
     Mat4 m_viewProjOverride;
     bool m_hasViewProjOverride = false;
     bool m_initialized = false;
-    bool m_warnedMissingGlyph = false;
-    bool m_warnedUnclosedTag = false;
+    bool m_warnedDirtyBlock = false;
 
   public:
     void init(GlShader* shader, size_t maxQuadCount = 4000);
 
     void setViewProjOverride(const Mat4& viewProj);
     void clearViewProjOverride();
+
+    Vec2 draw(const TextBlock& block, Vec2 origin, Vec2 boxSize = VEC2_ZERO);
 
     Vec2 draw(
         const Font& font, std::string_view text, Vec2 origin, const TextStyle& style = {},
@@ -68,26 +66,11 @@ class TextRenderer : public Singleton<TextRenderer>
         const Font& font, std::string_view text, const TextStyle& style, Vec2 pen, float lineOriginX
     );
 
-    Vec2 drawGlyph(const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen);
-
-    Vec2 measure(
-        const Font& font, std::string_view text, const TextStyle& style = {},
-        const std::vector<TextStyle>& spanStyles = {}
-    );
-
     void flush();
 
   private:
     TextRenderer() = default;
     ~TextRenderer() = default;
-
-    struct TextPen
-    {
-        Vec2 pos = VEC2_ZERO;
-        float maxX = 0.0f;
-        float maxLineStep = 0.0f;
-        float maxLineSize = 0.0f;
-    };
 
     struct GlyphAppearance
     {
@@ -104,12 +87,7 @@ class TextRenderer : public Singleton<TextRenderer>
     };
 
     bool ensureReady();
-    void parseSpans(std::string_view text);
-    void walkSpan(
-        const Font& font, std::string_view text, const TextStyle& style, TextPen& pen,
-        float lineOriginX, bool emit
-    );
-    const Glyph* resolveGlyph(const Font& font, uint32_t codepoint);
+    void appendGlyph(const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen);
     void appendGlyphMtsdf(const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen);
     void appendGlyphBitmap(const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen);
     void writeQuad(
@@ -121,13 +99,6 @@ class TextRenderer : public Singleton<TextRenderer>
     );
     void appendSolidQuad(
         const GlTexture* texture, Vec2 min, Vec2 max, Color color, float baselineY, float italicSkew
-    );
-    static float firstLineSize(
-        const std::vector<TextSpan>& spans, const TextStyle& style,
-        const std::vector<TextStyle>& spanStyles
-    );
-    static const TextStyle& pickStyle(
-        const TextSpan& span, const TextStyle& style, const std::vector<TextStyle>& spanStyles
     );
 };
 

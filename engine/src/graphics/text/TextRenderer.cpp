@@ -2,7 +2,10 @@
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/Window.hpp"
+#include "graphics/text/TextLayoutCalculator.hpp"
+#include "graphics/text/TextMetrics.hpp"
 #include "utils/Utf8.hpp"
+#include "utils/math/MathFuncs.hpp"
 
 namespace Engine {
 
@@ -69,74 +72,62 @@ bool TextRenderer::ensureReady()
     return true;
 }
 
-// Warns at most once for the whole run: draw and measure both parse, every frame,
-// so warning inside the parser itself would bury the log under one line per frame.
-void TextRenderer::parseSpans(std::string_view text)
+// The solved layout is Y-down from the block's top-left, while the pen is Y-up, so
+// subtracting run.offset.y is the single flip in the whole text path.
+Vec2 TextRenderer::draw(const TextBlock& block, Vec2 origin, Vec2 boxSize)
 {
-    if (TextTags::parse(text, m_spans)) return;
-    if (m_warnedUnclosedTag) return;
-
-    m_warnedUnclosedTag = true;
-    LOG_WARNING(
-        "text has an unclosed '{}{}' tag, so its last span runs to the end of the string: \"{}\" "
-        "(further occurrences stay silent)",
-        TextTags::TAG_PREFIX, TextTags::TAG_STYLE, text
-    );
-}
-
-const TextStyle& TextRenderer::pickStyle(
-    const TextSpan& span, const TextStyle& style, const std::vector<TextStyle>& spanStyles
-)
-{
-    // A style list shorter than the number of tagged spans is not an error -- the
-    // extras just fall back to the default.
-    if (span.styleIndex < 0 || (size_t)span.styleIndex >= spanStyles.size()) return style;
-    return spanStyles[span.styleIndex];
-}
-
-// The top-left origin has to clear the tallest text on the first line, not just the
-// default style's ascender, or a big span would poke out above the block.
-float TextRenderer::firstLineSize(
-    const std::vector<TextSpan>& spans, const TextStyle& style,
-    const std::vector<TextStyle>& spanStyles
-)
-{
-    float largest = style.size;
-    for (const TextSpan& span : spans) {
-        size_t newline = span.text.find('\n');
-        std::string_view onFirstLine =
-            span.text.substr(0, newline == std::string_view::npos ? span.text.size() : newline);
-
-        const TextStyle& spanStyle = pickStyle(span, style, spanStyles);
-        if (!onFirstLine.empty() && spanStyle.size > largest) largest = spanStyle.size;
-
-        if (newline != std::string_view::npos) break;
+    const Font* font = block.getFont();
+    if (!font || !font->isValid()) {
+        LOG_WARNING("drawing a TextBlock with an invalid font; skipping");
+        return VEC2_ZERO;
     }
-    return largest;
+
+    if (block.isDirty()) {
+        if (!m_warnedDirtyBlock) {
+            m_warnedDirtyBlock = true;
+            LOG_WARNING(
+                "drawing a TextBlock whose layout was never calculated; call "
+                "TextLayoutCalculator::calculate first (further occurrences stay silent)"
+            );
+        }
+        return VEC2_ZERO;
+    }
+
+    if (!ensureReady()) return block.getBounds();
+
+    // Vertical alignment lands here rather than in the solver because it needs the
+    // box height, which only the caller knows. A zero box means no slack, so
+    // world-space text with no box behaves as Top.
+    float slack = Math::max(0.0f, boxSize.y - block.getBounds().y);
+    float yOffset = 0.0f;
+    if (block.getAlignV() == TextAlignV::Middle) yOffset = slack * 0.5f;
+    else if (block.getAlignV() == TextAlignV::Bottom) yOffset = slack;
+
+    for (const TextRun& run : block.getRuns()) {
+        if (run.text.empty()) continue;
+
+        Vec2 pen(origin.x + run.offset.x, origin.y - yOffset - run.offset.y);
+        drawSpan(*font, run.text, block.styleForRun(run.styleIndex), pen, pen.x);
+    }
+    return block.getBounds();
 }
 
+// The convenience form: everything here is per-call scratch, so a real frame loop
+// should own a TextBlock instead of paying for a parse and a wrap every frame.
 Vec2 TextRenderer::draw(
     const Font& font, std::string_view text, Vec2 origin, const TextStyle& style,
     const std::vector<TextStyle>& spanStyles
 )
 {
-    if (!font.isValid()) {
-        LOG_WARNING("drawing text with an invalid font; skipping");
-        return origin;
-    }
-
-    parseSpans(text);
-
-    // origin is the top-left of the first line's ascender box; everything below
-    // this point works on the baseline pen instead.
-    Vec2 pen(origin.x, origin.y - font.getAscender(firstLineSize(m_spans, style, spanStyles)));
-
-    for (const TextSpan& span : m_spans) {
-        pen = drawSpan(font, span.text, pickStyle(span, style, spanStyles), pen, origin.x);
-    }
-    return pen;
+    TextBlock block(&font, text, style);
+    block.setSpanStyles(spanStyles);
+    TextLayoutCalculator::get().calculate(block, 0.0f);
+    return draw(block, origin);
 }
 
+// A '\n' here steps by this span's style alone, which is the last remnant of the
+// old baseline-to-baseline rule -- anything multi-line or multi-style belongs in a
+// TextBlock, where a line is as tall as the tallest style touching it.
 Vec2 TextRenderer::drawSpan(
     const Font& font, std::string_view text, const TextStyle& style, Vec2 pen, float lineOriginX
 )
@@ -144,50 +135,10 @@ Vec2 TextRenderer::drawSpan(
     if (!font.isValid() || text.empty()) return pen;
     if (!ensureReady()) return pen;
 
-    TextPen state;
-    state.pos = pen;
-    walkSpan(font, text, style, state, lineOriginX, true);
-    return state.pos;
-}
-
-Vec2 TextRenderer::measure(
-    const Font& font, std::string_view text, const TextStyle& style,
-    const std::vector<TextStyle>& spanStyles
-)
-{
-    if (!font.isValid()) return VEC2_ZERO;
-
-    TextPen state;
-    parseSpans(text);
-    for (const TextSpan& span : m_spans) {
-        walkSpan(font, span.text, pickStyle(span, style, spanStyles), state, 0.0f, false);
-    }
-
-    float width = state.maxX > state.pos.x ? state.maxX : state.pos.x;
-    // pos.y only ever moves down from the starting baseline, so its magnitude is
-    // the stacked line advance; the last line's own box is added on top, sized by
-    // the largest style that landed on it.
-    float lastLineSize = state.maxLineSize > 0.0f ? state.maxLineSize : style.size;
-    float lastLineBox = font.getAscender(lastLineSize) - font.getDescender(lastLineSize);
-    return Vec2(width, lastLineBox - state.pos.y);
-}
-
-void TextRenderer::walkSpan(
-    const Font& font, std::string_view text, const TextStyle& style, TextPen& pen,
-    float lineOriginX, bool emit
-)
-{
-    const float spanStep = font.getLineHeight(style.size) * style.lineSpacing;
+    const float spanStep = TextMetrics::lineStep(font, style);
     const bool decorated = style.underline || style.strikethrough;
 
-    // A line is as tall as the tallest style on it, so the step is accumulated
-    // across every span that touches the line and only consumed at the newline --
-    // stepping by whichever span happens to hold the '\n' would let a big span on
-    // one line collide with the next.
-    if (spanStep > pen.maxLineStep) pen.maxLineStep = spanStep;
-    if (style.size > pen.maxLineSize) pen.maxLineSize = style.size;
-
-    float decorationStartX = pen.pos.x;
+    float decorationStartX = pen.x;
     uint32_t prev = 0;
 
     size_t i = 0;
@@ -202,80 +153,37 @@ void TextRenderer::walkSpan(
 
         uint32_t codepoint = Utf8::next(text, i);
         if (codepoint == 0) break;
-
         if (codepoint == '\r') continue;
 
         if (codepoint == '\n') {
-            if (emit && decorated) {
-                appendLineDecorations(font, style, decorationStartX, pen.pos.x, pen.pos.y);
-            }
-            if (pen.pos.x > pen.maxX) pen.maxX = pen.pos.x;
-
-            pen.pos.x = lineOriginX;
-            pen.pos.y -= pen.maxLineStep;
-            // The rest of this span continues on the new line, so it seeds the next
-            // line's height instead of starting from nothing.
-            pen.maxLineStep = spanStep;
-            pen.maxLineSize = style.size;
-            decorationStartX = pen.pos.x;
+            if (decorated) appendLineDecorations(font, style, decorationStartX, pen.x, pen.y);
+            pen.x = lineOriginX;
+            pen.y -= spanStep;
+            decorationStartX = pen.x;
             prev = 0;
             continue;
         }
 
-        if (codepoint == '\t') {
-            const Glyph* space = font.getGlyph(' ');
-            float advance = space ? space->advance : FALLBACK_SPACE_ADVANCE;
-            pen.pos.x += (advance * TAB_SPACES + style.letterSpacing) * style.size;
-            prev = 0;
-            continue;
-        }
-
-        if (prev != 0) pen.pos.x += font.getKerning(prev, codepoint) * style.size;
-
-        const Glyph* glyph = resolveGlyph(font, codepoint);
-        if (!glyph) {
-            prev = 0;
-            continue;
-        }
-
-        if (emit) pen.pos = drawGlyph(font, *glyph, style, pen.pos);
-        else pen.pos.x += (glyph->advance + style.letterSpacing) * style.size;
-
-        prev = codepoint;
+        GlyphStep glyphStep = TextMetrics::step(font, style, codepoint, prev);
+        if (glyphStep.glyph) appendGlyph(font, *glyphStep.glyph, style, pen);
+        pen.x += glyphStep.advance;
+        prev = glyphStep.kerningPrev;
     }
 
-    if (emit && decorated) {
-        appendLineDecorations(font, style, decorationStartX, pen.pos.x, pen.pos.y);
-    }
-    if (pen.pos.x > pen.maxX) pen.maxX = pen.pos.x;
+    if (decorated) appendLineDecorations(font, style, decorationStartX, pen.x, pen.y);
+    return pen;
 }
 
-const Glyph* TextRenderer::resolveGlyph(const Font& font, uint32_t codepoint)
-{
-    const Glyph* glyph = font.getGlyph(codepoint);
-    if (glyph) return glyph;
-
-    if (!m_warnedMissingGlyph) {
-        m_warnedMissingGlyph = true;
-        LOG_WARNING(
-            "font {} has no glyph for codepoint {}; substituting '?' where it exists "
-            "(further misses stay silent)",
-            font.getSourcePath(), codepoint
-        );
-    }
-    return font.getGlyph('?');
-}
-
-Vec2 TextRenderer::drawGlyph(const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen)
+void TextRenderer::appendGlyph(
+    const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen
+)
 {
     // Whitespace carries an advance but no box, so it must not burn a quad slot.
     bool hasShape = glyph.quadMin.x != glyph.quadMax.x && glyph.quadMin.y != glyph.quadMax.y;
-    if (hasShape) {
-        if (font.getAtlasType() == FontAtlasType::Mtsdf) appendGlyphMtsdf(font, glyph, style, pen);
-        else appendGlyphBitmap(font, glyph, style, pen);
-    }
+    if (!hasShape) return;
 
-    return Vec2(pen.x + (glyph.advance + style.letterSpacing) * style.size, pen.y);
+    if (font.getAtlasType() == FontAtlasType::Mtsdf) appendGlyphMtsdf(font, glyph, style, pen);
+    else appendGlyphBitmap(font, glyph, style, pen);
 }
 
 void TextRenderer::appendGlyphMtsdf(
