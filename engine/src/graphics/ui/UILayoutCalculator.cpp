@@ -54,6 +54,7 @@ const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId)
     computeIntrinsicHeights();
     computeFinalHeights();
     computePositions();
+    applyTransforms();
     computeDrawPositions();
 
     // Snapshotted for next frame's lookups, not this frame's draw -- .node would
@@ -168,6 +169,24 @@ void UILayoutCalculator::computePositions()
     for (size_t i = 0; i < m_nodes.size(); i++) positionChildren((uint)i);
 }
 
+// A cosmetic adjustment applied after siblings are already positioned, so a hovered
+// node growing/shifting never reflows anything else -- it only rewrites its own box.
+// That rewritten box is what ends up in the previous-frame snapshot too, so a scaled
+// button's hit-test area tracks its drawn size rather than the pre-transform one.
+// Does not re-anchor children: a transformed node with children would leave them
+// sitting where the untransformed box put them.
+void UILayoutCalculator::applyTransforms()
+{
+    for (UILayoutNode& node : m_nodes) {
+        const UILayoutConfig& layout = node.node->layout;
+        if (layout.offset == VEC2_ZERO && layout.scale == VEC2_ONE) continue;
+
+        Vec2 center = node.pos + node.size * 0.5f;
+        node.size = node.size * layout.scale;
+        node.pos = center - node.size * 0.5f + layout.offset;
+    }
+}
+
 // Display only, and deliberately the last thing to run: every geometric pass works
 // in layout space (top-left anchored, Y-down) and this is the one place that is
 // converted to what the renderer wants -- a centre, Y-up from the root's bottom.
@@ -191,8 +210,9 @@ void UILayoutCalculator::aggregateIntrinsic(uint index, UILayoutAxis axis)
          child = m_nodes[child].nextSibling) {
         if (isFloating(m_nodes[child])) continue;
 
-        float childMin = intrinsicMin(m_nodes[child], axis);
-        float childMax = intrinsicMax(m_nodes[child], axis);
+        float childMargin = axisPadding(m_nodes[child].node->layout.margin, axis);
+        float childMin = intrinsicMin(m_nodes[child], axis) + childMargin;
+        float childMax = intrinsicMax(m_nodes[child], axis) + childMargin;
         if (alongMain) {
             min += childMin;
             max += childMax;
@@ -248,7 +268,7 @@ void UILayoutCalculator::distributeChildren(uint index, UILayoutAxis axis, bool 
     }
 
     float inner = sizeOf(m_nodes[index], axis) - axisPadding(layout.padding, axis);
-    float available = inner - gapTotal(index);
+    float available = inner - gapTotal(index) - marginTotal(index, axis);
 
     m_scratch.clear();
     float used = 0.0f;
@@ -276,7 +296,13 @@ void UILayoutCalculator::resolveCrossAxis(uint index, UILayoutAxis axis)
 
     for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
          child = m_nodes[child].nextSibling) {
-        setSizeOf(m_nodes[child], axis, resolveChildAgainst(child, axis, inner));
+        // Floating stays exempt from margin here too, matching the main-axis pass:
+        // it is anchor-positioned, not flow-positioned, so there is no space "around
+        // it" for a margin to carve out.
+        float childInner = isFloating(m_nodes[child]) ?
+                               inner :
+                               inner - axisPadding(m_nodes[child].node->layout.margin, axis);
+        setSizeOf(m_nodes[child], axis, resolveChildAgainst(child, axis, childInner));
     }
 }
 
@@ -308,7 +334,7 @@ void UILayoutCalculator::positionChildren(uint index)
     float innerMain = sizeOf(m_nodes[index], mainAxis) - axisPadding(layout.padding, mainAxis);
     float innerCross = sizeOf(m_nodes[index], crossAxis) - axisPadding(layout.padding, crossAxis);
 
-    float used = gapTotal(index);
+    float used = gapTotal(index) + marginTotal(index, mainAxis);
     for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
          child = m_nodes[child].nextSibling) {
         if (isFloating(m_nodes[child])) continue;
@@ -326,15 +352,22 @@ void UILayoutCalculator::positionChildren(uint index)
             continue;
         }
 
+        const UIEdges& childMargin = m_nodes[child].node->layout.margin;
+        cursor += axisLeading(childMargin, mainAxis);
+
         float childCross = sizeOf(m_nodes[child], crossAxis);
+        float crossMargin = axisPadding(childMargin, crossAxis);
         Vec2 pos = VEC2_ZERO;
         axisSet(pos, mainAxis, cursor);
         axisSet(
-            pos, crossAxis, crossOrigin + alignOffset(layout.alignCross, innerCross - childCross)
+            pos, crossAxis,
+            crossOrigin + axisLeading(childMargin, crossAxis) +
+                alignOffset(layout.alignCross, innerCross - childCross - crossMargin)
         );
         m_nodes[child].pos = pos;
 
-        cursor += sizeOf(m_nodes[child], mainAxis) + layout.gap;
+        cursor +=
+            sizeOf(m_nodes[child], mainAxis) + axisTrailing(childMargin, mainAxis) + layout.gap;
     }
 }
 
@@ -522,6 +555,17 @@ float UILayoutCalculator::gapTotal(uint index) const
     uint count = layoutChildCount(index);
     if (count < 2) return 0.0f;
     return m_nodes[index].node->layout.gap * (float)(count - 1);
+}
+
+float UILayoutCalculator::marginTotal(uint index, UILayoutAxis axis) const
+{
+    float total = 0.0f;
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) continue;
+        total += axisPadding(m_nodes[child].node->layout.margin, axis);
+    }
+    return total;
 }
 
 float UILayoutCalculator::alignOffset(UIAlign align, float free)

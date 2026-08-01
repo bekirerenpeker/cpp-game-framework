@@ -1,8 +1,6 @@
 #pragma once
 
 #include "graphics/Color.hpp"
-#include "graphics/text/Font.hpp"
-#include "graphics/text/TextStyle.hpp"
 #include "graphics/gl_wrappers/GlTexture.hpp"
 #include "utils/math/Vec2.hpp"
 #include <optional>
@@ -60,13 +58,10 @@ struct UIContainerStyle
     std::optional<int> zIndex;
     std::optional<UICursor> cursor;
 
-    std::optional<Vec2> offset;
-    std::optional<Vec2> scale;
-
     std::optional<float> transitionDuration;
     std::optional<UITransition> transition;
 
-    void combine(const UIContainerStyle& other)
+    UIContainerStyle& combine(const UIContainerStyle& other)
     {
         if (other.backgroundColor) backgroundColor = other.backgroundColor;
         if (other.backgroundImage) backgroundImage = other.backgroundImage;
@@ -84,11 +79,17 @@ struct UIContainerStyle
         if (other.zIndex) zIndex = other.zIndex;
         if (other.cursor) cursor = other.cursor;
 
-        if (other.offset) offset = other.offset;
-        if (other.scale) scale = other.scale;
-
         if (other.transitionDuration) transitionDuration = other.transitionDuration;
         if (other.transition) transition = other.transition;
+
+        return *this;
+    }
+
+    UIContainerStyle combined(const UIContainerStyle& other) const
+    {
+        UIContainerStyle result = *this;
+        result.combine(other);
+        return result;
     }
 };
 

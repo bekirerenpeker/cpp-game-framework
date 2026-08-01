@@ -93,7 +93,17 @@ void buildUi(const Font& font, float rootWidth)
             .underline = true,
         };
 
-        ui.openContainer(headerLayout, fill(Color(0.20f, 0.23f, 0.30f)));
+        // The returned state is already this frame's, hit-tested against last frame's
+        // box -- nothing reads style/layout until draw(), so mutating the node right
+        // here lands in time. The gradient tracks the corner the mouse sat in,
+        // left/right in red, top/bottom in green, so moving it visibly slides the tint.
+        UINodeState headerState = ui.openContainer(headerLayout, fill(Color(0.20f, 0.23f, 0.30f)));
+        if (headerState.isHovered) {
+            ui.getNode(headerState.id)->style.backgroundColor = Color(
+                0.20f + Math::clamp(headerState.relativeMousePos.x, 0.0f, 1.0f) * 0.5f,
+                0.23f + Math::clamp(headerState.relativeMousePos.y, 0.0f, 1.0f) * 0.5f, 0.30f
+            );
+        }
         ui.addTextLeaf(
             textBox(), {
                            .font = &font,
@@ -118,10 +128,15 @@ void buildUi(const Font& font, float rootWidth)
 
             ui.openContainer(sidebarLayout, fill(Color(0.14f, 0.16f, 0.20f)));
             for (int i = 0; i < 3; i++) {
-                ui.openContainer(
+                UINodeState itemState = ui.openContainer(
                     box(UISizeSpec::grow(), UISizeSpec::fixed(36.0f)),
                     fill(Color(0.24f, 0.27f, 0.34f))
                 );
+                if (itemState.isHovered) {
+                    UINode* itemNode = ui.getNode(itemState.id);
+                    itemNode->layout.offset = Vec2(7, 0);
+                    itemNode->layout.scale = Vec2(1, 1.1);
+                }
                 ui.closeContainer();
             }
             ui.closeContainer();
@@ -165,15 +180,40 @@ void buildUi(const Font& font, float rootWidth)
         UILayoutConfig footerLayout = box(UISizeSpec::grow(), UISizeSpec::fixed(40.0f));
         footerLayout.padding = UIEdges(12.0f, 8.0f);
         footerLayout.alignCross = UIAlign::Center;
+        footerLayout.gap = 8.0f;
 
-        ui.openContainer(footerLayout, fill(Color(0.20f, 0.23f, 0.30f)));
-        ui.addTextLeaf(
-            textBox(), {
-                           .font = &font,
-                           .text = "footer",
-                           .style = {.color = Color(0.70f, 0.73f, 0.80f), .size = 16.0f}
+        // Four sections, each lit by one of UINodeState's four fields, to see press
+        // and release flash for a single frame while hover and held stay level.
+        static const char* footerLabels[4] = {"hover", "press", "release", "held"};
+
+        ui.openContainer(footerLayout);
+        for (int i = 0; i < 4; i++) {
+            UILayoutConfig sectionLayout = box(UISizeSpec::grow(), UISizeSpec::grow());
+            sectionLayout.alignMain = UIAlign::Center;
+            sectionLayout.alignCross = UIAlign::Center;
+
+            UINodeState sectionState =
+                ui.openContainer(sectionLayout, fill(Color(0.20f, 0.23f, 0.30f)));
+
+            bool active = false;
+            switch (i) {
+            case 0: active = sectionState.isHovered; break;
+            case 1: active = sectionState.isPressed; break;
+            case 2: active = sectionState.isReleased; break;
+            case 3: active = sectionState.isHeld; break;
+            }
+            if (active)
+                ui.getNode(sectionState.id)->style.backgroundColor = Color(0.35f, 0.55f, 0.85f);
+
+            ui.addTextLeaf(
+                textBox(), {
+                               .font = &font,
+                               .text = footerLabels[i],
+                               .style = {.color = Color(0.70f, 0.73f, 0.80f), .size = 16.0f}
+            }
+            );
+            ui.closeContainer();
         }
-        );
         ui.closeContainer();
     }
     ui.closeContainer();

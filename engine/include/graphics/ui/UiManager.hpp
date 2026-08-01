@@ -13,6 +13,8 @@ struct UINodeState
 {
     IdType id;
     bool isHovered, isPressed, isReleased, isHeld;
+    Vec2 relativeMousePos = VEC2_ZERO;
+    Vec2 localMousePos = VEC2_ZERO;
 };
 
 class UIManager : public Singleton<UIManager>

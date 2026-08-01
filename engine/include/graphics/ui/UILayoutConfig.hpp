@@ -93,8 +93,11 @@ struct UILayoutConfig
     UISizeSpec width;
     UISizeSpec height;
     UIEdges padding;
+    UIEdges margin;
     UIFloatingConfig floating;
     Vec2 scrollOffset = VEC2_ZERO;
+    Vec2 offset = VEC2_ZERO;
+    Vec2 scale = VEC2_ONE;
     float gap = 0.0f;
     UILayoutDirection direction = UILayoutDirection::Row;
     UIAlign alignMain = UIAlign::Start;
@@ -122,6 +125,16 @@ inline const UISizeSpec& axisSpec(const UILayoutConfig& config, UILayoutAxis axi
 inline float axisPadding(const UIEdges& padding, UILayoutAxis axis)
 {
     return axis == UILayoutAxis::Horizontal ? padding.horizontal() : padding.vertical();
+}
+
+inline float axisLeading(const UIEdges& edges, UILayoutAxis axis)
+{
+    return axis == UILayoutAxis::Horizontal ? edges.left : edges.top;
+}
+
+inline float axisTrailing(const UIEdges& edges, UILayoutAxis axis)
+{
+    return axis == UILayoutAxis::Horizontal ? edges.right : edges.bottom;
 }
 
 inline bool axisClipped(const UILayoutConfig& config, UILayoutAxis axis)

@@ -64,6 +64,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     void computeIntrinsicHeights();
     void computeFinalHeights();
     void computePositions();
+    void applyTransforms();
     void computeDrawPositions();
 
     void aggregateIntrinsic(uint index, UILayoutAxis axis);
@@ -84,6 +85,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     float upperBound(uint index, UILayoutAxis axis) const;
     uint layoutChildCount(uint index) const;
     float gapTotal(uint index) const;
+    float marginTotal(uint index, UILayoutAxis axis) const;
     static float alignOffset(UIAlign align, float free);
 };
 

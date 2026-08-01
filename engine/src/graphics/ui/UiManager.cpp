@@ -1,5 +1,7 @@
 #include "graphics/ui/UiManager.hpp"
+#include "core/input/Input.hpp"
 #include "core/logging/LoggerMacros.hpp"
+#include "core/window_management/ViewContext.hpp"
 #include "graphics/ui/UILayoutCalculator.hpp"
 #include <functional>
 
@@ -18,6 +20,33 @@ uint64_t localKeyOf(std::string_view key, uint64_t positionalIndex)
 {
     return key.empty() ? hashCombine(1, positionalIndex) :
                          hashCombine(2, std::hash<std::string_view> {}(key));
+}
+
+// Hit-tests against the previous frame's box, since this frame's hasn't been solved
+// yet -- the same one-frame lag prevFrameLayout itself already carries.
+UINodeState computeState(IdType id, const UILayoutNode* prev)
+{
+    if (!prev) return {id, false, false, false, false};
+
+    Vec2 half = prev->size * 0.5f;
+    // drawPos is centre-anchored and Y-up; flip into the box's own top-left/Y-down
+    // space so local/relative match the rest of the UI instead of the render convention.
+    Vec2 centerDelta = ViewContext::get().getMouseWorldPos() - prev->drawPos;
+    Vec2 local = Vec2(centerDelta.x + half.x, half.y - centerDelta.y);
+    Vec2 relative = prev->size.x > 0.0f && prev->size.y > 0.0f ? local / prev->size : VEC2_ZERO;
+
+    bool hovered =
+        local.x >= 0.0f && local.x <= prev->size.x && local.y >= 0.0f && local.y <= prev->size.y;
+
+    return {
+        id,
+        hovered,
+        hovered && Input::get().mouseButtonPressed(MouseButton::Left),
+        hovered && Input::get().mouseButtonReleased(MouseButton::Left),
+        hovered && Input::get().mouseButtonHeld(MouseButton::Left),
+        relative,
+        local
+    };
 }
 
 }   // namespace
@@ -80,8 +109,10 @@ UINodeState UIManager::openContainer(
 {
     UINodeState state = addNode(layout, style, key);
     UINode* node = m_nodes.get(state.id);
-    if (node)
+    if (node) {
         node->prevFrameLayout = UILayoutCalculator::get().getPrevFrameLayout(node->persistentKey);
+        state = computeState(state.id, node->prevFrameLayout);
+    }
 
     m_openStack.push_back(state.id);
     return state;
