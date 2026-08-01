@@ -165,6 +165,10 @@ Vec2 TextRenderer::drawSpan(
         }
 
         GlyphStep glyphStep = TextMetrics::step(font, style, codepoint, prev);
+
+        // Kerning belongs to the pair, so it moves the pen before this glyph is
+        // placed; folding it into the advance would draw every glyph one pair late.
+        pen.x += glyphStep.kerning;
         if (glyphStep.glyph) appendGlyph(font, *glyphStep.glyph, style, pen);
         pen.x += glyphStep.advance;
         prev = glyphStep.kerningPrev;

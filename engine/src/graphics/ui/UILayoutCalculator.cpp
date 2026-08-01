@@ -39,11 +39,10 @@ bool isFloating(const UILayoutNode& node) { return node.node->layout.isFloating;
 
 }   // namespace
 
-const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Vec2 rootSize)
+const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId)
 {
     m_nodes.clear();
     m_scratch.clear();
-    m_rootSize = rootSize;
 
     if (buildSubtree(rootId, NO_LAYOUT_NODE) == NO_LAYOUT_NODE) return m_nodes;
 
@@ -113,7 +112,7 @@ void UILayoutCalculator::computeFinalWidths()
 {
     if (m_nodes.empty()) return;
 
-    m_nodes[0].size.x = m_rootSize.x;
+    m_nodes[0].size.x = resolveRootSize(UILayoutAxis::Horizontal);
     for (size_t i = 0; i < m_nodes.size(); i++)
         distributeChildren((uint)i, UILayoutAxis::Horizontal, true);
 }
@@ -140,7 +139,7 @@ void UILayoutCalculator::computeFinalHeights()
 {
     if (m_nodes.empty()) return;
 
-    m_nodes[0].size.y = m_rootSize.y;
+    m_nodes[0].size.y = resolveRootSize(UILayoutAxis::Vertical);
     // Nothing wraps vertically, so there is no height equivalent of the shrink pass:
     // content that does not fit overflows and is the clip flag's problem.
     for (size_t i = 0; i < m_nodes.size(); i++)
@@ -160,9 +159,10 @@ void UILayoutCalculator::computePositions()
 // converted to what the renderer wants -- a centre, Y-up from the root's bottom.
 void UILayoutCalculator::computeDrawPositions()
 {
+    float rootHeight = m_nodes[0].size.y;
     for (UILayoutNode& node : m_nodes) {
         node.drawPos =
-            Vec2(node.pos.x + node.size.x * 0.5f, m_rootSize.y - (node.pos.y + node.size.y * 0.5f));
+            Vec2(node.pos.x + node.size.x * 0.5f, rootHeight - (node.pos.y + node.size.y * 0.5f));
     }
 }
 
@@ -441,6 +441,17 @@ void UILayoutCalculator::levelDown(UILayoutAxis axis, float deficit)
         // overflow, not a bug: the boxes spill and clipping is the caller's choice.
         if (applied <= EPSILON) break;
     }
+}
+
+// A root answers to nothing, so its own spec is the whole story. Grow and Percent
+// have no parent box to resolve against and fall back to max-content the way Fit
+// does. Deliberately not clamped to the content floor: a Fixed root narrower than
+// its content is exactly what makes the children shrink and the text re-wrap.
+float UILayoutCalculator::resolveRootSize(UILayoutAxis axis) const
+{
+    const UISizeSpec& spec = axisSpec(m_nodes[0].node->layout, axis);
+    float size = spec.mode == UISizeMode::Fixed ? spec.value : intrinsicMax(m_nodes[0], axis);
+    return Math::min(Math::max(size, spec.min), spec.max);
 }
 
 float UILayoutCalculator::seedChildSize(uint index, UILayoutAxis axis, float available) const

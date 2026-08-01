@@ -54,14 +54,14 @@ TextBlockWidths TextLayoutCalculator::measureMinMaxWidth(TextBlock& block)
             GlyphStep glyphStep = TextMetrics::step(font, style, codepoint, prev);
             prev = glyphStep.kerningPrev;
 
-            lineWidth += glyphStep.advance;
+            lineWidth += glyphStep.total();
             // A word is allowed to straddle a span boundary, so the accumulator is
             // deliberately not reset between spans -- only at whitespace.
             if (TextMetrics::isBreakSpace(codepoint)) {
                 widths.min = Math::max(widths.min, wordWidth);
                 wordWidth = 0.0f;
             } else {
-                wordWidth += glyphStep.advance;
+                wordWidth += glyphStep.total();
             }
         }
     }
@@ -220,7 +220,7 @@ float TextLayoutCalculator::calculate(TextBlock& block, float availableWidth)
             breakAscent = lineAscent;
             breakDescent = lineDescent;
             breakHeight = lineHeight;
-        } else if (bounded && penX > 0.0f && penX + glyphStep.advance > budget) {
+        } else if (bounded && penX > 0.0f && penX + glyphStep.total() > budget) {
             if (haveBreak) {
                 // The last space can be several spans back, so everything emitted
                 // since is discarded and the walk resumes from there.
@@ -248,7 +248,7 @@ float TextLayoutCalculator::calculate(TextBlock& block, float availableWidth)
             continue;
         }
 
-        penX += glyphStep.advance;
+        penX += glyphStep.total();
         prev = glyphStep.kerningPrev;
     }
 

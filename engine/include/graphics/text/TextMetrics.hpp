@@ -7,13 +7,19 @@
 namespace Engine {
 
 // The result of consuming one codepoint. glyph is null when there is nothing to
-// draw (a tab, or a codepoint with no substitute) but advance is still valid;
+// draw (a tab, or a codepoint with no substitute) but the widths are still valid;
 // kerningPrev is what the caller carries into the next step, 0 breaking the pair.
+// kerning and advance are kept apart because they land either side of the glyph:
+// kerning moves the pen before it is drawn, advance after. Measuring only ever
+// needs total(), which is why folding them together looks harmless and is not.
 struct GlyphStep
 {
     const Glyph* glyph = nullptr;
+    float kerning = 0.0f;
     float advance = 0.0f;
     uint32_t kerningPrev = 0;
+
+    float total() const { return kerning + advance; }
 };
 
 namespace TextMetrics {

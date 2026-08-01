@@ -66,7 +66,7 @@ GlyphStep step(const Font& font, const TextStyle& style, uint32_t codepoint, uin
     if (!result.glyph) return result;
 
     result.advance = (result.glyph->advance + style.letterSpacing) * style.size;
-    if (prev != 0) result.advance += font.getKerning(prev, codepoint) * style.size;
+    if (prev != 0) result.kerning = font.getKerning(prev, codepoint) * style.size;
     result.kerningPrev = codepoint;
     return result;
 }

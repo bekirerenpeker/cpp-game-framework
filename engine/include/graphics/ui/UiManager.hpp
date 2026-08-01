@@ -1,8 +1,10 @@
 #pragma once
 
 #include "graphics/ui/UINode.hpp"
+#include "graphics/ui/leaf_types/UITextLeafData.hpp"
 #include "utils/IdIndexedVector.hpp"
 #include "utils/Singleton.hpp"
+#include <vector>
 
 namespace Engine {
 
@@ -12,14 +14,19 @@ class UIManager : public Singleton<UIManager>
 
   private:
     IdIndexedVector<UINode> m_nodes;
+    std::vector<IUILeafData*> m_leaves;
+    std::vector<IdType> m_openStack;
+    std::vector<IdType> m_roots;
 
   public:
-    IdType addContainer(
-        IdType parent = INVALID_ID, const UILayoutConfig& layout = {},
-        const UIContainerStyle& style = {}
-    );
+    void clear();
 
-    void draw(IdType rootId, Vec2 rootSize);
+    IdType openContainer(const UILayoutConfig& layout = {}, const UIContainerStyle& style = {});
+    void closeContainer();
+
+    IdType addTextLeaf(const UILayoutConfig& layout, const UITextConfig& config);
+
+    void draw();
 
     UINode* getNode(IdType id) { return m_nodes.get(id); }
     const UINode* getNode(IdType id) const { return m_nodes.get(id); }
@@ -27,7 +34,9 @@ class UIManager : public Singleton<UIManager>
 
   private:
     UIManager() = default;
-    ~UIManager() = default;
+    ~UIManager();
+
+    IdType addNode(const UILayoutConfig& layout, const UIContainerStyle& style);
 };
 
 }   // namespace Engine

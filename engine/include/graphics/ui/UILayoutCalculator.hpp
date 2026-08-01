@@ -42,10 +42,9 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
 
     std::vector<UILayoutNode> m_nodes;
     std::vector<uint> m_scratch;
-    Vec2 m_rootSize = VEC2_ZERO;
 
   public:
-    const std::vector<UILayoutNode>& calculate(IdType rootId, Vec2 rootSize);
+    const std::vector<UILayoutNode>& calculate(IdType rootId);
     const std::vector<UILayoutNode>& getNodes() const { return m_nodes; }
 
   private:
@@ -72,6 +71,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     void levelUp(UILayoutAxis axis, float remaining);
     void levelDown(UILayoutAxis axis, float deficit);
 
+    float resolveRootSize(UILayoutAxis axis) const;
     float seedChildSize(uint index, UILayoutAxis axis, float available) const;
     float clampToSpec(uint index, UILayoutAxis axis, float value) const;
     float contentFloor(uint index, UILayoutAxis axis) const;
