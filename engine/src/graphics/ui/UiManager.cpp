@@ -28,9 +28,13 @@ UIManager::addContainer(IdType parent, const UILayoutConfig& layout, const UICon
 
 void UIManager::draw(IdType rootId, Vec2 rootSize)
 {
-    // The solved tree is not consumed yet: there is no UI renderer to hand it to,
-    // and UINode::draw still has no way to receive a rect.
-    UILayoutCalculator::get().calculate(rootId, rootSize);
+    const auto& layout = UILayoutCalculator::get().calculate(rootId, rootSize);
+
+    for (const auto& layoutNode : layout) {
+        const UINode* node = layoutNode.node;
+        if (!node) continue;
+        node->draw(layoutNode.drawPos, layoutNode.size);
+    }
 }
 
 }   // namespace Engine

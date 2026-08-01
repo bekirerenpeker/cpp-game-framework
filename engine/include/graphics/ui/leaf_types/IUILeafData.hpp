@@ -30,7 +30,7 @@ struct IUILeafData
 
     virtual UILeafWidths measureWidths() = 0;
     virtual float measureHeight(float contentWidth) = 0;
-    virtual void draw(Vec2 pos, Vec2 size) = 0;
+    virtual void draw(Vec2 drawPos, Vec2 size) = 0;
 };
 
 }   // namespace Engine

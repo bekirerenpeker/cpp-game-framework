@@ -1,4 +1,5 @@
 #include "graphics/ui/leaf_types/UITextLeafData.hpp"
+#include "graphics/Renderer.hpp"
 #include "graphics/text/TextLayoutCalculator.hpp"
 #include "graphics/text/TextRenderer.hpp"
 
@@ -26,6 +27,14 @@ float UITextLeafData::measureHeight(float contentWidth)
     return TextLayoutCalculator::get().calculate(m_block, contentWidth);
 }
 
-void UITextLeafData::draw(Vec2 pos, Vec2 size) { TextRenderer::get().draw(m_block, pos, size); }
+void UITextLeafData::draw(Vec2 drawPos, Vec2 size)
+{
+    Renderer::get().addQuad(drawPos, size, Color(1.0f, 1.0f, 1.0f, 0.3f), nullptr);
+
+    // TextRenderer walks its runs downward from a top-left origin, so the centre has
+    // to be expanded back out to that corner -- upward, since drawPos is Y-up.
+    Vec2 topLeft = Vec2(drawPos.x - size.x * 0.5f, drawPos.y + size.y * 0.5f);
+    TextRenderer::get().draw(m_block, topLeft, size);
+}
 
 }   // namespace Engine

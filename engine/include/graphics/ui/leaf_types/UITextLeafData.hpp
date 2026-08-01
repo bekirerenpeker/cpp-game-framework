@@ -23,7 +23,7 @@ class UITextLeafData : public IUILeafData
 
     UILeafWidths measureWidths() override;
     float measureHeight(float contentWidth) override;
-    void draw(Vec2 pos, Vec2 size) override;
+    void draw(Vec2 drawPos, Vec2 size) override;
 };
 
 }   // namespace Engine

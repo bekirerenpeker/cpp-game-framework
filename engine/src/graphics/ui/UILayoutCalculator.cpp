@@ -6,27 +6,23 @@ namespace Engine {
 
 namespace {
 
-float sizeOf(const UILayoutNode& node, UILayoutAxis axis)
-{
-    return axis == UILayoutAxis::Horizontal ? node.width : node.height;
-}
+float sizeOf(const UILayoutNode& node, UILayoutAxis axis) { return axisGet(node.size, axis); }
 
 void setSizeOf(UILayoutNode& node, UILayoutAxis axis, float value)
 {
-    if (axis == UILayoutAxis::Horizontal) node.width = value;
-    else node.height = value;
+    axisSet(node.size, axis, value);
 }
 
 // The vertical axis has no min/max pair: nothing wraps vertically, so a node's
-// intrinsic height is one number living in `height` until the final pass overwrites it.
+// intrinsic height is one number living in size.y until the final pass overwrites it.
 float intrinsicMin(const UILayoutNode& node, UILayoutAxis axis)
 {
-    return axis == UILayoutAxis::Horizontal ? node.minWidth : node.height;
+    return axis == UILayoutAxis::Horizontal ? node.minWidth : node.size.y;
 }
 
 float intrinsicMax(const UILayoutNode& node, UILayoutAxis axis)
 {
-    return axis == UILayoutAxis::Horizontal ? node.maxWidth : node.height;
+    return axis == UILayoutAxis::Horizontal ? node.maxWidth : node.size.y;
 }
 
 void setIntrinsic(UILayoutNode& node, UILayoutAxis axis, float min, float max)
@@ -35,7 +31,7 @@ void setIntrinsic(UILayoutNode& node, UILayoutAxis axis, float min, float max)
         node.minWidth = min;
         node.maxWidth = max;
     } else {
-        node.height = max;
+        node.size.y = max;
     }
 }
 
@@ -59,6 +55,7 @@ const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Ve
     computeIntrinsicHeights();
     computeFinalHeights();
     computePositions();
+    computeDrawPositions();
 
     return m_nodes;
 }
@@ -116,7 +113,7 @@ void UILayoutCalculator::computeFinalWidths()
 {
     if (m_nodes.empty()) return;
 
-    m_nodes[0].width = m_rootSize.x;
+    m_nodes[0].size.x = m_rootSize.x;
     for (size_t i = 0; i < m_nodes.size(); i++)
         distributeChildren((uint)i, UILayoutAxis::Horizontal, true);
 }
@@ -129,8 +126,8 @@ void UILayoutCalculator::computeIntrinsicHeights()
 
         if (m_nodes[index].node->leafData && m_nodes[index].firstChild == NO_LAYOUT_NODE) {
             float contentWidth =
-                Math::max(m_nodes[index].width - layout.padding.horizontal(), 0.0f);
-            m_nodes[index].height =
+                Math::max(m_nodes[index].size.x - layout.padding.horizontal(), 0.0f);
+            m_nodes[index].size.y =
                 m_nodes[index].node->measureHeight(contentWidth) + layout.padding.vertical();
         } else {
             aggregateIntrinsic(index, UILayoutAxis::Vertical);
@@ -143,7 +140,7 @@ void UILayoutCalculator::computeFinalHeights()
 {
     if (m_nodes.empty()) return;
 
-    m_nodes[0].height = m_rootSize.y;
+    m_nodes[0].size.y = m_rootSize.y;
     // Nothing wraps vertically, so there is no height equivalent of the shrink pass:
     // content that does not fit overflows and is the clip flag's problem.
     for (size_t i = 0; i < m_nodes.size(); i++)
@@ -154,9 +151,19 @@ void UILayoutCalculator::computePositions()
 {
     if (m_nodes.empty()) return;
 
-    m_nodes[0].x = 0.0f;
-    m_nodes[0].y = 0.0f;
+    m_nodes[0].pos = VEC2_ZERO;
     for (size_t i = 0; i < m_nodes.size(); i++) positionChildren((uint)i);
+}
+
+// Display only, and deliberately the last thing to run: every geometric pass works
+// in layout space (top-left anchored, Y-down) and this is the one place that is
+// converted to what the renderer wants -- a centre, Y-up from the root's bottom.
+void UILayoutCalculator::computeDrawPositions()
+{
+    for (UILayoutNode& node : m_nodes) {
+        node.drawPos =
+            Vec2(node.pos.x + node.size.x * 0.5f, m_rootSize.y - (node.pos.y + node.size.y * 0.5f));
+    }
 }
 
 void UILayoutCalculator::aggregateIntrinsic(uint index, UILayoutAxis axis)
@@ -294,8 +301,7 @@ void UILayoutCalculator::positionChildren(uint index)
         used += sizeOf(m_nodes[child], mainAxis);
     }
 
-    Vec2 origin =
-        Vec2(m_nodes[index].x, m_nodes[index].y) + layout.padding.topLeft() - layout.scrollOffset;
+    Vec2 origin = m_nodes[index].pos + layout.padding.topLeft() - layout.scrollOffset;
     float cursor = axisGet(origin, mainAxis) + alignOffset(layout.alignMain, innerMain - used);
     float crossOrigin = axisGet(origin, crossAxis);
 
@@ -312,8 +318,7 @@ void UILayoutCalculator::positionChildren(uint index)
         axisSet(
             pos, crossAxis, crossOrigin + alignOffset(layout.alignCross, innerCross - childCross)
         );
-        m_nodes[child].x = pos.x;
-        m_nodes[child].y = pos.y;
+        m_nodes[child].pos = pos;
 
         cursor += sizeOf(m_nodes[child], mainAxis) + layout.gap;
     }
@@ -325,13 +330,12 @@ void UILayoutCalculator::positionFloatingChild(uint parentIndex, uint childIndex
     const UILayoutNode& parent = m_nodes[parentIndex];
     UILayoutNode& child = m_nodes[childIndex];
 
-    float anchorX = parent.x + alignOffset(floating.anchorX, parent.width);
-    float anchorY = parent.y + alignOffset(floating.anchorY, parent.height);
-    float selfX = alignOffset(floating.selfX, child.width);
-    float selfY = alignOffset(floating.selfY, child.height);
+    float anchorX = parent.pos.x + alignOffset(floating.anchorX, parent.size.x);
+    float anchorY = parent.pos.y + alignOffset(floating.anchorY, parent.size.y);
+    float selfX = alignOffset(floating.selfX, child.size.x);
+    float selfY = alignOffset(floating.selfY, child.size.y);
 
-    child.x = anchorX - selfX + floating.offset.x;
-    child.y = anchorY - selfY + floating.offset.y;
+    child.pos = Vec2(anchorX - selfX + floating.offset.x, anchorY - selfY + floating.offset.y);
 }
 
 void UILayoutCalculator::levelUp(UILayoutAxis axis, float remaining)

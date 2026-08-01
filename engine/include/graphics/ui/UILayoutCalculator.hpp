@@ -9,10 +9,12 @@ namespace Engine {
 constexpr uint NO_LAYOUT_NODE = (uint)-1;
 
 // A flat mirror of one UINode for the duration of a solve. minWidth/maxWidth are
-// scratch for the intrinsic passes; width/height/x/y are the solved geometry. There
-// is no minHeight/maxHeight because nothing wraps vertically, so a node's intrinsic
-// height is a single number -- it is stored in height and overwritten by the final
-// pass, which is safe only because that pass runs strictly top-down.
+// scratch for the intrinsic passes; pos/size are the solved geometry in layout
+// space, which is top-left anchored and Y-down. drawPos is display-only: the centre
+// of the rect in a Y-up space, produced once every other pass has settled.
+// There is no minHeight/maxHeight because nothing wraps vertically, so a node's
+// intrinsic height is a single number -- it lives in size.y until the final pass
+// overwrites it, which is safe only because that pass runs strictly top-down.
 struct UILayoutNode
 {
     const UINode* node = nullptr;
@@ -26,10 +28,9 @@ struct UILayoutNode
     float minWidth = 0.0f;
     float maxWidth = 0.0f;
 
-    float width = 0.0f;
-    float height = 0.0f;
-    float x = 0.0f;
-    float y = 0.0f;
+    Vec2 pos = VEC2_ZERO;
+    Vec2 size = VEC2_ZERO;
+    Vec2 drawPos = VEC2_ZERO;
 };
 
 class UILayoutCalculator : public Singleton<UILayoutCalculator>
@@ -58,6 +59,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     void computeIntrinsicHeights();
     void computeFinalHeights();
     void computePositions();
+    void computeDrawPositions();
 
     void aggregateIntrinsic(uint index, UILayoutAxis axis);
     void finalizeIntrinsic(uint index, UILayoutAxis axis);
