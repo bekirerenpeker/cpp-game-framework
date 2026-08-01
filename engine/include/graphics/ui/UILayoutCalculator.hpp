@@ -18,6 +18,7 @@ constexpr uint NO_LAYOUT_NODE = (uint)-1;
 struct UILayoutNode
 {
     const UINode* node = nullptr;
+    uint64_t persistentKey = 0;
 
     uint parent = NO_LAYOUT_NODE;
     uint firstChild = NO_LAYOUT_NODE;
@@ -40,12 +41,17 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
   private:
     static constexpr float EPSILON = 0.0001f;
 
-    std::vector<UILayoutNode> m_nodes;
+    std::vector<UILayoutNode> m_prevFrameNodes, m_nodes;
     std::vector<uint> m_scratch;
 
   public:
     const std::vector<UILayoutNode>& calculate(IdType rootId);
     const std::vector<UILayoutNode>& getNodes() const { return m_nodes; }
+
+    // .node on a returned entry is always null -- it points into a UINode tree the
+    // next UIManager::clear() has already destroyed, so only geometry is safe to read.
+    const UILayoutNode* getPrevFrameLayout(uint64_t key) const;
+    void beginFrame() { m_prevFrameNodes.clear(); }
 
   private:
     UILayoutCalculator() = default;

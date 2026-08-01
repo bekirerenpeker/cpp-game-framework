@@ -56,7 +56,20 @@ const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId)
     computePositions();
     computeDrawPositions();
 
+    // Snapshotted for next frame's lookups, not this frame's draw -- .node would
+    // dangle by then, so it is dropped here rather than left to rot.
+    size_t base = m_prevFrameNodes.size();
+    m_prevFrameNodes.insert(m_prevFrameNodes.end(), m_nodes.begin(), m_nodes.end());
+    for (size_t i = base; i < m_prevFrameNodes.size(); i++) m_prevFrameNodes[i].node = nullptr;
+
     return m_nodes;
+}
+
+const UILayoutNode* UILayoutCalculator::getPrevFrameLayout(uint64_t key) const
+{
+    for (const UILayoutNode& node : m_prevFrameNodes)
+        if (node.persistentKey == key) return &node;
+    return nullptr;
 }
 
 // Children are appended after their parent, so the array comes out in preorder and
@@ -70,6 +83,7 @@ uint UILayoutCalculator::buildSubtree(IdType nodeId, uint parentIndex)
     uint index = (uint)m_nodes.size();
     UILayoutNode layoutNode;
     layoutNode.node = node;
+    layoutNode.persistentKey = node->persistentKey;
     layoutNode.parent = parentIndex;
     m_nodes.push_back(layoutNode);
 

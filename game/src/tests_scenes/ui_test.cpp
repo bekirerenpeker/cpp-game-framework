@@ -9,8 +9,8 @@ namespace {
 const char* FONT_FOLDER = "game/assets/fonts";
 const char* FALLBACK_FONT = "C:/Windows/Fonts/segoeui.ttf";
 
-const Vec2 ROOT_SIZE(900.0f, 600.0f);
-const float ROOT_WIDTH_SWING = 150.0f;
+const Vec2 ROOT_SIZE(800.0f, 600.0f);
+const float ROOT_WIDTH_SWING = 100.0f;
 const float GLOW_SPEED = 2.2f;
 const float SPAN_SIZE_SPEED = 1.4f;
 
@@ -186,7 +186,7 @@ void buildUi(const Font& font, float rootWidth)
 // under it live. WASD pans, QE zooms.
 int ui_test()
 {
-    IdType windowId = WindowManager::get().createWindow({1000, 800, "UI Test"});
+    IdType windowId = WindowManager::get().createWindow({1600, 800, "UI Test"});
 
     Registry registry;
     EntityHandle camera = registry.create();

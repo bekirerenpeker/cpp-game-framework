@@ -4,9 +4,16 @@
 #include "graphics/ui/leaf_types/UITextLeafData.hpp"
 #include "utils/IdIndexedVector.hpp"
 #include "utils/Singleton.hpp"
+#include <string_view>
 #include <vector>
 
 namespace Engine {
+
+struct UINodeState
+{
+    IdType id;
+    bool isHovered, isPressed, isReleased, isHeld;
+};
 
 class UIManager : public Singleton<UIManager>
 {
@@ -21,7 +28,10 @@ class UIManager : public Singleton<UIManager>
   public:
     void clear();
 
-    IdType openContainer(const UILayoutConfig& layout = {}, const UIContainerStyle& style = {});
+    UINodeState openContainer(
+        const UILayoutConfig& layout = {}, const UIContainerStyle& style = {},
+        std::string_view key = {}
+    );
     void closeContainer();
 
     IdType addTextLeaf(const UILayoutConfig& layout, const UITextConfig& config);
@@ -36,7 +46,8 @@ class UIManager : public Singleton<UIManager>
     UIManager() = default;
     ~UIManager();
 
-    IdType addNode(const UILayoutConfig& layout, const UIContainerStyle& style);
+    UINodeState
+    addNode(const UILayoutConfig& layout, const UIContainerStyle& style, std::string_view key = {});
 };
 
 }   // namespace Engine

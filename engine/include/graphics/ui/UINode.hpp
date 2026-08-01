@@ -8,6 +8,8 @@
 
 namespace Engine {
 
+struct UILayoutNode;
+
 struct UINode : IHasId
 {
     IdType parent = INVALID_ID;
@@ -20,6 +22,9 @@ struct UINode : IHasId
     UIContainerStyle style;
     IUILeafData* leafData = nullptr;
     bool isVisible = true;
+
+    uint64_t persistentKey = 0;
+    const UILayoutNode* prevFrameLayout = nullptr;
 
     bool isContainer() const { return leafData == nullptr; }
 
