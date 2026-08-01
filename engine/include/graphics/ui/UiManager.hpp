@@ -14,7 +14,12 @@ class UIManager : public Singleton<UIManager>
     IdIndexedVector<UINode> m_nodes;
 
   public:
-    IdType addContainer(IdType parent = INVALID_ID, const UIContainerStyle& style = {});
+    IdType addContainer(
+        IdType parent = INVALID_ID, const UILayoutConfig& layout = {},
+        const UIContainerStyle& style = {}
+    );
+
+    void draw(IdType rootId, Vec2 rootSize);
 
     UINode* getNode(IdType id) { return m_nodes.get(id); }
     const UINode* getNode(IdType id) const { return m_nodes.get(id); }

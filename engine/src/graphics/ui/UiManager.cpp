@@ -1,12 +1,15 @@
 #include "graphics/ui/UiManager.hpp"
+#include "graphics/ui/UILayoutCalculator.hpp"
 
 namespace Engine {
 
-IdType UIManager::addContainer(IdType parent, const UIContainerStyle& style)
+IdType
+UIManager::addContainer(IdType parent, const UILayoutConfig& layout, const UIContainerStyle& style)
 {
     IdType id = m_nodes.add();
     UINode* node = m_nodes.get(id);
     node->parent = parent;
+    node->layout = layout;
     node->style = style;
 
     if (parent == INVALID_ID) return id;
@@ -21,6 +24,13 @@ IdType UIManager::addContainer(IdType parent, const UIContainerStyle& style)
     parentNode->childCount++;
 
     return id;
+}
+
+void UIManager::draw(IdType rootId, Vec2 rootSize)
+{
+    // The solved tree is not consumed yet: there is no UI renderer to hand it to,
+    // and UINode::draw still has no way to receive a rect.
+    UILayoutCalculator::get().calculate(rootId, rootSize);
 }
 
 }   // namespace Engine
