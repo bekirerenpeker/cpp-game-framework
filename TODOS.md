@@ -34,6 +34,19 @@ rather than leaving a stale description.
   `divider`) come first since they are what a theme would resolve. Only then is
   restyling a whole UI one edit.
 
+- [ ] **A screen-space root that fills the window** — `resolveRootSize` still
+  sizes a root from its own `UISizeSpec` with nothing passed in, so `Grow` and
+  `Percent` fall back to max-content the way `Fit` does. In screen space the
+  natural want is a root that *is* the window, which needs an available size
+  threaded into the root solve. That collides with the documented invariant that
+  a root is deliberately not clamped to its content floor, so it is a design call
+  rather than a patch — decide before building a real HUD on fixed-size roots.
+
+- [ ] **UI scale / DPI** — screen space is hard-wired to one unit per window
+  pixel. A `pixelsPerUiUnit` on `UIRenderer` would fold into the ortho and into
+  `getMouseUiPos` with no other call site touched, and is what a settings-menu
+  "UI scale" slider or a HiDPI display would need.
+
 - [ ] **Scroll + clip** — `LayoutConfig::clipX/clipY` and `scrollOffset` are
   honoured by the solver already (a clipped axis reports `minW = 0`, which is
   what lets it shrink below its content), but nothing sets a scissor rect or
@@ -113,6 +126,26 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **UI space switch: screen by default, world on request** — `UIRenderer`
+  owns a `UISpace` (`Screen`/`World`) set by `setSpace`, and three things read
+  it: the view-proj matrix, `getRootOrigin()` (where a root's top-left lands)
+  and `getMouseUiPos()`. One owner, three readers, so they cannot disagree —
+  which is what makes the switch safe for rendering, hit testing and layout in
+  one move. Layout itself never learned about spaces: `calculate` gained a
+  `rootTopLeft` and `computeDrawPositions` bakes it into `drawPos`, so the *one*
+  value the renderer draws from and the mouse tests against is already in the
+  active space. Screen space is Y-**up** (`ortho(0,w,0,h)`) because glyph quads
+  are built baseline-up and a Y-down matrix mirrors every string; the flip is one
+  translation in `getRootOrigin`. `UIManager::draw()` became self-contained —
+  pushes the matrix into `TextRenderer`, walks, then flushes boxes before glyphs
+  — since that ordering is not something a caller should have to know.
+  The bug worth remembering: `setSpace` originally flushed unconditionally, and
+  because it is naturally called during setup that ran `ensureReady` and built
+  the window's VAO **before the render context was bound**. Every later draw then
+  had a correct matrix and correct vertices and drew nothing — a forced opaque
+  fragment output proved the fragments never ran. It now flushes only when the
+  batch is non-empty. Verified in both spaces, including hover.
 
 - [x] **Containers paint through `UIRenderer`, not a debug quad** —
   [UIRenderer.hpp](engine/include/graphics/ui/UIRenderer.hpp) is a Singleton

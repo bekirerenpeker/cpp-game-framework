@@ -1,4 +1,5 @@
 #include "graphics/ui/UIRenderer.hpp"
+#include "core/input/Input.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/Window.hpp"
@@ -28,19 +29,57 @@ void UIRenderer::init(GlShader* shader, size_t maxQuadCount)
 }
 
 // Boxes drawn in a different space cannot share a draw call with boxes already
-// queued, so switching flushes -- same rule as TextRenderer.
-void UIRenderer::setViewProjOverride(const Mat4& viewProj)
+// queued, so switching flushes -- same rule as TextRenderer's view-proj override.
+void UIRenderer::setSpace(UISpace space)
 {
-    if (m_initialized) flush();
-    m_viewProjOverride = viewProj;
-    m_hasViewProjOverride = true;
+    if (m_space == space) return;
+    // Only a batch with something already in it needs resolving before the matrix
+    // moves under it. Guarding on that matters more than the saved draw call: setSpace
+    // is naturally called during setup, and flushing there would run ensureReady and
+    // create this window's VAO before the render context is bound, leaving every later
+    // draw pointed at a VAO built against the wrong state -- correct matrix, correct
+    // vertices, nothing on screen.
+    if (m_initialized && m_batch.getQuadCount() > 0) flush();
+    m_space = space;
 }
 
-void UIRenderer::clearViewProjOverride()
+// Screen space is deliberately Y-**up** (0,0 at the window's bottom-left) rather than
+// the more obvious Y-down: glyph quads are built baseline-up, so a Y-down matrix
+// renders every string mirrored. The single flip lives in getRootOrigin instead,
+// where it costs one translation and touches nothing else.
+Mat4 UIRenderer::getViewProjMat() const
 {
-    if (!m_hasViewProjOverride) return;
-    if (m_initialized) flush();
-    m_hasViewProjOverride = false;
+    if (m_space == UISpace::World) return ViewContext::get().getViewProjMat();
+
+    Window* window = ViewContext::get().getActiveWindow();
+    if (!window) return Mat4();
+    return Mat4::ortho(
+        0.0f, (float)window->getWidth(), 0.0f, (float)window->getHeight(), -1.0f, 1.0f
+    );
+}
+
+// Where a root's top-left corner sits. Screen puts it in the window's top-left, which
+// is the whole of the Y flip; world leaves it on the world origin, so the UI hangs
+// down and to the right of it the way every other top-left anchored box does.
+Vec2 UIRenderer::getRootOrigin() const
+{
+    if (m_space == UISpace::World) return VEC2_ZERO;
+
+    Window* window = ViewContext::get().getActiveWindow();
+    return window ? Vec2(0.0f, (float)window->getHeight()) : VEC2_ZERO;
+}
+
+// The mouse in whatever space the UI is currently solved in, so hit testing compares
+// against a drawPos without either side knowing which space it is in.
+Vec2 UIRenderer::getMouseUiPos() const
+{
+    if (m_space == UISpace::World) return ViewContext::get().getMouseWorldPos();
+
+    Window* window = ViewContext::get().getActiveWindow();
+    if (!window) return VEC2_ZERO;
+    // Input reports window-centred pixels, +Y up; screen space is the same pixels
+    // measured from the bottom-left corner.
+    return Input::get().getMousePos() + Vec2(window->getWidth() * 0.5f, window->getHeight() * 0.5f);
 }
 
 bool UIRenderer::ensureReady()
@@ -64,9 +103,7 @@ bool UIRenderer::ensureReady()
         m_batch.configureVao(*vao);
     }
     m_batch.setVao(vao);
-    m_batch.setViewProjMat(
-        m_hasViewProjOverride ? m_viewProjOverride : ViewContext::get().getViewProjMat()
-    );
+    m_batch.setViewProjMat(getViewProjMat());
     return true;
 }
 

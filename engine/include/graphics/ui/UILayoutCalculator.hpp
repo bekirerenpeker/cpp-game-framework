@@ -45,7 +45,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     std::vector<uint> m_scratch;
 
   public:
-    const std::vector<UILayoutNode>& calculate(IdType rootId);
+    const std::vector<UILayoutNode>& calculate(IdType rootId, Vec2 rootTopLeft = VEC2_ZERO);
     const std::vector<UILayoutNode>& getNodes() const { return m_nodes; }
 
     const UILayoutNode* getPrevFrameLayout(uint64_t key) const;
@@ -63,7 +63,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     void computeFinalHeights();
     void computePositions();
     void applyTransforms();
-    void computeDrawPositions();
+    void computeDrawPositions(Vec2 rootTopLeft);
 
     void aggregateIntrinsic(uint index, UILayoutAxis axis);
     void finalizeIntrinsic(uint index, UILayoutAxis axis);

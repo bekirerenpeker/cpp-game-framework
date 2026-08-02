@@ -341,7 +341,11 @@ void buildUi(const Font& font, GlTexture& image)
         // clip rect from the solver, zIndex reorders the walk, and cursor and
         // transition are input and animation concerns.
         label(
-            font, "painted per quad: background, border, radius, dash, shadow", CAPTION_COLOR, 13.0f
+            font,
+            UIRenderer::get().getSpace() == UISpace::Screen ?
+                "screen space - pinned to the window, camera does nothing.  SPACE switches" :
+                "world space - pans and zooms with the camera.  SPACE switches",
+            CAPTION_COLOR, 13.0f
         );
     }
     ui.closeContainer();
@@ -351,15 +355,20 @@ void buildUi(const Font& font, GlTexture& image)
 
 // Every paintable field of UIContainerStyle, drawn by UIRenderer as one quad each --
 // background, border ring, corner radius, dash pattern and shadow all come out of a
-// single rounded-box distance field. WASD pans, QE zooms; the edges stay a pixel wide
-// at any zoom because the antialiasing is driven by the distance field's gradient.
+// single rounded-box distance field. SPACE switches the UI between screen and world
+// space; WASD pans and QE zooms the camera, which moves the UI only in world space.
+// Edges stay a pixel wide at any zoom because the antialiasing is driven by the
+// distance field's gradient, and hovering proves hit testing follows the space.
 int ui_test()
 {
     IdType windowId = WindowManager::get().createWindow({1600, 800, "UI Test"});
 
     Registry registry;
     EntityHandle camera = registry.create();
-    camera.emplace<TransformComponent>().position = Vec3(ROOT_SIZE.x * 0.5f, ROOT_SIZE.y * 0.5f, 0);
+    // A world-space root hangs down and right of the world origin, so the camera has
+    // to look at the middle of that box rather than the first quadrant.
+    camera.emplace<TransformComponent>().position =
+        Vec3(ROOT_SIZE.x * 0.5f, ROOT_SIZE.y * -0.5f, 0);
     camera.emplace<CameraComponent>().windowId = windowId;
     camera.get<CameraComponent>().orthoSize = ROOT_SIZE.y * 1.15f;
 
@@ -385,6 +394,12 @@ int ui_test()
         transform.position.y += Input::get().getAxis("Vertical") * dt * cam.orthoSize;
         cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
 
+        if (Input::get().keyPressed(KeyCode::Space)) {
+            UIRenderer::get().setSpace(
+                UIRenderer::get().getSpace() == UISpace::Screen ? UISpace::World : UISpace::Screen
+            );
+        }
+
         buildUi(font, image);
     };
 
@@ -392,12 +407,9 @@ int ui_test()
         Renderer::get().beginPass();
         Renderer::get().clearColor(BACKDROP);
 
+        // Resolves its own batches in order; boxes and glyphs are not the caller's
+        // flush to sequence.
         UIManager::get().draw();
-
-        // Boxes and glyphs are separate batches, so the boxes have to resolve before
-        // any glyph does or the two draw in whichever order they happen to flush.
-        UIRenderer::get().flush();
-        TextRenderer::get().flush();
 
         Renderer::get().beginPass();
         Renderer::get().setShader(&quadShader);

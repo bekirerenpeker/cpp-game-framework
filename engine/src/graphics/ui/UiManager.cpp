@@ -1,8 +1,9 @@
 #include "graphics/ui/UiManager.hpp"
 #include "core/input/Input.hpp"
 #include "core/logging/LoggerMacros.hpp"
-#include "core/window_management/ViewContext.hpp"
+#include "graphics/text/TextRenderer.hpp"
 #include "graphics/ui/UILayoutCalculator.hpp"
+#include "graphics/ui/UIRenderer.hpp"
 #include <functional>
 
 namespace Engine {
@@ -25,9 +26,11 @@ UINodeState computeState(IdType id, const UILayoutNode* prev)
     if (!prev) return {id, false, false, false, false};
 
     Vec2 half = prev->size * 0.5f;
-    // drawPos is centre-anchored and Y-up; flip into the box's own top-left/Y-down
-    // space so local/relative match the rest of the UI instead of the render convention.
-    Vec2 centerDelta = ViewContext::get().getMouseWorldPos() - prev->drawPos;
+    // Both sides come from the same space -- the mouse through UIRenderer, drawPos
+    // baked by the solver -- so screen and world hit test through one path. drawPos is
+    // centre-anchored and Y-up; flip into the box's own top-left/Y-down space so
+    // local/relative match the rest of the UI instead of the render convention.
+    Vec2 centerDelta = UIRenderer::get().getMouseUiPos() - prev->drawPos;
     Vec2 local = Vec2(centerDelta.x + half.x, half.y - centerDelta.y);
     Vec2 relative = prev->size.x > 0.0f && prev->size.y > 0.0f ? local / prev->size : VEC2_ZERO;
 
@@ -139,16 +142,33 @@ void UIManager::draw()
         );
     }
 
+    UIRenderer& renderer = UIRenderer::get();
+
+    // Glyphs have to reach the same space as the boxes. Setting the override flushes,
+    // which is what keeps any world text submitted earlier this frame on the world
+    // matrix instead of retroactively landing on this one.
+    if (renderer.getSpace() == UISpace::World) TextRenderer::get().clearViewProjOverride();
+    else TextRenderer::get().setViewProjOverride(renderer.getViewProjMat());
+
     UILayoutCalculator::get().beginFrame();
 
+    Vec2 rootTopLeft = renderer.getRootOrigin();
     for (IdType rootId : m_roots) {
-        const std::vector<UILayoutNode>& solved = UILayoutCalculator::get().calculate(rootId);
+        const std::vector<UILayoutNode>& solved =
+            UILayoutCalculator::get().calculate(rootId, rootTopLeft);
         for (const UILayoutNode& layoutNode : solved) {
             const UINode* node = layoutNode.node;
             if (!node) continue;
             node->draw(layoutNode.drawPos, layoutNode.size);
         }
     }
+
+    // Boxes and glyphs are separate batches, so their relative depth is flush order,
+    // not submission order. Resolving both here rather than leaving it to the caller
+    // is the only way a box declared after a label reliably lands under it.
+    renderer.flush();
+    TextRenderer::get().flush();
+    TextRenderer::get().clearViewProjOverride();
 }
 
 }   // namespace Engine

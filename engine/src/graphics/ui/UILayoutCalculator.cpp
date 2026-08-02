@@ -39,7 +39,7 @@ bool isFloating(const UILayoutNode& node) { return node.node->layout.isFloating;
 
 }   // namespace
 
-const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId)
+const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Vec2 rootTopLeft)
 {
     m_nodes.clear();
     m_scratch.clear();
@@ -55,7 +55,7 @@ const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId)
     computeFinalHeights();
     computePositions();
     applyTransforms();
-    computeDrawPositions();
+    computeDrawPositions(rootTopLeft);
 
     // Snapshotted for next frame's lookups, not this frame's draw -- .node would
     // dangle by then, so it is dropped here rather than left to rot.
@@ -189,13 +189,17 @@ void UILayoutCalculator::applyTransforms()
 
 // Display only, and deliberately the last thing to run: every geometric pass works
 // in layout space (top-left anchored, Y-down) and this is the one place that is
-// converted to what the renderer wants -- a centre, Y-up from the root's bottom.
-void UILayoutCalculator::computeDrawPositions()
+// converted to what the renderer wants -- a centre, Y-up from rootTopLeft, which is
+// where the caller wants the root's top-left corner to land. Placing the root here
+// rather than at draw time is what keeps hit testing correct: drawPos is the one
+// thing both the renderer and the mouse compare against, so it has to be final.
+void UILayoutCalculator::computeDrawPositions(Vec2 rootTopLeft)
 {
-    float rootHeight = m_nodes[0].size.y;
     for (UILayoutNode& node : m_nodes) {
-        node.drawPos =
-            Vec2(node.pos.x + node.size.x * 0.5f, rootHeight - (node.pos.y + node.size.y * 0.5f));
+        node.drawPos = Vec2(
+            rootTopLeft.x + node.pos.x + node.size.x * 0.5f,
+            rootTopLeft.y - (node.pos.y + node.size.y * 0.5f)
+        );
     }
 }
 

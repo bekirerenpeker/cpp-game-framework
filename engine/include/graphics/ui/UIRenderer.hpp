@@ -10,6 +10,16 @@
 
 namespace Engine {
 
+// Which space a UI unit lands in. Screen is one unit per window pixel, unaffected by
+// the camera, and is what a HUD or a menu wants. World is the niche one -- a UI
+// pinned to the scene (a nameplate, a diegetic panel), moving and scaling with the
+// camera like any sprite. The whole UI shares one space; it is not per root.
+enum class UISpace : uint8_t
+{
+    Screen = 0,
+    World,
+};
+
 // The rounded-box shader's format, not the UI's one vertex type -- text already runs
 // on TextVertex, and anything bringing its own shader will bring its own too. One
 // quad carries a whole box: the fragment shader rebuilds the background, the border
@@ -45,15 +55,18 @@ class UIRenderer : public Singleton<UIRenderer>
     static constexpr float DASH_ON_RATIO = 0.5f;
 
     BatchRenderer<UIBoxVertex> m_batch;
-    Mat4 m_viewProjOverride;
-    bool m_hasViewProjOverride = false;
+    UISpace m_space = UISpace::Screen;
     bool m_initialized = false;
 
   public:
     void init(GlShader* shader, size_t maxQuadCount = 2000);
 
-    void setViewProjOverride(const Mat4& viewProj);
-    void clearViewProjOverride();
+    void setSpace(UISpace space);
+    UISpace getSpace() const { return m_space; }
+
+    Mat4 getViewProjMat() const;
+    Vec2 getRootOrigin() const;
+    Vec2 getMouseUiPos() const;
 
     void addContainerQuad(Vec2 drawPos, Vec2 size, const UIContainerStyle& style);
 
