@@ -27,11 +27,12 @@ rather than leaving a stale description.
   for a fraction of CSS Grid's algorithm; auto-fit/minmax/dense packing are not
   worth it.
 
-- [ ] **Widget theming** — `UiRenderer` draws `UiStyle` for real now, corner
-  radius included, and `UiPresets::panel/button/outline/divider` give starting points.
-  What is still missing is a *theme*: a named palette + role mapping those
-  presets resolve against, so a call site says "surface" or "accent" rather than
-  a literal `Color`. Only then is restyling a whole UI one edit.
+- [ ] **Widget theming** — `UIRenderer` draws every paintable `UIContainerStyle`
+  field for real now, but there are no presets and no *theme*: a named palette +
+  role mapping a style resolves against, so a call site says "surface" or
+  "accent" rather than a literal `Color`. Presets (`panel`/`button`/`outline`/
+  `divider`) come first since they are what a theme would resolve. Only then is
+  restyling a whole UI one edit.
 
 - [ ] **Scroll + clip** — `LayoutConfig::clipX/clipY` and `scrollOffset` are
   honoured by the solver already (a clipped axis reports `minW = 0`, which is
@@ -80,7 +81,7 @@ rather than leaving a stale description.
   second walk of the runs.
 
 - [ ] **One batch for UI rects and UI glyphs** — the UI now submits two batches
-  per root (rounded rects through `UiShader`, glyphs through `TextShader`), so a
+  per root (rounded rects through `UIBoxShader`, glyphs through `TextShader`), so a
   panel and its label cost two draw calls. They cannot merge as things stand:
   the rect shader is a rounded-box SDF with its own vertex layout and the glyph
   shader is a distance-field sampler. Merging means one shader branching on a
@@ -112,6 +113,42 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **Containers paint through `UIRenderer`, not a debug quad** —
+  [UIRenderer.hpp](engine/include/graphics/ui/UIRenderer.hpp) is a Singleton
+  owning a `BatchRenderer<UIBoxVertex>` over
+  [UIBoxShader.glsl](game/assets/shaders/UIBoxShader.glsl), and `UINode::draw`
+  forwards a container to `addContainerQuad(drawPos, size, style)` instead of
+  `Renderer::addQuad`. **One quad carries the whole container**: background
+  (colour, image, both), border ring, corner radius, dash pattern and shadow all
+  come out of a single rounded-box SDF evaluated per fragment, so no style field
+  costs extra geometry. Every field is per-vertex, never a uniform — a uniform
+  would cost one draw call per style — and every varying except the local
+  position is `flat`, since they are per-quad constants.
+  Things that had to be right: the border's inner edge is the *same* distance
+  field offset by `borderWidth` (offsetting an SDF inserts the correctly shrunken
+  corner radii for free, so 4 border quads are never emitted); the quad is padded
+  out by `blur + |offset| + AA_PADDING` so the shadow has somewhere to live and
+  the box's own antialiased fringe is not cut off by the edge it is smoothing,
+  which is why the fragment reads uv off `halfSize` rather than the interpolated
+  corners; antialiasing is `fwidth` of the distance itself, so an edge stays one
+  screen pixel at any zoom; the shadow is knocked out under the box the way CSS
+  does it, or a translucent background shows its own shadow through itself; and
+  `shadowOffset.y` is negated on the way in, because the style names it Y-down
+  like CSS while every geometric field past that point is the renderer's Y-up
+  draw space. Dashes walk **arc length** around the rounded boundary (straight
+  runs plus quarter-arcs, first quadrant measured and the other three mirrored
+  onto it), with the period divided into a whole number of repeats **CPU-side**
+  so the pattern closes on itself instead of leaving a stub at the seam;
+  `UIBorderStyle::Dashed`/`Dotted` are just two period-to-width ratios, so the
+  shader stays generic.
+  A container whose fill, border and shadow are all invisible emits **zero
+  geometry**, so layout-only containers cost nothing — but note this also means a
+  container with no style at all is now invisible, where the debug quad used to
+  paint it white. `ui_test` is now a gallery of all 24 style combinations.
+  Not covered, and not a quad's business: `overflow` needs a clip rect from the
+  solver, `zIndex` reorders the walk, `cursor` and `transition` are input and
+  animation concerns.
 
 - [x] **Text layout folded out of `TextRenderer`** — wrapping, line boxes and
   alignment now live in one stateless `TextLayoutCalculator`
@@ -174,7 +211,7 @@ rather than leaving a stale description.
 
 - [x] **UI renders in window space, from a rounded-rect shader** — `UiRenderer`
   owns a `BatchRenderer<UiVertex>` over
-  [UiShader.glsl](game/assets/shaders/UiShader.glsl) instead of borrowing the
+  [UIBoxShader.glsl](game/assets/shaders/UIBoxShader.glsl) instead of borrowing the
   sprite batch, and `setViewport(screenTopLeft, pixelsPerUiUnit)` places a root
   in **window pixels**, so the camera no longer moves or scales the UI. Every
   container is one quad whose fragment shader evaluates a rounded-box signed

@@ -1,6 +1,5 @@
 #include "graphics/ui/UINode.hpp"
-#include "graphics/Color.hpp"
-#include "graphics/Renderer.hpp"
+#include "graphics/ui/UIRenderer.hpp"
 #include "graphics/ui/leaf_types/IUILeafData.hpp"
 
 namespace Engine {
@@ -26,10 +25,7 @@ void UINode::draw(Vec2 drawPos, Vec2 size) const
         return;
     }
 
-    Color color = style.backgroundColor.has_value() ? style.backgroundColor.value() : COLOR_WHITE;
-    GlTexture* backgroundImage =
-        style.backgroundImage.has_value() ? style.backgroundImage.value() : nullptr;
-    Renderer::get().addQuad(drawPos, size, color, backgroundImage);
+    UIRenderer::get().addContainerQuad(drawPos, size, style);
 }
 
 }   // namespace Engine
