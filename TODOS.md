@@ -9,17 +9,88 @@ rather than leaving a stale description.
 
 ## In progress / next up
 
-- [ ] **Engine-handled resizable containers** — `UiState` already reports
-  `isHeld` + `dragDelta` + `mouseLocal` + last frame's rect, which is all a scene
-  needs to resize a panel itself (see case 0 in `ui_layout_test`). Doing it
-  *inside* the engine needs three things that are not free: a second hit pass
-  that prefers a container's resize border over its own children (under
-  "topmost wins" the border loses the hit to any overlapping child, so the
-  container never becomes active), a long-lived `key -> size` map with its own
-  frame-age eviction since immediate mode has no destroy event, and a builder
-  that overwrites the caller's `LayoutConfig.width/height` with
-  `SizeSpec::fixed(...)`, which breaks the rule that `LayoutConfig` is purely
-  the caller's data. Only worth it once several call sites want it.
+- [ ] **Widget layer over the primitives** — the target shape for the UI: the
+  primitives (`UIManager`'s container/leaf tree, `UILayoutCalculator`,
+  `UIRenderer`, `UIContainerStyle`) are treated as **finished and closed**, and
+  everything else — button, slider, image, colour picker, window, checkbox,
+  dropdown — is a *composition* of them plus default styles. Each widget builds a
+  small subtree, applies its own normal/hover/pressed styling, and hands back a
+  state the caller reacts to. This is how Clay, Dear ImGui and egui are all built,
+  and it is sustainable, with three rules that keep it that way:
+  **(a) widgets live outside `UIManager`** — a `UIWidgets` namespace or
+  `widgets/` folder of free functions, not methods, or `UIManager` becomes a god
+  class coupled to every widget that will ever exist. **(b) a widget may only
+  touch `UIManager`'s public API.** That is the load-bearing discipline: if a
+  widget cannot be written without reaching into privates, the *primitive* layer
+  is missing something, and the fix is to add the primitive, never to friend the
+  widget. **(c) one config struct per widget** (`UIButtonConfig`, …), the same
+  reasoning as `UITextConfig` — a new knob must not cost a signature change, or
+  every widget grows a twelve-argument overload set.
+  Button, label and image can be built today and need none of the items below.
+  Slider, window, dropdown and text field need **all four**, so those four should
+  land first — retrofitting capture and hit ordering under a dozen existing
+  widgets means rewriting all of them.
+
+- [ ] **Hit resolution: topmost wins, one hovered node** — `computeState` today
+  tests every container against the mouse *independently*, so overlapping
+  containers all report `isHovered` at once and all react to the same click.
+  Invisible while the UI is one flat panel; wrong the moment there is a window
+  over a window, a dropdown over content, or a tooltip. Needs a single resolution
+  pass per frame producing **one** hovered id — deepest/topmost hit wins,
+  respecting paint order and `zIndex` (which is declared on `UIContainerStyle`
+  and still not honoured by the walk). This is a correctness fix the current
+  system needs regardless of widgets; it is only unnoticed because nothing
+  overlaps yet.
+
+- [ ] **Mouse capture / active widget** — the thing that makes any drag work.
+  On press, one widget becomes *active* and keeps receiving the drag until
+  release **even when the cursor leaves its rect**; without it a slider drops its
+  grab the instant you move off the handle, which is most of the gesture. One
+  global active id, and it must also suppress hover on everything underneath
+  while held. Distinct from today's `isHeld`, which means "hovered *and* the
+  button is down" and so is false the moment the cursor wanders off.
+
+- [ ] **Retained per-widget state, keyed by `persistentKey`** — immediate mode
+  rebuilds the tree every frame and `clear()` wipes it, so the only thing
+  currently surviving a frame is `UILayoutCalculator::m_prevFrameNodes`
+  (geometry only). Anything mid-interaction needs more: the drag origin and grab
+  offset of a slider, a window's dragged position/size, scroll offset, a text
+  caret, whether a dropdown is open. A `persistentKey -> state` map with
+  **frame-age eviction**, since immediate mode has no destroy event to hang
+  cleanup off. Note the split: the slider's *value* stays the caller's (`float&`),
+  only the *interaction* state is engine-owned.
+  This subsumes the old resizable-container item, including its unresolved
+  wrinkle — a resizable window has to override the caller's
+  `UILayoutConfig.width/height`, which breaks "layout config is purely the
+  caller's data". The clean resolution is an engine-owned override layer applied
+  *after* the caller's config, not mutation of it.
+
+- [ ] **Per-state styles** — a widget needs normal/hover/pressed/disabled, not
+  one `UIContainerStyle`. `combine`'s all-`std::optional` merge is already
+  exactly the right primitive (a set field on `other` wins), so this is a small
+  struct of four optional styles plus the rule for picking one, not new
+  machinery. Pairs with **Widget theming** below: without a theme every widget
+  function hardcodes a palette, and restyling an app means editing engine source.
+  Do the theme first — it is what the defaults resolve against.
+
+- [ ] **`UINodeState` outputs for dragging** — what sliders and windows need on
+  top of today's `isHovered`/`isPressed`/`isReleased`/`isHeld` +
+  `relativeMousePos`/`localMousePos`:
+  `isActive` (this widget holds capture, wherever the cursor is — the one that
+  actually drives a drag), `dragDelta` (movement since last frame),
+  `pressOrigin` (mouse position *and* the node rect at press, so a drag computes
+  from the grab point instead of accumulating per-frame error), and `grabOffset`
+  (where inside the handle it was grabbed, or the handle snaps its centre to the
+  cursor on the first frame). Worth adding alongside: `scrollDelta` (wheel over
+  this node — the scroll item below needs it), `isDoubleClicked` (title-bar
+  maximise, reset-to-default), and `isFocused` once text input exists.
+  Note `relativeMousePos` is *already* a slider's normalized value along its
+  axis, so a horizontal slider is `clamp(relative.x)` — most of the primitive is
+  there, it is capture that is missing.
+  Known wart to document rather than fix: hit testing reads last frame's rect, so
+  a widget that moves *because* of the drag trails by a frame. Dear ImGui has the
+  same property; it only bites if drag math is written against the current rect
+  instead of `pressOrigin`.
 
 - [ ] **Grid** — a track list where each track carries the same `SizeSpec`, run
   through `LayoutCalculator`'s existing distribution routine, then row-major
@@ -33,6 +104,9 @@ rather than leaving a stale description.
   "accent" rather than a literal `Color`. Presets (`panel`/`button`/`outline`/
   `divider`) come first since they are what a theme would resolve. Only then is
   restyling a whole UI one edit.
+  **Prerequisite for the widget layer**, not a follow-up to it: every widget
+  function bakes in default colours, and if those are literals rather than theme
+  roles, restyling means editing engine source once and then every widget again.
 
 - [ ] **A screen-space root that fills the window** — `resolveRootSize` still
   sizes a root from its own `UISizeSpec` with nothing passed in, so `Grow` and
