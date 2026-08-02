@@ -14,16 +14,12 @@ uint64_t hashCombine(uint64_t seed, uint64_t value)
     return seed ^ (value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
 }
 
-// Positional and explicit keys are combined with a different constant first so a
-// container at sibling index 3 can never collide with an explicit key "3".
 uint64_t localKeyOf(std::string_view key, uint64_t positionalIndex)
 {
     return key.empty() ? hashCombine(1, positionalIndex) :
                          hashCombine(2, std::hash<std::string_view> {}(key));
 }
 
-// Hit-tests against the previous frame's box, since this frame's hasn't been solved
-// yet -- the same one-frame lag prevFrameLayout itself already carries.
 UINodeState computeState(IdType id, const UILayoutNode* prev)
 {
     if (!prev) return {id, false, false, false, false};
@@ -53,9 +49,6 @@ UINodeState computeState(IdType id, const UILayoutNode* prev)
 
 UIManager::~UIManager() { clear(); }
 
-// The tree is meant to be declared fresh every frame, so this frees the leaves as
-// well as the nodes -- a leaf is owned here precisely because a per-frame rebuild
-// gives the caller nowhere sensible to keep it.
 void UIManager::clear()
 {
     for (IUILeafData* leaf : m_leaves) delete leaf;
@@ -65,10 +58,6 @@ void UIManager::clear()
     m_roots.clear();
 }
 
-// Parenting comes from the open stack rather than an argument, so a caller never
-// handles an id: whatever container is currently open adopts whatever is added next.
-// persistentKey is a parent-scoped hash chain, not the per-frame id: it is what
-// survives clear() so a container can be matched back up with its previous frame.
 UINodeState UIManager::addNode(
     const UILayoutConfig& layout, const UIContainerStyle& style, std::string_view key
 )
@@ -129,8 +118,6 @@ void UIManager::closeContainer()
     m_openStack.pop_back();
 }
 
-// A leaf is a node like any other -- it carries its own layout and the open
-// container gives it a box. Only the content it draws differs, so it never opens.
 IdType UIManager::addTextLeaf(const UILayoutConfig& layout, const UITextConfig& config)
 {
     UINodeState state = addNode(layout, {});
@@ -152,11 +139,8 @@ void UIManager::draw()
         );
     }
 
-    // Each top-level container is solved on its own, so several independent panels
-    // in one frame cost nothing beyond their own subtree. beginFrame resets the
-    // calculator's previous-frame snapshot once, so it accumulates every root's
-    // result rather than only the last one solved.
     UILayoutCalculator::get().beginFrame();
+
     for (IdType rootId : m_roots) {
         const std::vector<UILayoutNode>& solved = UILayoutCalculator::get().calculate(rootId);
         for (const UILayoutNode& layoutNode : solved) {

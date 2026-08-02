@@ -48,8 +48,6 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     const std::vector<UILayoutNode>& calculate(IdType rootId);
     const std::vector<UILayoutNode>& getNodes() const { return m_nodes; }
 
-    // .node on a returned entry is always null -- it points into a UINode tree the
-    // next UIManager::clear() has already destroyed, so only geometry is safe to read.
     const UILayoutNode* getPrevFrameLayout(uint64_t key) const;
     void beginFrame() { m_prevFrameNodes.clear(); }
 
