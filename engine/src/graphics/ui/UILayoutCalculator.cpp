@@ -61,7 +61,17 @@ const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Ve
     // dangle by then, so it is dropped here rather than left to rot.
     size_t base = m_prevFrameNodes.size();
     m_prevFrameNodes.insert(m_prevFrameNodes.end(), m_nodes.begin(), m_nodes.end());
-    for (size_t i = base; i < m_prevFrameNodes.size(); i++) m_prevFrameNodes[i].node = nullptr;
+    for (size_t i = base; i < m_prevFrameNodes.size(); i++) {
+        UILayoutNode& node = m_prevFrameNodes[i];
+        node.node = nullptr;
+        // Index links are relative to this root's own solve, so they have to be
+        // rebased onto the concatenated snapshot -- an un-rebased parent walk lands
+        // in whichever root happens to sit at that offset.
+        if (node.parent != NO_LAYOUT_NODE) node.parent += (uint)base;
+        if (node.firstChild != NO_LAYOUT_NODE) node.firstChild += (uint)base;
+        if (node.lastChild != NO_LAYOUT_NODE) node.lastChild += (uint)base;
+        if (node.nextSibling != NO_LAYOUT_NODE) node.nextSibling += (uint)base;
+    }
 
     return m_nodes;
 }
@@ -82,9 +92,17 @@ uint UILayoutCalculator::buildSubtree(IdType nodeId, uint parentIndex)
     if (!node) return NO_LAYOUT_NODE;
 
     uint index = (uint)m_nodes.size();
+    // Read before the push_back: growing m_nodes can move the parent out from under a
+    // reference to it. zIndex is relative to the parent rather than global, which is
+    // what keeps a child from ever falling behind its own container.
+    uint parentLayer = parentIndex == NO_LAYOUT_NODE ? 0 : m_nodes[parentIndex].paintLayer;
+    int zIndex = node->style.zIndex.value_or(0);
+
     UILayoutNode layoutNode;
     layoutNode.node = node;
     layoutNode.persistentKey = node->persistentKey;
+    layoutNode.acceptsInput = node->isContainer() && node->isVisible;
+    layoutNode.paintLayer = parentLayer + (uint)(zIndex > 0 ? zIndex : 0);
     layoutNode.parent = parentIndex;
     m_nodes.push_back(layoutNode);
 

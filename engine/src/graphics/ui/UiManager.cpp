@@ -4,6 +4,7 @@
 #include "graphics/text/TextRenderer.hpp"
 #include "graphics/ui/UILayoutCalculator.hpp"
 #include "graphics/ui/UIRenderer.hpp"
+#include "utils/math/MathFuncs.hpp"
 #include <functional>
 
 namespace Engine {
@@ -21,9 +22,17 @@ uint64_t localKeyOf(std::string_view key, uint64_t positionalIndex)
                          hashCombine(2, std::hash<std::string_view> {}(key));
 }
 
-UINodeState computeState(IdType id, const UILayoutNode* prev)
+bool containsMouse(const UILayoutNode& node, Vec2 mouse)
 {
-    if (!prev) return {id, false, false, false, false};
+    Vec2 half = node.size * 0.5f;
+    Vec2 delta = mouse - node.drawPos;
+    return Math::abs(delta.x) <= half.x && Math::abs(delta.y) <= half.y;
+}
+
+UINodeState
+computeState(IdType id, const UILayoutNode* prev, bool hovered, bool hoveredDirectly, bool active)
+{
+    if (!prev) return {id};
 
     Vec2 half = prev->size * 0.5f;
     // Both sides come from the same space -- the mouse through UIRenderer, drawPos
@@ -34,12 +43,14 @@ UINodeState computeState(IdType id, const UILayoutNode* prev)
     Vec2 local = Vec2(centerDelta.x + half.x, half.y - centerDelta.y);
     Vec2 relative = prev->size.x > 0.0f && prev->size.y > 0.0f ? local / prev->size : VEC2_ZERO;
 
-    bool hovered =
-        local.x >= 0.0f && local.x <= prev->size.x && local.y >= 0.0f && local.y <= prev->size.y;
-
+    // The button states ride on the bubbled hover, so a click inside a child still
+    // reaches the containers around it. Two *overlapping* containers still cannot both
+    // react, since only the topmost one's ancestors are in the chain at all.
     return {
         id,
         hovered,
+        hoveredDirectly,
+        active,
         hovered && Input::get().mouseButtonPressed(MouseButton::Left),
         hovered && Input::get().mouseButtonReleased(MouseButton::Left),
         hovered && Input::get().mouseButtonHeld(MouseButton::Left),
@@ -59,6 +70,77 @@ void UIManager::clear()
     m_nodes.clear();
     m_openStack.clear();
     m_roots.clear();
+
+    // Resolved here rather than at the end of draw() because this is the last moment
+    // before the tree is rebuilt, so it pairs this frame's mouse with last frame's
+    // geometry -- and every openContainer after it needs the answer already settled.
+    resolveInput();
+}
+
+// Exactly one node is hovered, and it is the last one in paint order under the
+// mouse: children paint after parents and later roots after earlier ones, so the
+// last hit is the topmost. Without this every container under the cursor reported a
+// hover of its own and a click landed on all of them at once.
+//
+// Resolution has to mirror whatever order the painter uses -- the walk that feeds
+// UIRenderer is this same preorder, so the two agree by construction. Honouring
+// zIndex means reordering both together, not just this one.
+void UIManager::resolveInput()
+{
+    m_hoveredKeys.clear();
+
+    Vec2 mouse = UIRenderer::get().getMouseUiPos();
+    const std::vector<UILayoutNode>& prev = UILayoutCalculator::get().getPrevFrameNodes();
+    Input& input = Input::get();
+
+    // Capture survives one frame past the button coming up, so the node that was
+    // pressed is the one that sees isReleased. Dropping it on button-up would hand
+    // the release to whatever the cursor had wandered onto by then.
+    if (!input.mouseButtonHeld(MouseButton::Left) && !input.mouseButtonReleased(MouseButton::Left))
+        m_activeKey = NO_KEY;
+
+    uint active = NO_LAYOUT_NODE;
+    if (m_activeKey != NO_KEY) {
+        for (uint i = 0; i < (uint)prev.size(); i++) {
+            if (prev[i].persistentKey != m_activeKey) continue;
+            active = i;
+            break;
+        }
+        // The captured node stopped being declared, so nothing will ever match the
+        // key again -- drop it rather than deadlocking input on a ghost.
+        if (active == NO_LAYOUT_NODE) m_activeKey = NO_KEY;
+    }
+
+    uint hit = NO_LAYOUT_NODE;
+    if (m_activeKey != NO_KEY) {
+        // Nothing else may be hovered while a drag is live -- that is the whole point
+        // of capture: dragging a slider past a button must not light the button. The
+        // captured node still only counts as *hovered* while the cursor is genuinely
+        // inside it, so pressing it, dragging away and releasing does not fire it.
+        if (containsMouse(prev[active], mouse)) hit = active;
+    } else {
+        for (uint i = 0; i < (uint)prev.size(); i++) {
+            if (!prev[i].acceptsInput) continue;
+            if (containsMouse(prev[i], mouse)) hit = i;
+        }
+        if (hit != NO_LAYOUT_NODE && input.mouseButtonPressed(MouseButton::Left))
+            m_activeKey = prev[hit].persistentKey;
+    }
+
+    if (hit == NO_LAYOUT_NODE) return;
+
+    // The hit node first, then every ancestor. Walking up is what keeps a panel lit
+    // while the cursor is on one of its own children; stopping at the hit node alone
+    // reads as the panel flickering off whenever the cursor crosses its contents.
+    for (uint i = hit; i != NO_LAYOUT_NODE; i = prev[i].parent)
+        m_hoveredKeys.push_back(prev[i].persistentKey);
+}
+
+bool UIManager::isKeyHovered(uint64_t key) const
+{
+    for (uint64_t hovered : m_hoveredKeys)
+        if (hovered == key) return true;
+    return false;
 }
 
 UINodeState UIManager::addNode(
@@ -103,7 +185,10 @@ UINodeState UIManager::openContainer(
     UINode* node = m_nodes.get(state.id);
     if (node) {
         node->prevFrameLayout = UILayoutCalculator::get().getPrevFrameLayout(node->persistentKey);
-        state = computeState(state.id, node->prevFrameLayout);
+        bool hovered = isKeyHovered(node->persistentKey);
+        bool direct = !m_hoveredKeys.empty() && m_hoveredKeys.front() == node->persistentKey;
+        bool active = m_activeKey != NO_KEY && node->persistentKey == m_activeKey;
+        state = computeState(state.id, node->prevFrameLayout, hovered, direct, active);
     }
 
     m_openStack.push_back(state.id);
@@ -156,18 +241,28 @@ void UIManager::draw()
     for (IdType rootId : m_roots) {
         const std::vector<UILayoutNode>& solved =
             UILayoutCalculator::get().calculate(rootId, rootTopLeft);
-        for (const UILayoutNode& layoutNode : solved) {
-            const UINode* node = layoutNode.node;
-            if (!node) continue;
-            node->draw(layoutNode.drawPos, layoutNode.size);
+
+        uint maxLayer = 0;
+        for (const UILayoutNode& layoutNode : solved)
+            if (layoutNode.paintLayer > maxLayer) maxLayer = layoutNode.paintLayer;
+
+        // Boxes and glyphs live in separate batches, so their relative depth is flush
+        // order, not submission order -- one flush for everything would put every
+        // glyph above every box no matter where the tree says they belong. Emitting a
+        // layer at a time and resolving both batches per layer keeps the tree's order
+        // while still costing only two draw calls per layer rather than per node.
+        for (uint layer = 0; layer <= maxLayer; layer++) {
+            for (const UILayoutNode& layoutNode : solved) {
+                if (layoutNode.paintLayer != layer) continue;
+                const UINode* node = layoutNode.node;
+                if (!node) continue;
+                node->draw(layoutNode.drawPos, layoutNode.size);
+            }
+            renderer.flush();
+            TextRenderer::get().flush();
         }
     }
 
-    // Boxes and glyphs are separate batches, so their relative depth is flush order,
-    // not submission order. Resolving both here rather than leaving it to the caller
-    // is the only way a box declared after a label reliably lands under it.
-    renderer.flush();
-    TextRenderer::get().flush();
     TextRenderer::get().clearViewProjOverride();
 }
 

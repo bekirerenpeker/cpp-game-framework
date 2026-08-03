@@ -17,80 +17,83 @@ rather than leaving a stale description.
   small subtree, applies its own normal/hover/pressed styling, and hands back a
   state the caller reacts to. This is how Clay, Dear ImGui and egui are all built,
   and it is sustainable, with three rules that keep it that way:
-  **(a) widgets live outside `UIManager`** — a `UIWidgets` namespace or
-  `widgets/` folder of free functions, not methods, or `UIManager` becomes a god
-  class coupled to every widget that will ever exist. **(b) a widget may only
+  **(a) widgets live outside `UIManager`** — free functions, not methods, or
+  `UIManager` becomes a god class coupled to every widget that will ever exist.
+  The caller should still only ever see **one** name: a `UI` namespace holding
+  both the widgets *and* thin forwarders for the bare primitives
+  (`UI::openContainer`/`closeContainer`/`addTextLeaf` → `UIManager`), so dropping
+  from a button down to a hand-built container is not a context switch to another
+  class. `UIManager` stays the tree/state owner and simply stops being the public
+  face. **(b) a widget may only
   touch `UIManager`'s public API.** That is the load-bearing discipline: if a
   widget cannot be written without reaching into privates, the *primitive* layer
   is missing something, and the fix is to add the primitive, never to friend the
   widget. **(c) one config struct per widget** (`UIButtonConfig`, …), the same
   reasoning as `UITextConfig` — a new knob must not cost a signature change, or
   every widget grows a twelve-argument overload set.
-  Button, label and image can be built today and need none of the items below.
-  Slider, window, dropdown and text field need **all four**, so those four should
-  land first — retrofitting capture and hit ordering under a dozen existing
-  widgets means rewriting all of them.
+  Hit ordering and mouse capture — the two that genuinely had to land before any
+  drag widget — are done, and `ui_test`'s slider is the proof that a widget is now
+  just composition plus caller-owned state. The remaining items below are
+  conveniences, not blockers.
 
-- [ ] **Hit resolution: topmost wins, one hovered node** — `computeState` today
-  tests every container against the mouse *independently*, so overlapping
-  containers all report `isHovered` at once and all react to the same click.
-  Invisible while the UI is one flat panel; wrong the moment there is a window
-  over a window, a dropdown over content, or a tooltip. Needs a single resolution
-  pass per frame producing **one** hovered id — deepest/topmost hit wins,
-  respecting paint order and `zIndex` (which is declared on `UIContainerStyle`
-  and still not honoured by the walk). This is a correctness fix the current
-  system needs regardless of widgets; it is only unnoticed because nothing
-  overlaps yet.
-
-- [ ] **Mouse capture / active widget** — the thing that makes any drag work.
-  On press, one widget becomes *active* and keeps receiving the drag until
-  release **even when the cursor leaves its rect**; without it a slider drops its
-  grab the instant you move off the handle, which is most of the gesture. One
-  global active id, and it must also suppress hover on everything underneath
-  while held. Distinct from today's `isHeld`, which means "hovered *and* the
-  button is down" and so is false the moment the cursor wanders off.
-
-- [ ] **Retained per-widget state, keyed by `persistentKey`** — immediate mode
-  rebuilds the tree every frame and `clear()` wipes it, so the only thing
-  currently surviving a frame is `UILayoutCalculator::m_prevFrameNodes`
-  (geometry only). Anything mid-interaction needs more: the drag origin and grab
-  offset of a slider, a window's dragged position/size, scroll offset, a text
-  caret, whether a dropdown is open. A `persistentKey -> state` map with
-  **frame-age eviction**, since immediate mode has no destroy event to hang
-  cleanup off. Note the split: the slider's *value* stays the caller's (`float&`),
-  only the *interaction* state is engine-owned.
-  This subsumes the old resizable-container item, including its unresolved
-  wrinkle — a resizable window has to override the caller's
-  `UILayoutConfig.width/height`, which breaks "layout config is purely the
-  caller's data". The clean resolution is an engine-owned override layer applied
-  *after* the caller's config, not mutation of it.
+- [ ] **Retained per-widget state, keyed by `persistentKey`** — *lower priority
+  than first assessed.* Under the "caller owns the value" model most of this does
+  not need to exist: a window's position and size can be `Vec2&` parameters
+  exactly like a slider's `float&`, and so can a drag origin. What genuinely
+  cannot be caller-owned is the global bookkeeping — which node holds capture
+  (done) and which holds keyboard focus — because no single call site knows about
+  the others. A `persistentKey -> state` map with **frame-age eviction** (immediate
+  mode has no destroy event) stays worth it as a *convenience* once many widgets
+  want scratch space, and is the natural home for an ImGui-style ini dump of
+  window layout later.
+  The old resizable-window wrinkle — that a window has to override the caller's
+  `UILayoutConfig.width/height`, breaking "layout config is purely the caller's
+  data" — turns out to **dissolve** under this model rather than needing solving:
+  `ui_test`'s window feeds its own `Vec2` straight in as `UISizeSpec::fixed(...)`,
+  so nothing is overridden and the config stays the caller's. It only comes back
+  if the engine ever owns window geometry.
 
 - [ ] **Per-state styles** — a widget needs normal/hover/pressed/disabled, not
   one `UIContainerStyle`. `combine`'s all-`std::optional` merge is already
   exactly the right primitive (a set field on `other` wins), so this is a small
   struct of four optional styles plus the rule for picking one, not new
-  machinery. Pairs with **Widget theming** below: without a theme every widget
-  function hardcodes a palette, and restyling an app means editing engine source.
-  Do the theme first — it is what the defaults resolve against.
+  machinery. **Belongs in the `UI` widget namespace, not in `UIManager`** — it is
+  a convenience for writing widgets, and the primitive layer already expresses it
+  perfectly well as `if (state.isHovered) node->style... `, which is what the test
+  scene does. Ships with the config-struct work, since a widget config is where a
+  normal/hover/pressed set would sit. Pairs with **Widget theming** below: without
+  a theme every widget function hardcodes a palette, and restyling an app means
+  editing engine source. Do the theme first — it is what the defaults resolve
+  against.
 
 - [ ] **`UINodeState` outputs for dragging** — what sliders and windows need on
   top of today's `isHovered`/`isPressed`/`isReleased`/`isHeld` +
-  `relativeMousePos`/`localMousePos`:
-  `isActive` (this widget holds capture, wherever the cursor is — the one that
-  actually drives a drag), `dragDelta` (movement since last frame),
+  `relativeMousePos`/`localMousePos`/`isActive`/`isHoveredDirectly`:
+  `dragDelta` (movement since last frame),
   `pressOrigin` (mouse position *and* the node rect at press, so a drag computes
   from the grab point instead of accumulating per-frame error), and `grabOffset`
   (where inside the handle it was grabbed, or the handle snaps its centre to the
   cursor on the first frame). Worth adding alongside: `scrollDelta` (wheel over
   this node — the scroll item below needs it), `isDoubleClicked` (title-bar
   maximise, reset-to-default), and `isFocused` once text input exists.
-  Note `relativeMousePos` is *already* a slider's normalized value along its
-  axis, so a horizontal slider is `clamp(relative.x)` — most of the primitive is
-  there, it is capture that is missing.
+  None of these are blocking: the slider in `ui_test` works on `isActive` plus
+  `relativeMousePos` alone, since that is *already* the normalized value along the
+  axis. They are what stops each widget re-deriving the same drag math.
   Known wart to document rather than fix: hit testing reads last frame's rect, so
   a widget that moves *because* of the drag trails by a frame. Dear ImGui has the
   same property; it only bites if drag math is written against the current rect
   instead of `pressOrigin`.
+
+- [ ] **Event consumption** — press bubbles along with hover, so clicking a child
+  also fires every container above it. Harmless while ancestors are inert panels;
+  wrong the first time a button sits inside a clickable row, which is a shape the
+  widget layer will produce almost immediately. Needs a way for the hit node to
+  stop propagation — either a flag a widget sets, or splitting "the node that
+  owns the click" from "the nodes that merely contain the cursor". Related and
+  cheap: an `ignoreInput` flag on `UILayoutConfig` (CSS `pointer-events: none`)
+  so decorative children opt out of hit testing entirely — the slider handle
+  currently captures instead of its own track, which works but only because the
+  widget checks both.
 
 - [ ] **Grid** — a track list where each track carries the same `SizeSpec`, run
   through `LayoutCalculator`'s existing distribution routine, then row-major
@@ -200,6 +203,62 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **Mouse capture, and paint layers for cross-batch ordering** — two things
+  the slider in `ui_test` needed.
+  **Capture**: `UIManager` keeps one `m_activeKey`. A press claims the topmost
+  node and holds it until release *wherever the cursor goes*, and while it is held
+  nothing else can be hovered — which is the point: dragging a slider past a
+  button must not light the button, and the slider's own caller has no way to tell
+  that button to stand down. `UINodeState::isActive` is what a drag reads instead
+  of `isHeld`; `isHeld` rides on hover and so dies the moment the cursor leaves the
+  track, which is most of a real gesture. Two details that matter: capture
+  survives one frame past button-up so the node that was *pressed* is the one that
+  sees `isReleased` (dropping it on button-up hands the release to whatever the
+  cursor drifted onto), and the captured node still only counts as *hovered* while
+  the cursor is genuinely inside it, so press-drag-away-release correctly does not
+  fire. A captured node that stops being declared drops the capture rather than
+  deadlocking input on a key nothing will match.
+  **Paint layers**: paint order is the preorder walk — children above ancestors,
+  later siblings above earlier — and the tree already encodes it correctly. But
+  boxes and glyphs are separate batches flushed once each, so *every* glyph landed
+  above *every* box regardless of the tree, which is why a floating overlay's
+  background sat under the labels it was covering. `UILayoutNode::paintLayer`
+  implements the previously-declared-and-ignored `zIndex` as a **layer offset from
+  the parent** (not CSS's sibling-relative, global-stacking meaning), so a node and
+  its subtree rise together and a child can never fall behind its own container.
+  `draw()` then emits a layer at a time and flushes both batches per layer: order
+  is preserved at two draw calls per layer rather than per node. Deliberately
+  *not* tied to `isFloating` — that is positioning, not stacking, and conflating
+  them is a known CSS confusion rather than a model worth copying.
+
+- [x] **Hit resolution: topmost wins, hover bubbles to ancestors** —
+  `computeState` used to test every container against the mouse *independently*,
+  so every container under the cursor reported its own hover and a click landed
+  on all of them at once. `UIManager::resolveHover()` now runs once per frame
+  from `clear()` — the last moment before the tree is rebuilt, which pairs this
+  frame's mouse with last frame's geometry and settles the answer before any
+  `openContainer` asks for it — and finds the **last** hit node in paint order.
+  Last is topmost because children paint after parents and later roots after
+  earlier ones, so hit order mirrors paint order by construction. Honouring
+  `zIndex` means reordering *both* together, not just this pass.
+  `isHovered` then **bubbles**: the hit node and every ancestor, DOM-style, so a
+  panel stays lit while the cursor is on its own children. Stopping at the hit
+  node alone reads as the panel flickering off whenever the cursor crosses its
+  contents. `isHoveredDirectly` keeps the single topmost node available for a
+  widget that needs to know the cursor is on *it*. The press/release/held flags
+  ride on the bubbled hover, and that does **not** reintroduce the original bug:
+  two overlapping containers still cannot both react, because only the topmost
+  node's ancestors are in the chain at all.
+  Two things it needed underneath: `UILayoutNode::acceptsInput`, copied off the
+  `UINode` at build time because the snapshot deliberately drops the pointer —
+  and it excludes leaves, since a leaf hands back no state and hitting one would
+  silently swallow the hover its container should have had. And the snapshot's
+  index links are now **rebased** onto the concatenated vector; they are relative
+  to each root's own solve, so an un-rebased parent walk lands in whichever root
+  happens to sit at that offset.
+  Not done, and the natural next step if it is ever wanted: **consumption**, a
+  child stopping propagation so an ancestor does not also see the click.
 
 - [x] **UI space switch: screen by default, world on request** — `UIRenderer`
   owns a `UISpace` (`Screen`/`World`) set by `setSpace`, and three things read

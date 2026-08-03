@@ -19,6 +19,15 @@ struct UILayoutNode
 {
     const UINode* node = nullptr;
     uint64_t persistentKey = 0;
+    // Copied off the UINode rather than read through it, because the snapshot kept
+    // for next frame's hit test drops the pointer -- anything the hit test needs has
+    // to live here. A leaf hands back no state, so hitting one would silently swallow
+    // the hover its container should have had.
+    bool acceptsInput = false;
+    // Paint order is the preorder walk, so the tree already says what is above what.
+    // This is the escape hatch for when that is not enough: a layer raises a node and
+    // its whole subtree above everything in lower layers, whatever the walk says.
+    uint paintLayer = 0;
 
     uint parent = NO_LAYOUT_NODE;
     uint firstChild = NO_LAYOUT_NODE;
@@ -47,6 +56,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
   public:
     const std::vector<UILayoutNode>& calculate(IdType rootId, Vec2 rootTopLeft = VEC2_ZERO);
     const std::vector<UILayoutNode>& getNodes() const { return m_nodes; }
+    const std::vector<UILayoutNode>& getPrevFrameNodes() const { return m_prevFrameNodes; }
 
     const UILayoutNode* getPrevFrameLayout(uint64_t key) const;
     void beginFrame() { m_prevFrameNodes.clear(); }
