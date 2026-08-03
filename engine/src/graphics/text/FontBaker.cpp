@@ -55,11 +55,8 @@ static void generateAtlas(
 
     msdf_atlas::GeneratorAttributes attributes;
     generator.setAttributes(attributes);
-    // A quarter of the cores, and deliberately a small share rather than a fair one. The
-    // bake runs on FontLoader's worker while the game renders, and text already reads in
-    // the default font meanwhile, so finishing sooner buys almost nothing while stealing
-    // cores costs frames for the whole time it runs. Half a 22-thread machine is still
-    // eleven threads fighting the render thread, which is what that felt like.
+    // A quarter of the cores, deliberately a small share rather than a fair one -- this
+    // runs alongside the render thread while text reads in the default font meanwhile.
     generator.setThreadCount(std::max((int)std::thread::hardware_concurrency() / 4, 1));
     generator.generate(glyphs.data(), (int)glyphs.size());
 

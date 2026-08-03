@@ -16,10 +16,15 @@ uint64_t hashCombine(uint64_t seed, uint64_t value)
     return seed ^ (value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
 }
 
+// Distinct seeds so an unnamed node's positional index and a named node's hash never
+// collide into the same key.
+constexpr uint64_t POSITIONAL_KEY_SEED = 1;
+constexpr uint64_t NAMED_KEY_SEED = 2;
+
 uint64_t localKeyOf(std::string_view key, uint64_t positionalIndex)
 {
-    return key.empty() ? hashCombine(1, positionalIndex) :
-                         hashCombine(2, std::hash<std::string_view> {}(key));
+    return key.empty() ? hashCombine(POSITIONAL_KEY_SEED, positionalIndex) :
+                         hashCombine(NAMED_KEY_SEED, std::hash<std::string_view> {}(key));
 }
 
 // A node is hittable only where it is actually visible, so the accumulated clip has to
@@ -65,13 +70,9 @@ computeState(IdType id, const UILayoutNode* prev, bool hovered, bool hoveredDire
     };
 }
 
-// Lowest priority first, so each state only overrides what it actually sets and a
-// pressed button keeps the rest of its hover look instead of falling back to the base.
-//
-// onHeld reads isActive rather than isHeld on purpose: the two only differ once the
-// cursor leaves the node mid-press, and there the capture flag is the one that matches
-// what the gesture is doing -- a grip dragged off itself stays lit until release. The
-// hover-bound flavour would be onHover's job anyway, since it dies with the hover.
+// Lowest priority first, so a pressed button keeps the rest of its hover look instead
+// of falling back to the base. onHeld reads isActive rather than isHeld so a grip
+// dragged off itself stays lit until release, since isHeld dies the moment hover does.
 UIContainerStyle resolveStyle(const UIContainerStyleSpec& spec, const UINodeState& state)
 {
     UIContainerStyle style = spec.base();
@@ -100,14 +101,9 @@ void UIManager::clear()
     resolveInput();
 }
 
-// Exactly one node is hovered, and it is the last one in paint order under the
-// mouse: children paint after parents and later roots after earlier ones, so the
-// last hit is the topmost. Without this every container under the cursor reported a
-// hover of its own and a click landed on all of them at once.
-//
-// Resolution has to mirror whatever order the painter uses -- the walk that feeds
-// UIRenderer is this same preorder, so the two agree by construction. Honouring
-// zIndex means reordering both together, not just this one.
+// Exactly one node is hovered: the last hit in paint order (children after parents,
+// later roots after earlier ones), which is topmost. Resolution has to mirror the
+// painter's own walk, so honouring zIndex means reordering both together.
 void UIManager::resolveInput()
 {
     m_hoveredKeys.clear();

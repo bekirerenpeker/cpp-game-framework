@@ -4,12 +4,9 @@
 
 using namespace Engine;
 
-// Draws a rule-tile map whose contents are re-sampled from 3D Perlin noise every
-// frame (time on the z axis, so the pattern scrolls). A cell is set to the rule
-// tile where the field crosses the threshold and cleared elsewhere; since the
-// field keeps shifting, TilemapRenderer continuously re-resolves each rule
-// tile's region + rotation from its live 8-neighbor connectivity on every
-// rebake. WASD/QE pan and zoom; V toggles wireframe.
+// Draws a rule-tile map re-sampled from 3D Perlin noise every frame (time on the z
+// axis), so TilemapRenderer keeps re-resolving each tile's region/rotation from its
+// live 8-neighbor connectivity. WASD/QE pan and zoom; V toggles wireframe.
 int tilemap_test()
 {
     LOG_INFO("================= TILEMAP RENDER TEST =================");
@@ -56,10 +53,6 @@ int tilemap_test()
 
     bool wireframe = false;
 
-    // Scroll the map by sampling 3D Perlin with time as the z axis; a tile is
-    // placed where the field crosses the threshold and cleared where it does
-    // not, so the pattern animates and the rule tile keeps re-picking its
-    // region/rotation as neighbors change.
     auto onFrame = [&](float dt) {
         float z = Time::get().currTime() * scrollSpeed;
         TilemapComponent& tilemap = tilemapEntity.get<TilemapComponent>();

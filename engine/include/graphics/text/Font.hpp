@@ -111,23 +111,17 @@ class Font : public IResource
     Font& operator=(Font&& other) noexcept;
 
     // The constructor only queues the bake, so every query below answers from a
-    // placeholder until the atlas lands: one generic glyph box for every codepoint, no
-    // texture (the batch renderer resolves that to its white default) and plausible
-    // metrics. Text therefore lays out and draws as a row of solid boxes while it
-    // loads, and no call anywhere blocks on the worker.
-    //
-    // isValid is true while loading for exactly that reason -- it means "usable", and a
-    // loading font is. isReady is the one to ask when the answer has to be the real
-    // face; getLoadVersion changes when it arrives, which is how a cached layout knows
-    // it was solved against the placeholder.
+    // placeholder (a generic glyph box, no texture, plausible metrics) until the atlas
+    // lands; no call ever blocks on the worker. isValid means "usable" and is true
+    // while loading; isReady asks for the real face, and getLoadVersion changes when
+    // it arrives.
     bool isValid() const;
     bool isLoading() const;
     bool isReady() const;
     uint getLoadVersion() const;
 
-    // Gives up the non-blocking property on purpose, for the few callers that need the
-    // real metrics before continuing rather than a frame or two later -- a startup
-    // measurement, a tool, an atlas dump. Never call it per frame.
+    // Blocks for the rare caller that needs the real metrics immediately rather than a
+    // frame or two later -- a startup measurement, a tool. Never call it per frame.
     void waitForLoad();
 
     FontAtlasType getAtlasType() const { return m_settings.atlasType; }

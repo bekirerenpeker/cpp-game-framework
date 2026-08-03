@@ -11,9 +11,8 @@
 namespace Engine {
 
 // Which space a UI unit lands in. Screen is one unit per window pixel, unaffected by
-// the camera, and is what a HUD or a menu wants. World is the niche one -- a UI
-// pinned to the scene (a nameplate, a diegetic panel), moving and scaling with the
-// camera like any sprite. The whole UI shares one space; it is not per root.
+// the camera -- what a HUD or menu wants. World moves and scales with the camera like
+// any sprite, for a nameplate or a diegetic panel. The whole UI shares one space.
 enum class UISpace : uint8_t
 {
     Screen = 0,
@@ -41,7 +40,7 @@ struct UIBoxVertex
     float borderWidth;
     float dashPeriod;
     float dashRatio;
-    float reserved;
+    float reserved;   // pads the last attribute out to a full vec4 slot, unused in the shader
     int texIndex;
 };
 

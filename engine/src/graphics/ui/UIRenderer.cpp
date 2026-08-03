@@ -34,20 +34,16 @@ void UIRenderer::init(GlShader* shader, size_t maxQuadCount)
 void UIRenderer::setSpace(UISpace space)
 {
     if (m_space == space) return;
-    // Only a batch with something already in it needs resolving before the matrix
-    // moves under it. Guarding on that matters more than the saved draw call: setSpace
-    // is naturally called during setup, and flushing there would run ensureReady and
-    // create this window's VAO before the render context is bound, leaving every later
-    // draw pointed at a VAO built against the wrong state -- correct matrix, correct
-    // vertices, nothing on screen.
+    // Guards more than the draw call: setSpace runs during setup too, and flushing an
+    // empty batch there would build this window's VAO before the render context is
+    // bound.
     if (m_initialized && m_batch.getQuadCount() > 0) flush();
     m_space = space;
 }
 
-// Screen space is deliberately Y-**up** (0,0 at the window's bottom-left) rather than
-// the more obvious Y-down: glyph quads are built baseline-up, so a Y-down matrix
-// renders every string mirrored. The single flip lives in getRootOrigin instead,
-// where it costs one translation and touches nothing else.
+// Screen space is deliberately Y-**up** (0,0 at the window's bottom-left): glyph
+// quads are built baseline-up, so a Y-down matrix would render every string mirrored.
+// The flip lives in getRootOrigin instead.
 Mat4 UIRenderer::getViewProjMat() const
 {
     if (m_space == UISpace::World) return ViewContext::get().getViewProjMat();

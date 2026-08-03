@@ -93,18 +93,14 @@ void Font::beginLoad()
     m_job = FontLoader::get().submit(m_sourcePath, m_settings);
 }
 
-// Called from the const accessors, so a Font needs no update() and no owner: the first
-// query after the worker is done is what installs the result. Cheap enough to sit in
-// that path -- once loaded it is a single enum compare, and while loading it is one
-// relaxed-ish atomic load.
+// Called from the const accessors, so a Font needs no update() and no owner -- the
+// first query after the worker is done installs the result. The const_cast is safe
+// since every caller still sees the same font, just backed by the real atlas now.
 void Font::pollLoad() const
 {
     if (m_state != FontLoadState::Loading) return;
     if (!m_job || !m_job->isDone.load(std::memory_order_acquire)) return;
 
-    // The mutation is genuinely internal -- every caller sees the same font it asked
-    // for, just backed by the real atlas now -- and the alternative is marking most of
-    // the class mutable, which would give up const checking everywhere else.
     const_cast<Font*>(this)->finishLoad();
 }
 
@@ -198,9 +194,8 @@ void Font::waitForLoad()
     finishLoad();
 }
 
-// The field encodes distances over +-distanceRange/2 atlas pixels, so an offset
-// past half the normalized range saturates everywhere and would flood the glyph
-// quad. MAX_FIELD_OFFSET is the shader's clamp expressed back in em.
+// The field encodes distances over +-distanceRange/2 atlas pixels; MAX_FIELD_OFFSET
+// is the shader's saturation clamp expressed back in em.
 float Font::getMaxEffectEm() const
 {
     if (m_settings.emPixelSize == 0 || m_distanceRange <= 0.0f) return 0.0f;

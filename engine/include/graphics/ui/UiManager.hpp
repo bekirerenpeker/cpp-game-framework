@@ -9,15 +9,10 @@
 
 namespace Engine {
 
-// isHovered follows the DOM rule: the node under the cursor and every ancestor of it,
-// so a panel still counts as hovered while the cursor sits on one of its children.
-// isHoveredDirectly is the single topmost node, for a widget that has to know the
-// cursor is on *it* rather than somewhere inside it.
-//
-// isActive is the drag flag: this node was pressed and holds the mouse until release
-// **wherever the cursor goes**, which is what a slider reads instead of isHeld --
-// isHeld rides on hover and so dies the moment the cursor leaves the track, which is
-// most of a real drag. While one node is active no other node can be hovered at all.
+// isHovered bubbles DOM-style to every ancestor of the node under the cursor;
+// isHoveredDirectly is just the topmost one. isActive is the drag flag: it holds
+// through release wherever the cursor goes, unlike isHeld, which dies the moment the
+// cursor leaves the widget -- a slider reads isActive for exactly that reason.
 struct UINodeState
 {
     IdType id = INVALID_ID;

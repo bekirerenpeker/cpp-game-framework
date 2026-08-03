@@ -14,7 +14,6 @@ int piano_demo()
     fs::path files[13] = {"a1.wav", "a1s.wav", "b1.wav",  "c1.wav", "c1s.wav", "d1.wav", "d1s.wav",
                           "e1.wav", "f1.wav",  "f1s.wav", "g1.wav", "g1s.wav", "c2.wav"};
     AudioBuffer* resources[13] = {nullptr};
-    IdType instances[13] = {INVALID_ID};
 
     AudioManager::get();   // initalize the audio engine
     for (int i = 0; i < 13; i++) {
@@ -31,13 +30,7 @@ int piano_demo()
         if (Input::get().keyPressed(KeyCode::Q)) break;
 
         for (int i = 0; i < 13; i++) {
-            if (Input::get().keyPressed(keyCodes[i])) {
-                instances[i] = AudioManager::get().playAudio(resources[i]);
-            }
-            if (Input::get().keyReleased(keyCodes[i]) &&
-                AudioManager::get().getAudioInstance(instances[i])) {
-                // AudioManager::get().stopAudioInstance(instances[i]);
-            }
+            if (Input::get().keyPressed(keyCodes[i])) AudioManager::get().playAudio(resources[i]);
         }
 
         mainWindow->swapBuffers();

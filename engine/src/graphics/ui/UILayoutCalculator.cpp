@@ -188,12 +188,9 @@ void UILayoutCalculator::computePositions()
     for (size_t i = 0; i < m_nodes.size(); i++) positionChildren((uint)i);
 }
 
-// A cosmetic adjustment applied after siblings are already positioned, so a hovered
-// node growing/shifting never reflows anything else -- it only rewrites its own box.
-// That rewritten box is what ends up in the previous-frame snapshot too, so a scaled
-// button's hit-test area tracks its drawn size rather than the pre-transform one.
-// Does not re-anchor children: a transformed node with children would leave them
-// sitting where the untransformed box put them.
+// Applied after siblings are positioned, so a hovered node growing/shifting rewrites
+// only its own box, never reflowing anything else. Children are not re-anchored, so
+// they stay where the untransformed box put them.
 void UILayoutCalculator::applyTransforms()
 {
     for (UILayoutNode& node : m_nodes) {
@@ -206,12 +203,9 @@ void UILayoutCalculator::applyTransforms()
     }
 }
 
-// Display only, and deliberately the last thing to run: every geometric pass works
-// in layout space (top-left anchored, Y-down) and this is the one place that is
-// converted to what the renderer wants -- a centre, Y-up from rootTopLeft, which is
-// where the caller wants the root's top-left corner to land. Placing the root here
-// rather than at draw time is what keeps hit testing correct: drawPos is the one
-// thing both the renderer and the mouse compare against, so it has to be final.
+// The one place layout space (top-left, Y-down) converts to what the renderer wants
+// (a centre, Y-up from rootTopLeft). Run last and stored rather than computed at draw
+// time, since drawPos is also what hit testing compares against.
 void UILayoutCalculator::computeDrawPositions(Vec2 rootTopLeft)
 {
     for (UILayoutNode& node : m_nodes) {
@@ -222,11 +216,10 @@ void UILayoutCalculator::computeDrawPositions(Vec2 rootTopLeft)
     }
 }
 
-// Strictly top-down, which is free here: the tree was built preorder, so a parent's
-// rect is always already final by the time its children are reached. A node inherits
-// whatever box its ancestors have narrowed it to, and narrows that further for its own
-// children if it clips -- so the rect a fragment is tested against is the intersection
-// of every clipping ancestor, computed once instead of walked per draw.
+// Strictly top-down, which is free since the tree is already preorder: a parent's rect
+// is final before its children are reached, so each node just narrows the box it
+// inherited -- the intersection of every clipping ancestor, computed once per node
+// instead of walked per draw.
 void UILayoutCalculator::computeClipRects()
 {
     for (UILayoutNode& node : m_nodes) {
@@ -540,10 +533,9 @@ void UILayoutCalculator::levelDown(UILayoutAxis axis, float deficit)
     }
 }
 
-// A root answers to nothing, so its own spec is the whole story. Grow and Percent
-// have no parent box to resolve against and fall back to max-content the way Fit
-// does. Deliberately not clamped to the content floor: a Fixed root narrower than
-// its content is exactly what makes the children shrink and the text re-wrap.
+// A root has no parent box, so Grow and Percent fall back to max-content like Fit
+// does. Deliberately not clamped to the content floor: a Fixed root narrower than its
+// content is exactly what makes children shrink and text re-wrap.
 float UILayoutCalculator::resolveRootSize(UILayoutAxis axis) const
 {
     const UISizeSpec& spec = axisSpec(m_nodes[0].node->layout, axis);

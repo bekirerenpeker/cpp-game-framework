@@ -56,13 +56,9 @@ FontLoader::~FontLoader()
     delete m_defaultFont;
 }
 
-// Created by the first submit rather than at engine init, so it is queued ahead of the
-// font that triggered it and nothing bakes at all in a scene with no text. The request
-// flag is set before the Font is built because that constructor submits, which lands
-// straight back here.
-//
-// Default-font state is main-thread only: Fonts are constructed there, and resolve() is
-// called from layout and drawing, which are too.
+// Created by the first submit rather than at engine init, so it's queued ahead of the
+// font that triggered it and a scene with no text never bakes one. m_defaultFont and
+// m_defaultRequested are main-thread only, same as every Font constructor and resolve().
 void FontLoader::ensureDefaultFont()
 {
     if (m_defaultRequested) return;
@@ -97,9 +93,9 @@ const Font* FontLoader::resolve(const Font* requested)
     return fallback && fallback->isReady() ? fallback : requested;
 }
 
-// One worker rather than a pool: a bake is msdf-atlas-gen plus a PNG write, and running
-// two at once would need the baker re-entrant for no real gain, since fonts arrive a
-// handful at a time. Sequential and off the main thread is the whole requirement.
+// One worker rather than a pool: fonts arrive a handful at a time, so making the baker
+// re-entrant to run two at once would buy little. Sequential and off the main thread
+// is the whole requirement.
 std::shared_ptr<FontLoadJob>
 FontLoader::submit(const fs::path& sourcePath, const FontBakeSettings& settings)
 {
@@ -128,10 +124,9 @@ FontLoader::submit(const fs::path& sourcePath, const FontBakeSettings& settings)
     return job;
 }
 
-// Rough relative cost of a bake, used only to order the queue. A bitmap atlas is a
-// glyph rasterisation; an mtsdf one colours the edges and solves a distance field per
-// glyph, which is the order-of-magnitude difference the factor stands for. Both scale
-// with the atlas area and the glyph count.
+// Rough relative cost of a bake, used only to order the queue. MTSDF_COST_FACTOR is
+// the order-of-magnitude difference between rasterising a glyph and solving a
+// distance field for one; both scale with atlas area and glyph count.
 uint64_t FontLoader::estimateCost(const FontBakeSettings& settings)
 {
     constexpr uint64_t MTSDF_COST_FACTOR = 20;
@@ -145,11 +140,9 @@ uint64_t FontLoader::estimateCost(const FontBakeSettings& settings)
     return glyphCount * area * perGlyph;
 }
 
-// Shortest job first: it minimises how long the average font spends as placeholder
-// boxes, so a cheap bitmap atlas queued behind an mtsdf one does not wait seconds for
-// work it could have finished in a fraction of the time. Nothing starves, because the
-// queue is a startup burst rather than a live stream, and equal costs keep submission
-// order so two identical fonts still arrive in the order they were asked for.
+// Shortest job first, so a cheap bitmap atlas queued behind an mtsdf one is not stuck
+// waiting seconds for work it could finish in a fraction of the time. Nothing starves,
+// since the queue is a startup burst rather than a live stream.
 std::shared_ptr<FontLoadJob> FontLoader::takeCheapestJob()
 {
     size_t cheapest = 0;
@@ -162,11 +155,10 @@ std::shared_ptr<FontLoadJob> FontLoader::takeCheapestJob()
     return job;
 }
 
-// Below normal, so the scheduler always prefers the render thread and -- on a hybrid
-// CPU -- parks this work on the efficiency cores. It only covers the serial half of a
-// bake (glyph geometry, PNG encode, cache IO); msdf-atlas-gen's own threads start at
-// normal priority whatever this one is, which is why the thread *count* is the lever
-// that matters and this is the cheap extra.
+// Below normal, so the scheduler prefers the render thread and, on a hybrid CPU, parks
+// this on the efficiency cores. Only covers the serial half of a bake -- msdf-atlas-gen's
+// own threads start at normal priority regardless, which is why the thread count (see
+// FontBaker::generateAtlas) is the lever that actually matters.
 void FontLoader::lowerWorkerPriority()
 {
 #if OS_NAME == OS_WINDOWS

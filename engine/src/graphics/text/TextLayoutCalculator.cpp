@@ -10,13 +10,22 @@ namespace {
 
 constexpr float BOUNDED_EPSILON = 0.0001f;
 
+// The last break-space seen on the current line, saved in case a later word doesn't
+// fit and the walk has to backtrack to it.
+struct WrapPoint
+{
+    size_t span = 0, byte = 0;
+    size_t runCount = 0, runByte = 0;
+    float runX = 0.0f, width = 0.0f;
+    float ascent = 0.0f, descent = 0.0f, height = 0.0f;
+};
+
 }   // namespace
 
-// Which font this block actually lays out with, and whether that answer just changed.
-// It moves at most twice in a block's life -- default font ready, then the requested one
-// ready -- so a compare beats a dirty flag every font would have to push to every block
-// that ever used it. Both halves matter: the pointer catches the swap from the borrowed
-// default to the real face, the version catches the same font's atlas arriving under it.
+// Which font this block actually lays out with, and whether that just changed: the
+// pointer catches the swap from the borrowed default to the real face, the version
+// catches that same font's atlas arriving under it. A compare beats every font pushing
+// a dirty flag to every block that ever used it.
 void TextLayoutCalculator::syncFontVersion(TextBlock& block)
 {
     const Font* resolved = FontLoader::get().resolve(block.m_font);
@@ -135,9 +144,7 @@ float TextLayoutCalculator::calculate(TextBlock& block, float availableWidth)
     uint32_t prev = 0;
 
     bool haveBreak = false;
-    size_t breakSpan = 0, breakByte = 0, breakRunCount = 0, breakRunByte = 0;
-    float breakRunX = 0.0f, breakWidth = 0.0f;
-    float breakAscent = 0.0f, breakDescent = 0.0f, breakHeight = 0.0f;
+    WrapPoint lastBreak;
 
     auto emitRun = [&](size_t endByte) {
         if (runSpan >= spans.size() || endByte <= runByte) return;
@@ -231,33 +238,26 @@ float TextLayoutCalculator::calculate(TextBlock& block, float availableWidth)
 
         if (TextMetrics::isBreakSpace(codepoint)) {
             haveBreak = true;
-            breakSpan = spanIdx;
-            breakByte = byteIdx;
-            breakWidth = penX;
-            breakRunCount = runs.size();
-            breakRunByte = runByte;
-            breakRunX = runX;
-            breakAscent = lineAscent;
-            breakDescent = lineDescent;
-            breakHeight = lineHeight;
+            lastBreak = {spanIdx, byteIdx,    runs.size(), runByte,   runX,
+                         penX,    lineAscent, lineDescent, lineHeight};
         } else if (bounded && penX > 0.0f && penX + glyphStep.total() > budget) {
             if (haveBreak) {
                 // The last space can be several spans back, so everything emitted
                 // since is discarded and the walk resumes from there.
-                runs.resize(breakRunCount);
-                runSpan = breakSpan;
-                runByte = breakRunByte;
-                runX = breakRunX;
-                emitRun(breakByte);
+                runs.resize(lastBreak.runCount);
+                runSpan = lastBreak.span;
+                runByte = lastBreak.runByte;
+                runX = lastBreak.runX;
+                emitRun(lastBreak.byte);
 
-                lineAscent = breakAscent;
-                lineDescent = breakDescent;
-                lineHeight = breakHeight;
-                closeLine(breakWidth);
+                lineAscent = lastBreak.ascent;
+                lineDescent = lastBreak.descent;
+                lineHeight = lastBreak.height;
+                closeLine(lastBreak.width);
 
-                spanIdx = breakSpan;
-                byteIdx = breakByte;
-                startRun(breakSpan, breakByte);
+                spanIdx = lastBreak.span;
+                byteIdx = lastBreak.byte;
+                startRun(lastBreak.span, lastBreak.byte);
             } else {
                 // A single word wider than the whole line still has to go somewhere.
                 emitRun(charStart);

@@ -24,11 +24,10 @@ Vec2 g_rootSize(980.0f, 646.0f);
 Vec2 g_windowPos(600.0f, 250.0f);
 Vec2 g_windowSize(340.0f, 200.0f);
 
-// Drag bookkeeping is caller-owned too. Only one node can hold capture at a time, so
-// these can never be contended -- but each grip needs its own, since the size it
-// started from is per widget. The *origin* is stored rather than accumulating
-// per-frame deltas: hit rects are one frame stale, so deltas would compound into drift
-// on a fast drag.
+// Drag bookkeeping is caller-owned too; each grip needs its own since the size it
+// started from is per widget. The pointer/value *origin* is stored rather than
+// accumulating per-frame deltas, since hit rects are one frame stale and deltas would
+// compound into drift on a fast drag.
 struct DragState
 {
     bool active = false;
@@ -160,10 +159,9 @@ UINodeState addGrip()
     return grip;
 }
 
-// Drives a caller-owned vector from a drag. Reads isActive, not isHeld: the cursor
-// leaves a 16px grip almost immediately, and only capture keeps the gesture alive.
-// signY flips because the mouse is y-up while layout offsets are y-down, so dragging
-// downwards has to *grow* a height and *increase* a top-left offset alike.
+// Drives a caller-owned vector from a drag. Reads isActive, not isHeld, since the
+// cursor leaves a 16px grip almost immediately and only capture keeps the gesture
+// alive. signY flips because the mouse is y-up while layout offsets are y-down.
 void dragVec2(const UINodeState& grip, DragState& drag, Vec2& value, Vec2 minValue, float signY)
 {
     if (!grip.isActive) {
@@ -186,9 +184,9 @@ void dragVec2(const UINodeState& grip, DragState& drag, Vec2& value, Vec2 minVal
 }
 
 // A movable, resizable window: a title bar that drags the whole thing, a body whose
-// inner container re-wraps its text as the width changes, and a corner grip. Nothing
-// here is engine state -- position and size are the scene's, exactly like the slider's
-// float, which is what makes a window ordinary composition rather than a special case.
+// inner container re-wraps its text as the width changes, and a corner grip. Position
+// and size are the scene's, same as the slider's float, so a window is ordinary
+// composition rather than a special case.
 void resizableWindow()
 {
     UIManager& ui = UIManager::get();
@@ -209,10 +207,9 @@ void resizableWindow()
                           .shadowOffset = Vec2(0.0f, 10.0f),
                           .shadowBlurRadius = 26.0f,
                           // The vertical pass never shrinks a child below its content,
-                          // so a short window is exactly the case where content spills
-                          // past its own frame -- and this is what cuts it off. The
-                          // shadow survives because a node's own drawing is bounded by
-                          // its *parent's* clip, not the one it imposes on its children.
+                          // so a short window spills past its own frame; this is what
+                          // cuts it off. The shadow survives since a node's own drawing
+                          // is bounded by its *parent's* clip, not its own.
                           .overflow = UIOverflow::Hidden,
                           // Above the overlay's layer 1, so it is the topmost thing in
                           // the scene for both painting and hit testing.
@@ -281,12 +278,10 @@ void resizableWindow()
     dragVec2(grip, g_windowResize, g_windowSize, WINDOW_MIN, -1.0f);
 }
 
-// A track with a handle floating along it, and the value lives in the caller's float.
-// The drag reads isActive rather than isHeld: isHeld rides on hover and so would drop
-// the grab the moment the cursor left the track, which is most of a real drag. The
-// handle is a container too, so a press that starts on it captures *it* rather than
-// the track -- either capture means the same gesture, and the value still comes off
-// the track's own relativeMousePos, which stays meaningful outside its rect.
+// A track with a handle floating along it; the value lives in the caller's float. The
+// drag reads isActive rather than isHeld, which would drop the grab the moment the
+// cursor left the track. The handle is a container too, so a press starting on it
+// captures *it* instead, but the value still comes off the track's relativeMousePos.
 void slider(float& value, const char* caption)
 {
     UIManager& ui = UIManager::get();
@@ -621,11 +616,10 @@ void buildUi(GlTexture& image)
         ui.closeContainer();
         endSection();
 
-        // The two labels on the right are the same string from the same face at the same
-        // size, one atlas each, so the readability difference is visible in one frame
-        // instead of from memory across a TAB press. They cost no extra draw call: a
-        // glyph carries its texture slot *and* its unitRange per vertex, so a second
-        // atlas -- and a second atlas type -- still shares the batch.
+        // The two labels on the right are the same string, face and size, one atlas
+        // each, so the readability difference is visible in one frame instead of across
+        // a TAB press. They cost no extra draw call, since texture slot and unitRange
+        // are both per-vertex.
         UILayoutConfig statusRow = box(UISizeSpec::grow(), UISizeSpec::fit());
         statusRow.gap = 18.0f;
         ui.openContainer(statusRow);
@@ -645,14 +639,10 @@ void buildUi(GlTexture& image)
         label("bitmap Handgloves 138", CAPTION_COLOR, 11.0f, g_bitmapFont);
         ui.closeContainer();
 
-        // Floating, so it sits over the left panel instead of taking a slot in the
-        // row, and declared last so it paints last -- which is exactly what makes it
-        // the topmost hit. Hovering the overlap lights this and not the panel under
-        // it; before the hit resolution both lit at once.
-        //
-        // zIndex is what puts it on its own paint layer. Without one it is still last
-        // in the walk, but the walk only orders each batch internally -- the panel's
-        // *glyphs* would flush after this box and land on top of it.
+        // Floating, so it sits over the left panel instead of taking a row slot, and
+        // declared last so it paints last -- which is what makes it the topmost hit.
+        // zIndex puts it on its own paint layer; without one the panel's *glyphs*
+        // would still flush after this box and land on top of it.
         UILayoutConfig overlayLayout = box(UISizeSpec::fixed(300.0f), UISizeSpec::fit());
         overlayLayout.isFloating = true;
         overlayLayout.floating.offset = Vec2(70.0f, 190.0f);
@@ -690,13 +680,10 @@ void buildUi(GlTexture& image)
 
 }   // namespace
 
-// Every paintable field of UIContainerStyle, drawn by UIRenderer as one quad each --
-// background, border ring, corner radius, dash pattern and shadow all come out of a
-// single rounded-box distance field. SPACE switches the UI between screen and world
-// space, TAB switches the UI font between an mtsdf and a bitmap atlas of the same face;
-// WASD pans and QE zooms the camera, which moves the UI only in world space.
-// Edges stay a pixel wide at any zoom because the antialiasing is driven by the
-// distance field's gradient, and hovering proves hit testing follows the space.
+// A gallery of every paintable UIContainerStyle field, each one quad drawn from a
+// single rounded-box distance field. SPACE toggles screen/world UI space, TAB toggles
+// the UI font between mtsdf and bitmap atlases of the same face; WASD/QE pan and zoom
+// the camera, which only moves the UI in world space.
 int ui_test()
 {
     IdType windowId = WindowManager::get().createWindow({1600, 800, "UI Test"});

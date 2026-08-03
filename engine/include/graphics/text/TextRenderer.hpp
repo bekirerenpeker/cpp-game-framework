@@ -11,10 +11,10 @@
 
 namespace Engine {
 
-// unitRange is per-vertex, not a uniform, so glyphs from different fonts and
-// different styles all stay in one batch. It also selects the shader's branch:
-// negative is a solid untextured fill (underline, strikethrough, UI rects), zero
-// is a plain coverage mask (bitmap atlas), positive is a distance field.
+// unitRange is per-vertex, not a uniform, so glyphs from different fonts and styles
+// stay in one batch. It also selects the shader's branch: negative is a solid fill
+// (underline, strikethrough), zero is a coverage mask (bitmap atlas), positive is a
+// distance field.
 struct TextVertex
 {
     Vec2 pos;
@@ -26,7 +26,7 @@ struct TextVertex
     Vec2 unitRange;
     Vec2 shadowOffset;
     float shadowSoftness;
-    float reserved;
+    float reserved;   // pads shadowOffset+shadowSoftness to a vec4 slot; unused
     float outlineWidth;
     float boldness;
     float softness;

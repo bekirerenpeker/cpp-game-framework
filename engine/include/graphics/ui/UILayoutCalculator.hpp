@@ -15,11 +15,8 @@ constexpr uint NO_LAYOUT_NODE = (uint)-1;
 
 // A flat mirror of one UINode for the duration of a solve. minWidth/maxWidth are
 // scratch for the intrinsic passes; pos/size are the solved geometry in layout
-// space, which is top-left anchored and Y-down. drawPos is display-only: the centre
-// of the rect in a Y-up space, produced once every other pass has settled.
-// There is no minHeight/maxHeight because nothing wraps vertically, so a node's
-// intrinsic height is a single number -- it lives in size.y until the final pass
-// overwrites it, which is safe only because that pass runs strictly top-down.
+// space (top-left anchored, Y-down). drawPos is display-only: the centre of the
+// rect in a Y-up space, produced once every other pass has settled.
 struct UILayoutNode
 {
     const UINode* node = nullptr;

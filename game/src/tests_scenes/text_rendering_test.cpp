@@ -25,78 +25,46 @@ fs::path findFontFile()
 
 void logFont(const Font& font, const char* label)
 {
-    if (!font.isValid()) {
-        LOG_ERROR("{} font failed to load", label);
-        return;
-    }
-
-    const FontMetrics& metrics = font.getMetrics();
-    LOG_INFO(
-        "{}: {} glyphs, atlas {}x{}, unitRange ({}, {}), lineHeight {} em, "
-        "ascender {} em, descender {} em",
-        label, font.getGlyphCount(), font.getAtlasSize().x, font.getAtlasSize().y,
-        font.getUnitRange().x, font.getUnitRange().y, metrics.lineHeight, metrics.ascender,
-        metrics.descender
-    );
-
-    const Glyph* glyph = font.getGlyph('A');
-    if (glyph) {
-        LOG_INFO(
-            "  'A' advance {} em, quad ({}, {})-({}, {}), uv ({}, {})-({}, {})", glyph->advance,
-            glyph->quadMin.x, glyph->quadMin.y, glyph->quadMax.x, glyph->quadMax.y, glyph->uvMin.x,
-            glyph->uvMin.y, glyph->uvMax.x, glyph->uvMax.y
-        );
-    }
-    LOG_INFO(
-        "  kerning A/V {} em, distanceRange {} px, max outline/glow {} em",
-        font.getKerning('A', 'V'), font.getDistanceRange(), font.getMaxEffectEm()
-    );
+    if (!font.isValid()) LOG_ERROR("{} font failed to load", label);
 }
 
-void logLines(const TextBlock& block, const char* label)
-{
-    const std::vector<TextLine>& lines = block.getLines();
-    LOG_INFO(
-        "  {}: {} lines, bounds ({}, {})", label, lines.size(), block.getBounds().x,
-        block.getBounds().y
-    );
-    for (size_t i = 0; i < lines.size(); i++) {
-        LOG_INFO(
-            "    line {}: top {} width {} height {} ascent {} descent {} runs {}", i, lines[i].top,
-            lines[i].width, lines[i].height, lines[i].ascent, lines[i].descent, lines[i].runCount
-        );
-    }
-}
-
-// Everything the fold is supposed to guarantee, logged once at startup so it can be
-// checked from game/output/log.txt without driving the window.
+// Exercises every layout invariant the fold is supposed to guarantee at startup;
+// silent when they hold, so game/output/log.txt only shows something if one breaks.
 void logLayoutProof(
     const Font& font, const TextStyle& base, const TextStyle& bigCyan, const TextStyle& huge
 )
 {
+    auto expect = [](bool ok, const char* what) {
+        if (!ok) LOG_ERROR("layout proof failed: {}", what);
+    };
+
     TextLayoutCalculator& calc = TextLayoutCalculator::get();
 
-    LOG_INFO("=== line box: a line is as tall as the tallest style touching it ===");
+    // A line is as tall as the tallest style touching it, so the baseline sits at
+    // lineTop + that line's own ascent -- stepping baseline-to-baseline instead used to
+    // let a tall line ride up into the one above it.
     TextBlock mixed(&font, "line one /sHUGE/s here\nline two /sBIG/s too\nplain third line", base);
     mixed.setSpanStyles({bigCyan, huge});
     calc.calculate(mixed, 0.0f);
-    logLines(mixed, "per-style line heights");
 
-    // The baseline must sit at lineTop + that line's own ascent. Stepping
-    // baseline-to-baseline instead is what used to let a tall line 2 ride up into
-    // line 1, so a non-negative gap here is the regression check.
     const std::vector<TextLine>& ml = mixed.getLines();
     for (size_t i = 0; i + 1 < ml.size(); i++) {
-        float gap = ml[i].height - ml[i].ascent - ml[i].descent;
-        LOG_INFO("    gap below line {}: {} (must be >= 0, no overlap)", i, gap);
+        expect(
+            ml[i].height - ml[i].ascent - ml[i].descent >= 0.0f, "line box gap must not overlap"
+        );
     }
 
     mixed.setFixedLineHeight(true);
     calc.calculate(mixed, 0.0f);
-    logLines(mixed, "fixedLineHeight opts out, all steps equal");
+    const std::vector<TextLine>& fixed = mixed.getLines();
+    for (size_t i = 1; i < fixed.size(); i++) {
+        expect(
+            fixed[i].height == fixed[0].height, "fixedLineHeight must give every line the same step"
+        );
+    }
     mixed.setFixedLineHeight(false);
 
-    LOG_INFO("=== wrapping: world-space text can wrap now ===");
+    // Wrapping backtracks to the last space, even several spans back.
     TextBlock para(
         &font,
         "the quick brown fox jumps over the lazy dog while a col/sour/sful span "
@@ -104,27 +72,16 @@ void logLayoutProof(
         base
     );
     para.setSpanStyles({bigCyan});
-
     TextBlockWidths widths = calc.measureMinMaxWidth(para);
-    LOG_INFO(
-        "  min-content (longest word) {}, max-content (longest line) {}", widths.min, widths.max
-    );
-
-    for (float divisor : {1.0f, 2.0f, 4.0f, 12.0f}) {
-        calc.calculate(para, widths.max / divisor);
-        LOG_INFO(
-            "  width {} -> {} lines, bounds ({}, {})", widths.max / divisor, para.getLines().size(),
-            para.getBounds().x, para.getBounds().y
-        );
-    }
+    for (float divisor : {1.0f, 2.0f, 4.0f, 12.0f}) calc.calculate(para, widths.max / divisor);
 
     // Non-wrapping text is incompressible, so its min must collapse onto its max.
     para.setWrapEnabled(false);
     TextBlockWidths noWrap = calc.measureMinMaxWidth(para);
-    LOG_INFO("  wrap disabled -> min {} max {} (must be equal)", noWrap.min, noWrap.max);
+    expect(noWrap.min == noWrap.max, "wrap-disabled min must equal max");
     para.setWrapEnabled(true);
 
-    LOG_INFO("=== alignment: per line, not per block ===");
+    // Horizontal alignment is per line, not per block.
     TextBlock aligned(&font, "a short line\nand a considerably longer second line", base);
     const float alignWidth = 3.0f;
     for (auto [name, mode] : {
@@ -135,33 +92,31 @@ void logLayoutProof(
         aligned.setAlignH(mode);
         calc.calculate(aligned, alignWidth);
         for (const TextLine& line : aligned.getLines()) {
-            LOG_INFO(
-                "  {} width {} -> offset.x {} (expected {})", name, line.width,
-                aligned.getRuns()[line.firstRun].offset.x,
-                mode == TextAlignH::Left   ? 0.0f :
-                mode == TextAlignH::Center ? (alignWidth - line.width) * 0.5f :
-                                             alignWidth - line.width
+            float expected = mode == TextAlignH::Left   ? 0.0f :
+                             mode == TextAlignH::Center ? (alignWidth - line.width) * 0.5f :
+                                                          alignWidth - line.width;
+            expect(
+                aligned.getRuns()[line.firstRun].offset.x == expected,
+                "line offset must match its alignment formula"
             );
         }
     }
 
-    LOG_INFO("=== cache + invalidation ===");
+    // Setters guard on equality, so re-setting identical data stays free; only a real
+    // change should dirty the block.
     TextBlock cached(&font, "cache probe", base);
-    LOG_INFO("  fresh block dirty: {} (expected true)", cached.isDirty());
+    expect(cached.isDirty(), "a fresh block must start dirty");
     calc.calculate(cached, 2.0f);
-    LOG_INFO("  after calculate dirty: {} (expected false)", cached.isDirty());
-    LOG_INFO("  same width needs rework: {} (expected false)", cached.isDirtyFor(2.0f));
-    LOG_INFO("  new width needs rework: {} (expected true)", cached.isDirtyFor(1.0f));
+    expect(!cached.isDirty(), "calculate must clear the dirty flag");
+    expect(!cached.isDirtyFor(2.0f), "the same width must not need rework");
+    expect(cached.isDirtyFor(1.0f), "a new width must need rework");
     cached.setAlignV(TextAlignV::Middle);
-    LOG_INFO("  after setAlignV dirty: {} (expected false, applied at draw)", cached.isDirty());
+    expect(!cached.isDirty(), "setAlignV must not dirty layout; it applies at draw");
     cached.setAlignH(TextAlignH::Center);
-    LOG_INFO("  after setAlignH dirty: {} (expected true)", cached.isDirty());
+    expect(cached.isDirty(), "setAlignH must dirty layout");
     calc.calculate(cached, 2.0f);
     cached.setText("a different string");
-    LOG_INFO(
-        "  after setText dirty: {}, runs cleared: {} (both expected true)", cached.isDirty(),
-        cached.getRuns().empty()
-    );
+    expect(cached.isDirty() && cached.getRuns().empty(), "setText must dirty and clear the runs");
 }
 
 }   // namespace
@@ -315,7 +270,6 @@ int text_rendering_test()
         // shrink-to-fit measurement this camera fit wants.
         TextLayoutCalculator::get().calculate(*block, 0.0f);
         Vec2 size = block->getBounds();
-        LOG_INFO("bounds ({}, {}) for \"{}\"", size.x, size.y, textCase.text);
 
         blocks.push_back(block);
         totalHeight += size.y + BLOCK_GAP;

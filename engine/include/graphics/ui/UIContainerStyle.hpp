@@ -82,12 +82,10 @@ struct UIContainerStyle
 };
 
 // Every field of UIContainerStyle plus one override per input state, so a container's
-// whole reactive look is declared in the call that creates it.
-//
-// The fields are repeated through the macro instead of inherited from UIContainerStyle
-// because a designated initializer may only name a *direct* member: the moment these
-// live in a base class, `{.backgroundColor = ...}` stops compiling at every call site,
-// and that spelling is the entire point of the struct.
+// whole reactive look is declared in the call that creates it. The fields are repeated
+// via the macro instead of inherited, because a designated initializer only names a
+// *direct* member -- `{.backgroundColor = ...}` would stop compiling if these lived in
+// a base class.
 struct UIContainerStyleSpec
 {
     UI_CONTAINER_STYLE_FIELDS(UI_STYLE_DECLARE_FIELD)
