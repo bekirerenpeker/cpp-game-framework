@@ -190,14 +190,45 @@ rather than leaving a stale description.
 
 ## Done
 
+- [x] **Async font loading** — `Font`'s constructor queues the bake on `FontLoader` (one
+  lazily started worker thread, jobs run sequentially) and returns immediately, so a
+  cold bake no longer freezes the window into "not responding". A loading font answers
+  every query with a placeholder — one generic glyph box, no texture (the batch
+  renderer's white default), plausible metrics — so text draws as solid quads at about
+  the right size and nothing blocks. The worker stops at `FontData` and the *const*
+  accessors poll the job, so the atlas is uploaded by the thread that owns the GL
+  context without `Font` needing an owner or an `update()`. `getLoadVersion()` +
+  `TextLayoutCalculator::syncFontVersion` re-solve a cached `TextBlock` when the real
+  metrics arrive; `waitForLoad()` is the deliberate blocking escape hatch.
+  Two things that made it actually usable rather than merely non-blocking: the queue is
+  shortest-job-first by estimated bake cost, so a bitmap atlas lands while an mtsdf one
+  is still going, and `FontBaker` asks msdf-atlas-gen for a **quarter** of the cores
+  instead of all of them (plus a below-normal priority worker) — at full width the bake
+  starved the render thread and the frame rate collapsed for as long as it ran, and half
+  a 22-thread machine was still enough to feel. Thread count is the lever: msdf's own
+  threads ignore the priority of whoever spawned them.
+  Not done and worth remembering: nothing evicts a `Font` whose bake failed, and
+  `UIManager`'s system-font fallback accepts a candidate before knowing it bakes, so a
+  corrupt font file draws placeholder boxes rather than trying the next candidate.
+
+- [x] **A default font on `FontLoader`, borrowed while other fonts bake** — the fallback
+  moved out of `UIManager` into the font system, where the whole text path can reach it.
+  `getDefaultFont()` bakes a system face (Arial / Liberation / DejaVu, by OS) as a small
+  bitmap atlas, created by the first `submit` so it is queued ahead of whatever font
+  triggered it, or on demand when a null font reaches `resolve()`. Every text entry point
+  resolves through it, so a font that is still baking draws in the default face instead
+  of placeholder boxes — boxes are now only the default's own loading state. Bitmap
+  because it is on every other font's critical path.
+  `TextBlock` had to record *which* font it was solved with, not just a version: the
+  resolution flips from borrowed default to real face mid-life, and both the layout and
+  the draw have to move together or one face's glyphs land on another's layout.
+
 - [x] **One UI font instead of one per leaf** — `UIManager::setFont(const Font*)` holds
   the face every text leaf uses; `UITextConfig::font` stays as a per-leaf override for
-  mixing faces, and is null in almost every call. With nothing set, `getFont()` bakes a
-  system font once (Arial / Liberation / DejaVu, by OS) through `ResourceManager` and
-  logs it, so a scene that forgets the call still draws text. Mtsdf for the fallback:
-  bitmap is sharper only at the size it was baked for, which a default cannot know.
-  `ui_test` toggles atlas type with TAB and shows both at 11px side by side —
-  worth revisiting the default if a real HUD ends up drawing one fixed text size.
+  mixing faces, and is null in almost every call. `getFont()` returning null is normal,
+  not a missing setting — the null travels down and resolves to the default font.
+  `ui_test` toggles atlas type with TAB and shows mtsdf/bitmap at 11px side by side —
+  worth revisiting which the UI sets if a real HUD ends up drawing one fixed text size.
 
 - [x] **Per-state styles** — `openContainer` takes a `UIContainerStyleSpec`: every
   `UIContainerStyle` field plus `onHover`/`onHeld`/`onPressed`/`onReleased`, each a

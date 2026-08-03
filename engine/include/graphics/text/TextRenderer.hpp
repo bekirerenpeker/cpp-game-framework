@@ -74,7 +74,8 @@ class TextRenderer : public Singleton<TextRenderer>
     );
 
     Vec2 drawSpan(
-        const Font& font, std::string_view text, const TextStyle& style, Vec2 pen, float lineOriginX
+        const Font& requested, std::string_view text, const TextStyle& style, Vec2 pen,
+        float lineOriginX
     );
 
     void flush();

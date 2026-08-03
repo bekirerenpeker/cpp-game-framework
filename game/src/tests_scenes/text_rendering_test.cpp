@@ -189,6 +189,12 @@ int text_rendering_test()
     );
     Font bitmapFont(fontPath, {.atlasType = FontAtlasType::Bitmap, .emPixelSize = 16});
 
+    // Fonts bake on a worker thread now, and everything below this line -- the logged
+    // numbers especially -- is about the real metrics, not the placeholder a loading
+    // font answers with. This is the case waitForLoad exists for.
+    mtsdfFont.waitForLoad();
+    bitmapFont.waitForLoad();
+
     logFont(mtsdfFont, "mtsdf");
     logFont(bitmapFont, "bitmap");
 

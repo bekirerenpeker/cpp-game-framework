@@ -1,4 +1,5 @@
 #include "graphics/text/TextLayoutCalculator.hpp"
+#include "graphics/text/FontLoader.hpp"
 #include "graphics/text/TextMetrics.hpp"
 #include "utils/Utf8.hpp"
 #include "utils/math/MathFuncs.hpp"
@@ -11,16 +12,34 @@ constexpr float BOUNDED_EPSILON = 0.0001f;
 
 }   // namespace
 
+// Which font this block actually lays out with, and whether that answer just changed.
+// It moves at most twice in a block's life -- default font ready, then the requested one
+// ready -- so a compare beats a dirty flag every font would have to push to every block
+// that ever used it. Both halves matter: the pointer catches the swap from the borrowed
+// default to the real face, the version catches the same font's atlas arriving under it.
+void TextLayoutCalculator::syncFontVersion(TextBlock& block)
+{
+    const Font* resolved = FontLoader::get().resolve(block.m_font);
+    uint version = resolved ? resolved->getLoadVersion() : 0;
+
+    if (resolved == block.m_resolvedFont && version == block.m_fontVersion) return;
+
+    block.m_resolvedFont = resolved;
+    block.m_fontVersion = version;
+    block.invalidate();
+}
+
 TextBlockWidths TextLayoutCalculator::measureMinMaxWidth(TextBlock& block)
 {
+    syncFontVersion(block);
     if (!block.m_widthsDirty) return block.m_widths;
     block.m_widthsDirty = false;
 
     block.m_widths = TextBlockWidths {};
-    if (!block.m_font || !block.m_font->isValid()) return block.m_widths;
+    if (!block.m_resolvedFont || !block.m_resolvedFont->isValid()) return block.m_widths;
 
     block.ensureSpans();
-    const Font& font = *block.m_font;
+    const Font& font = *block.m_resolvedFont;
 
     TextBlockWidths widths;
     float lineWidth = 0.0f;
@@ -76,17 +95,18 @@ TextBlockWidths TextLayoutCalculator::measureMinMaxWidth(TextBlock& block)
 
 float TextLayoutCalculator::calculate(TextBlock& block, float availableWidth)
 {
+    syncFontVersion(block);
     if (!block.isDirtyFor(availableWidth)) return block.m_bounds.y;
 
     block.clearLayout();
     block.m_lastWidth = availableWidth;
     block.m_layoutDirty = false;
 
-    if (!block.m_font || !block.m_font->isValid()) return 0.0f;
+    if (!block.m_resolvedFont || !block.m_resolvedFont->isValid()) return 0.0f;
 
     block.ensureSpans();
 
-    const Font& font = *block.m_font;
+    const Font& font = *block.m_resolvedFont;
     const std::vector<TextSpan>& spans = block.m_spans;
     std::vector<TextRun>& runs = block.m_runs;
     std::vector<TextLine>& lines = block.m_lines;

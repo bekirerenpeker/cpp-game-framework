@@ -1,8 +1,6 @@
 #include "graphics/ui/UiManager.hpp"
-#include "core/file_management/FileManager.hpp"
 #include "core/input/Input.hpp"
 #include "core/logging/LoggerMacros.hpp"
-#include "core/resource_management/ResourceManager.hpp"
 #include "graphics/text/TextRenderer.hpp"
 #include "graphics/ui/UILayoutCalculator.hpp"
 #include "graphics/ui/UIRenderer.hpp"
@@ -84,63 +82,9 @@ UIContainerStyle resolveStyle(const UIContainerStyleSpec& spec, const UINodeStat
     return style;
 }
 
-// Tried in order the first time a text leaf asks for a font and nobody called setFont.
-// Arial is the one face a stock Windows and macOS both have; the Linux entries are what
-// the common distros ship in its place.
-const char* SYSTEM_FONT_CANDIDATES[] = {
-#if OS_NAME == OS_WINDOWS
-    "C:/Windows/Fonts/arial.ttf",
-    "C:/Windows/Fonts/segoeui.ttf",
-    "C:/Windows/Fonts/tahoma.ttf",
-#elif OS_NAME == OS_MACOS
-    "/System/Library/Fonts/Supplemental/Arial.ttf",
-    "/Library/Fonts/Arial.ttf",
-    "/System/Library/Fonts/Supplemental/Verdana.ttf",
-#else
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/TTF/DejaVuSans.ttf",
-#endif
-};
-
-// Mtsdf rather than Bitmap because the fallback has no idea what it is about to be used
-// for: one atlas has to serve every text size in the UI, plus world space, where the
-// camera scales it. A bitmap atlas beats it only at the one size it was baked for, so
-// that is a choice a caller makes with setFont, not one a default can make for them.
-constexpr FontBakeSettings FALLBACK_FONT_BAKE {
-    .atlasType = FontAtlasType::Mtsdf, .charset = FontCharset::AsciiLatin1, .emPixelSize = 48
-};
-
 }   // namespace
 
 UIManager::~UIManager() { clear(); }
-
-// Baked on first use, so a scene that never draws UI text never pays for it, and only
-// ResourceManager ever owns a Font the UI made.
-const Font* UIManager::getFont()
-{
-    if (m_font) return m_font;
-    if (m_fallbackAttempted) return m_fallbackFont;
-
-    // One attempt and one message however many leaves ask, not one per leaf per frame.
-    m_fallbackAttempted = true;
-
-    for (const char* candidate : SYSTEM_FONT_CANDIDATES) {
-        if (!FileManager::get().doesPathExist(candidate)) continue;
-
-        IdType id = ResourceManager::get().addResource<Font>(candidate, FALLBACK_FONT_BAKE);
-        Font* font = ResourceManager::get().getResource<Font>(id);
-        if (font && font->isValid()) {
-            LOG_WARNING("no UI font set; falling back to {}. Call UIManager::setFont", candidate);
-            m_fallbackFont = font;
-            return m_fallbackFont;
-        }
-        ResourceManager::get().unloadResource(id);
-    }
-
-    LOG_ERROR("no UI font set and no system font found; UI text will not draw");
-    return nullptr;
-}
 
 void UIManager::clear()
 {
@@ -294,9 +238,11 @@ IdType UIManager::addTextLeaf(const UILayoutConfig& layout, const UITextConfig& 
     if (!node) return state.id;
 
     UITextLeafData* leaf = new UITextLeafData(config);
-    // Resolved on the block rather than on a copy of the config: the config owns a
-    // spanStyles vector, and this runs once per text leaf per frame.
-    if (!config.font) leaf->getBlock().setFont(getFont());
+    // Set on the block rather than on a copy of the config, which owns a spanStyles
+    // vector this would have to copy once per text leaf per frame. Still null if the UI
+    // was never given a font, and that is fine: the text path resolves null to
+    // FontLoader's default.
+    if (!config.font) leaf->getBlock().setFont(m_font);
 
     m_leaves.push_back(leaf);
     node->leafData = leaf;

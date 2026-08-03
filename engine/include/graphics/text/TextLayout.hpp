@@ -93,6 +93,8 @@ class TextBlock
     Vec2 m_bounds = VEC2_ZERO;
     TextBlockWidths m_widths;
     float m_lastWidth = -1.0f;
+    const Font* m_resolvedFont = nullptr;
+    uint m_fontVersion = 0;
     bool m_tagsClosed = true;
     bool m_spansDirty = true;
     bool m_widthsDirty = true;
@@ -119,6 +121,10 @@ class TextBlock
     void invalidate();
 
     const Font* getFont() const { return m_font; }
+    // The font this block was last solved against, which is the requested one only once
+    // it has finished baking -- until then the layout is the default font's, and drawing
+    // has to use the same one or the glyphs land at another face's positions.
+    const Font* getResolvedFont() const { return m_resolvedFont ? m_resolvedFont : m_font; }
     const std::string& getText() const { return m_text; }
     const TextStyle& getStyle() const { return m_style; }
     const TextStyle& styleForRun(int styleIndex) const;

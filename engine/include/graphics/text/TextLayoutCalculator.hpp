@@ -17,6 +17,7 @@ class TextLayoutCalculator : public Singleton<TextLayoutCalculator>
     TextLayoutCalculator() = default;
     ~TextLayoutCalculator() = default;
 
+    static void syncFontVersion(TextBlock& block);
     static void applyHorizontalAlign(TextBlock& block, float contentWidth);
 };
 

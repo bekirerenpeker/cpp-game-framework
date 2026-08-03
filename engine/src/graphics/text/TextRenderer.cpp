@@ -2,6 +2,7 @@
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/Window.hpp"
+#include "graphics/text/FontLoader.hpp"
 #include "graphics/text/TextLayoutCalculator.hpp"
 #include "graphics/text/TextMetrics.hpp"
 #include "utils/Utf8.hpp"
@@ -89,7 +90,10 @@ bool TextRenderer::ensureReady()
 // subtracting run.offset.y is the single flip in the whole text path.
 Vec2 TextRenderer::draw(const TextBlock& block, Vec2 origin, Vec2 boxSize)
 {
-    const Font* font = block.getFont();
+    // The one the layout was solved against, not the one the caller named: while a font
+    // bakes its block is laid out with the default font's metrics, and drawing the real
+    // glyphs at those positions would be a different face on someone else's layout.
+    const Font* font = block.getResolvedFont();
     if (!font || !font->isValid()) {
         LOG_WARNING("drawing a TextBlock with an invalid font; skipping");
         return VEC2_ZERO;
@@ -142,9 +146,15 @@ Vec2 TextRenderer::draw(
 // old baseline-to-baseline rule -- anything multi-line or multi-style belongs in a
 // TextBlock, where a line is as tall as the tallest style touching it.
 Vec2 TextRenderer::drawSpan(
-    const Font& font, std::string_view text, const TextStyle& style, Vec2 pen, float lineOriginX
+    const Font& requested, std::string_view text, const TextStyle& style, Vec2 pen,
+    float lineOriginX
 )
 {
+    // Resolved here too, since this is the chaining primitive a caller can reach for
+    // without a TextBlock -- it measures and emits in one pass, so both halves see the
+    // same font either way.
+    const Font& font = *FontLoader::get().resolve(&requested);
+
     if (!font.isValid() || text.empty()) return pen;
     if (!ensureReady()) return pen;
 
