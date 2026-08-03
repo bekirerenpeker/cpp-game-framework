@@ -65,6 +65,23 @@ computeState(IdType id, const UILayoutNode* prev, bool hovered, bool hoveredDire
     };
 }
 
+// Lowest priority first, so each state only overrides what it actually sets and a
+// pressed button keeps the rest of its hover look instead of falling back to the base.
+//
+// onHeld reads isActive rather than isHeld on purpose: the two only differ once the
+// cursor leaves the node mid-press, and there the capture flag is the one that matches
+// what the gesture is doing -- a grip dragged off itself stays lit until release. The
+// hover-bound flavour would be onHover's job anyway, since it dies with the hover.
+UIContainerStyle resolveStyle(const UIContainerStyleSpec& spec, const UINodeState& state)
+{
+    UIContainerStyle style = spec.base();
+    if (state.isHovered) style.combine(spec.onHover);
+    if (state.isActive) style.combine(spec.onHeld);
+    if (state.isPressed) style.combine(spec.onPressed);
+    if (state.isReleased) style.combine(spec.onReleased);
+    return style;
+}
+
 }   // namespace
 
 UIManager::~UIManager() { clear(); }
@@ -149,14 +166,11 @@ bool UIManager::isKeyHovered(uint64_t key) const
     return false;
 }
 
-UINodeState UIManager::addNode(
-    const UILayoutConfig& layout, const UIContainerStyle& style, std::string_view key
-)
+UINodeState UIManager::addNode(const UILayoutConfig& layout, std::string_view key)
 {
     IdType id = m_nodes.add();
     UINode* node = m_nodes.get(id);
     node->layout = layout;
-    node->style = style;
 
     if (m_openStack.empty()) {
         node->parent = INVALID_ID;
@@ -184,10 +198,10 @@ UINodeState UIManager::addNode(
 }
 
 UINodeState UIManager::openContainer(
-    const UILayoutConfig& layout, const UIContainerStyle& style, std::string_view key
+    const UILayoutConfig& layout, const UIContainerStyleSpec& style, std::string_view key
 )
 {
-    UINodeState state = addNode(layout, style, key);
+    UINodeState state = addNode(layout, key);
     UINode* node = m_nodes.get(state.id);
     if (node) {
         node->prevFrameLayout = UILayoutCalculator::get().getPrevFrameLayout(node->persistentKey);
@@ -195,6 +209,11 @@ UINodeState UIManager::openContainer(
         bool direct = !m_hoveredKeys.empty() && m_hoveredKeys.front() == node->persistentKey;
         bool active = m_activeKey != NO_KEY && node->persistentKey == m_activeKey;
         state = computeState(state.id, node->prevFrameLayout, hovered, direct, active);
+
+        // Flattened here rather than stored, so the node still carries one final style
+        // and nothing downstream has to know a state ever existed. The caller can still
+        // rewrite node->style afterwards for anything a constant cannot express.
+        node->style = resolveStyle(style, state);
     }
 
     m_openStack.push_back(state.id);
@@ -214,7 +233,7 @@ void UIManager::closeContainer()
 
 IdType UIManager::addTextLeaf(const UILayoutConfig& layout, const UITextConfig& config)
 {
-    UINodeState state = addNode(layout, {});
+    UINodeState state = addNode(layout);
     UINode* node = m_nodes.get(state.id);
     if (!node) return state.id;
 

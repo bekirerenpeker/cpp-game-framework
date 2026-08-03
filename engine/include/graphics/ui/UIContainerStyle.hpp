@@ -39,49 +39,37 @@ enum class UITransition
     EaseInOut
 };
 
+// The field list lives once, here, and every struct that carries a container's look is
+// generated from it -- adding a field is one line and both structs follow.
+// std::optional<Gradient> backgroundGradient belongs in here once gradients exist.
+#define UI_CONTAINER_STYLE_FIELDS(X)                                                               \
+    X(Color, backgroundColor)                                                                      \
+    X(GlTexture*, backgroundImage)                                                                 \
+    X(Color, borderColor)                                                                          \
+    X(float, borderWidth)                                                                          \
+    X(float, borderRadius)                                                                         \
+    X(UIBorderStyle, borderStyle)                                                                  \
+    X(Color, shadowColor)                                                                          \
+    X(Vec2, shadowOffset)                                                                          \
+    X(float, shadowBlurRadius)                                                                     \
+    X(UIOverflow, overflow)                                                                        \
+    X(int, zIndex)                                                                                 \
+    X(UICursor, cursor)                                                                            \
+    X(float, transitionDuration)                                                                   \
+    X(UITransition, transition)
+
+#define UI_STYLE_DECLARE_FIELD(type, name) std::optional<type> name;
+#define UI_STYLE_MERGE_FIELD(type, name)                                                           \
+    if (other.name) name = other.name;
+#define UI_STYLE_COPY_FIELD(type, name) style.name = name;
+
 struct UIContainerStyle
 {
-    std::optional<Color> backgroundColor;
-    // std::optional<Gradient> backgroundGradient;
-    std::optional<GlTexture*> backgroundImage;
-
-    std::optional<Color> borderColor;
-    std::optional<float> borderWidth;
-    std::optional<float> borderRadius;
-    std::optional<UIBorderStyle> borderStyle;
-
-    std::optional<Color> shadowColor;
-    std::optional<Vec2> shadowOffset;
-    std::optional<float> shadowBlurRadius;
-
-    std::optional<UIOverflow> overflow;
-    std::optional<int> zIndex;
-    std::optional<UICursor> cursor;
-
-    std::optional<float> transitionDuration;
-    std::optional<UITransition> transition;
+    UI_CONTAINER_STYLE_FIELDS(UI_STYLE_DECLARE_FIELD)
 
     UIContainerStyle& combine(const UIContainerStyle& other)
     {
-        if (other.backgroundColor) backgroundColor = other.backgroundColor;
-        if (other.backgroundImage) backgroundImage = other.backgroundImage;
-
-        if (other.borderColor) borderColor = other.borderColor;
-        if (other.borderWidth) borderWidth = other.borderWidth;
-        if (other.borderRadius) borderRadius = other.borderRadius;
-        if (other.borderStyle) borderStyle = other.borderStyle;
-
-        if (other.shadowColor) shadowColor = other.shadowColor;
-        if (other.shadowOffset) shadowOffset = other.shadowOffset;
-        if (other.shadowBlurRadius) shadowBlurRadius = other.shadowBlurRadius;
-
-        if (other.overflow) overflow = other.overflow;
-        if (other.zIndex) zIndex = other.zIndex;
-        if (other.cursor) cursor = other.cursor;
-
-        if (other.transitionDuration) transitionDuration = other.transitionDuration;
-        if (other.transition) transition = other.transition;
-
+        UI_CONTAINER_STYLE_FIELDS(UI_STYLE_MERGE_FIELD)
         return *this;
     }
 
@@ -90,6 +78,30 @@ struct UIContainerStyle
         UIContainerStyle result = *this;
         result.combine(other);
         return result;
+    }
+};
+
+// Every field of UIContainerStyle plus one override per input state, so a container's
+// whole reactive look is declared in the call that creates it.
+//
+// The fields are repeated through the macro instead of inherited from UIContainerStyle
+// because a designated initializer may only name a *direct* member: the moment these
+// live in a base class, `{.backgroundColor = ...}` stops compiling at every call site,
+// and that spelling is the entire point of the struct.
+struct UIContainerStyleSpec
+{
+    UI_CONTAINER_STYLE_FIELDS(UI_STYLE_DECLARE_FIELD)
+
+    UIContainerStyle onHover;
+    UIContainerStyle onHeld;
+    UIContainerStyle onPressed;
+    UIContainerStyle onReleased;
+
+    UIContainerStyle base() const
+    {
+        UIContainerStyle style;
+        UI_CONTAINER_STYLE_FIELDS(UI_STYLE_COPY_FIELD)
+        return style;
     }
 };
 

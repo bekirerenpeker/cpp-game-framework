@@ -53,19 +53,6 @@ rather than leaving a stale description.
   so nothing is overridden and the config stays the caller's. It only comes back
   if the engine ever owns window geometry.
 
-- [ ] **Per-state styles** — a widget needs normal/hover/pressed/disabled, not
-  one `UIContainerStyle`. `combine`'s all-`std::optional` merge is already
-  exactly the right primitive (a set field on `other` wins), so this is a small
-  struct of four optional styles plus the rule for picking one, not new
-  machinery. **Belongs in the `UI` widget namespace, not in `UIManager`** — it is
-  a convenience for writing widgets, and the primitive layer already expresses it
-  perfectly well as `if (state.isHovered) node->style... `, which is what the test
-  scene does. Ships with the config-struct work, since a widget config is where a
-  normal/hover/pressed set would sit. Pairs with **Widget theming** below: without
-  a theme every widget function hardcodes a palette, and restyling an app means
-  editing engine source. Do the theme first — it is what the defaults resolve
-  against.
-
 - [ ] **`UINodeState` outputs for dragging** — what sliders and windows need on
   top of today's `isHovered`/`isPressed`/`isReleased`/`isHeld` +
   `relativeMousePos`/`localMousePos`/`isActive`/`isHoveredDirectly`:
@@ -202,6 +189,22 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **Per-state styles** — `openContainer` takes a `UIContainerStyleSpec`: every
+  `UIContainerStyle` field plus `onHover`/`onHeld`/`onPressed`/`onReleased`, each a
+  whole style. `UIManager` merges base → hover → held → pressed/released (lowest
+  priority first, so a press keeps the hover's look) and stores the **one** resolved
+  style on the node, which is unchanged. Landed in the primitive layer rather than the
+  planned widget namespace: `if (state.isHovered) node->style...` still works and is
+  still the right tool for a per-frame value, but a constant reactive look wanted to be
+  declared where the container is.
+  Two things worth remembering: `onHeld` is `isActive` (capture), not `isHeld`, so a
+  grip dragged off itself stays lit; and the spec repeats `UIContainerStyle`'s fields
+  through the `UI_CONTAINER_STYLE_FIELDS` X-macro instead of inheriting, because a
+  designated initializer cannot name a base's member and `{.backgroundColor = ...}` is
+  the whole point. `UILayoutConfig` deliberately has no equivalent — its fields are not
+  optional (an override could only replace, not merge) and hover-driven geometry reads
+  last frame's hit test, so it can oscillate.
 
 - [x] **Overflow clipping** — `UIContainerStyle::overflow` is honoured: `Hidden` or
   `Scroll` bounds everything inside the node to its rect. The clip is resolved

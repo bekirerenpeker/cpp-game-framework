@@ -51,7 +51,7 @@ class UIManager : public Singleton<UIManager>
     void clear();
 
     UINodeState openContainer(
-        const UILayoutConfig& layout = {}, const UIContainerStyle& style = {},
+        const UILayoutConfig& layout = {}, const UIContainerStyleSpec& style = {},
         std::string_view key = {}
     );
     void closeContainer();
@@ -71,8 +71,7 @@ class UIManager : public Singleton<UIManager>
     void resolveInput();
     bool isKeyHovered(uint64_t key) const;
 
-    UINodeState
-    addNode(const UILayoutConfig& layout, const UIContainerStyle& style, std::string_view key = {});
+    UINodeState addNode(const UILayoutConfig& layout, std::string_view key = {});
 };
 
 }   // namespace Engine

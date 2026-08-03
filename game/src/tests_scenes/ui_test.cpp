@@ -47,6 +47,27 @@ const Color TITLE_COLOR(0.90f, 0.92f, 0.96f);
 const Color LABEL_COLOR(0.82f, 0.85f, 0.91f);
 const Color CAPTION_COLOR(0.56f, 0.59f, 0.68f);
 
+// Every reactive container in this scene lights the same way, so a screenshot shows at
+// a glance which single one the hit test picked. Only the fields it names are touched --
+// the container keeps the rest of its own look.
+const UIContainerStyle HOVER_LIGHT {
+    .backgroundColor = Color(0.20f, 0.34f, 0.52f), .borderColor = ACCENT, .borderWidth = 2.0f
+};
+
+// The lit look of a swatch under the cursor, and the one a grab handle keeps for as long
+// as it holds the drag. Named because a state style is an ordinary UIContainerStyle --
+// nothing about it has to be written inline.
+const UIContainerStyle HOVER_GLOW {
+    .backgroundColor = ACCENT,
+    .borderColor = COLOR_WHITE,
+    .borderWidth = 3.0f,
+    .shadowColor = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.7f),
+    .shadowBlurRadius = 20.0f
+};
+const UIContainerStyle DRAG_GLOW {
+    .backgroundColor = COLOR_WHITE, .shadowColor = ACCENT, .shadowBlurRadius = 12.0f
+};
+
 // 0..1, so a style field can be written as base + pulse * range.
 float pulse(float speed) { return 0.5f + 0.5f * Math::sin(Time::get().currTime() * speed); }
 
@@ -81,9 +102,9 @@ void label(const Font& font, std::string_view text, Color color, float size)
 }
 
 // A swatch of the style under test with its name underneath. The swatch's state comes
-// back so a caller can rewrite the style it was just given -- nothing reads a style
-// until draw(), so a hover landing here still lands in time.
-UINodeState cell(const Font& font, const UIContainerStyle& style, const char* caption)
+// back so a caller can still rewrite the style it was just given -- nothing reads a
+// style until draw(), so a hover landing here still lands in time.
+UINodeState cell(const Font& font, const UIContainerStyleSpec& style, const char* caption)
 {
     UIManager& ui = UIManager::get();
 
@@ -121,8 +142,12 @@ UINodeState addGrip()
     layout.floating.selfY = UIAlign::End;
     layout.floating.offset = Vec2(-4.0f, -4.0f);
 
-    UINodeState grip =
-        UIManager::get().openContainer(layout, {.backgroundColor = ACCENT, .borderRadius = 3.0f});
+    UINodeState grip = UIManager::get().openContainer(
+        layout, {.backgroundColor = ACCENT,
+                 .borderRadius = 3.0f,
+                 .onHover = {.backgroundColor = COLOR_WHITE},
+                 .onHeld = DRAG_GLOW}
+    );
     UIManager::get().closeContainer();
     return grip;
 }
@@ -192,7 +217,10 @@ void resizableWindow(const Font& font)
     titleLayout.alignCross = UIAlign::Center;
 
     UINodeState titleBar = ui.openContainer(
-        titleLayout, {.backgroundColor = Color(0.24f, 0.26f, 0.34f), .borderRadius = 9.0f}
+        titleLayout, {.backgroundColor = Color(0.24f, 0.26f, 0.34f),
+                      .borderRadius = 9.0f,
+                      .onHover = {.backgroundColor = Color(0.30f, 0.33f, 0.42f)},
+                      .onHeld = {.backgroundColor = ACCENT}}
     );
     label(
         font, std::format("window  {} x {}", (int)g_windowSize.x, (int)g_windowSize.y), LABEL_COLOR,
@@ -267,7 +295,9 @@ void slider(const Font& font, float& value, const char* caption)
         {.backgroundColor = SWATCH,
          .borderColor = OUTLINE,
          .borderWidth = 1.0f,
-         .borderRadius = SLIDER_HEIGHT * 0.5f}
+         .borderRadius = SLIDER_HEIGHT * 0.5f,
+         // Hover bubbles, so this also lights while the cursor is on the handle.
+         .onHover = {.borderColor = ACCENT}}
     );
 
     UILayoutConfig handleLayout =
@@ -277,18 +307,34 @@ void slider(const Font& font, float& value, const char* caption)
         Vec2(Math::clamp(value, 0.0f, 1.0f) * (CELL_SIZE.x * 1.6f - SLIDER_HEIGHT), 0.0f);
 
     UINodeState handle = ui.openContainer(
-        handleLayout, {
-                          .backgroundColor = ACCENT,
-                          .borderColor = COLOR_WHITE,
-                          .borderWidth = 1.0f,
-                          .borderRadius = SLIDER_HEIGHT * 0.5f,
-                      }
+        handleLayout,
+        {
+            .backgroundColor = ACCENT,
+            .borderColor = COLOR_WHITE,
+            .borderWidth = 1.0f,
+            .borderRadius = SLIDER_HEIGHT * 0.5f,
+            .onHover = {.borderWidth = 2.0f},
+            // onHeld rides on capture, not hover, so the handle stays lit
+            // for the whole drag -- the cursor is off a 20px handle almost
+            // immediately, and a hover-bound style would flicker out there.
+            .onHeld = {.borderWidth = 3.0f, .shadowColor = ACCENT, .shadowBlurRadius = 14.0f},
+    }
     );
     ui.closeContainer();
     ui.closeContainer();
 
     if (track.isActive || handle.isActive)
         value = Math::clamp(track.relativeMousePos.x, 0.0f, 1.0f);
+
+    // The state styles above are constants; this one *is* the value, which no constant
+    // can express, so it stays on the escape hatch. A declared node is still writable
+    // right up to draw().
+    if (UINode* node = ui.getNode(handle.id)) {
+        node->style.backgroundColor = Color(
+            Math::lerp(ACCENT.r, 1.0f, value), Math::lerp(ACCENT.g, 1.0f, value),
+            Math::lerp(ACCENT.b, 1.0f, value)
+        );
+    }
 
     ui.addTextLeaf(
         textBox(), {
@@ -324,34 +370,22 @@ void endSection()
     UIManager::get().closeContainer();
 }
 
-UINodeState beginPanel()
+void beginPanel()
 {
     UILayoutConfig layout = box(UISizeSpec::grow(), UISizeSpec::grow());
     layout.direction = UILayoutDirection::Column;
     layout.padding = UIEdges(16.0f);
     layout.gap = 16.0f;
 
-    return UIManager::get().openContainer(
+    UIManager::get().openContainer(
         layout, {
                     .backgroundColor = PANEL,
                     .borderColor = OUTLINE,
                     .borderWidth = 1.0f,
                     .borderRadius = 12.0f,
+                    .onHover = HOVER_LIGHT,
                 }
     );
-}
-
-// Every reactive container in this scene lights the same way, so a screenshot shows
-// at a glance which single one the hit test picked.
-void lightWhenHovered(const UINodeState& state)
-{
-    if (!state.isHovered) return;
-
-    UINode* node = UIManager::get().getNode(state.id);
-    if (!node) return;
-    node->style.backgroundColor = Color(0.20f, 0.34f, 0.52f);
-    node->style.borderColor = ACCENT;
-    node->style.borderWidth = 2.0f;
 }
 
 void buildBackgroundSection(const Font& font, GlTexture& image)
@@ -517,15 +551,19 @@ void buildLiveSection(const Font& font)
         "blur"
     );
 
-    UINodeState state = cell(font, {.backgroundColor = SWATCH, .borderRadius = 10.0f}, "hover me");
-    if (state.isHovered) {
-        UINode* node = UIManager::get().getNode(state.id);
-        node->style.backgroundColor = ACCENT;
-        node->style.borderColor = COLOR_WHITE;
-        node->style.borderWidth = 3.0f;
-        node->style.shadowColor = Color(ACCENT.r, ACCENT.g, ACCENT.b, 0.7f);
-        node->style.shadowBlurRadius = 20.0f;
-    }
+    // The whole reactive look declared in one call. A press keeps the hover's glow and
+    // only overrides the two fields it names, since each state is merged over the last.
+    cell(
+        font,
+        {
+            .backgroundColor = SWATCH,
+            .borderRadius = 10.0f,
+            .onHover = HOVER_GLOW,
+            .onHeld = {.backgroundColor = Color(0.16f, 0.40f, 0.70f), .borderWidth = 1.0f},
+            .onPressed = {.backgroundColor = COLOR_WHITE}
+    },
+        "press me"
+    );
     endSection();
 }
 
@@ -562,19 +600,17 @@ void buildUi(const Font& font, GlTexture& image)
 
         ui.openContainer(bodyLayout);
         {
-            UINodeState leftPanel = beginPanel();
+            beginPanel();
             buildBackgroundSection(font, image);
             buildRadiusSection(font);
             buildBorderSection(font);
             ui.closeContainer();
-            lightWhenHovered(leftPanel);
 
-            UINodeState rightPanel = beginPanel();
+            beginPanel();
             buildBorderStyleSection(font);
             buildShadowSection(font);
             buildLiveSection(font);
             ui.closeContainer();
-            lightWhenHovered(rightPanel);
         }
         ui.closeContainer();
 
@@ -620,7 +656,7 @@ void buildUi(const Font& font, GlTexture& image)
         overlayLayout.padding = UIEdges(14.0f);
         overlayLayout.gap = 6.0f;
 
-        UINodeState overlay = ui.openContainer(
+        ui.openContainer(
             overlayLayout, {
                                .backgroundColor = Color(0.22f, 0.24f, 0.32f),
                                .borderColor = OUTLINE,
@@ -630,12 +666,12 @@ void buildUi(const Font& font, GlTexture& image)
                                .shadowOffset = Vec2(0.0f, 8.0f),
                                .shadowBlurRadius = 20.0f,
                                .zIndex = 1,
+                               .onHover = HOVER_LIGHT,
                            }
         );
         label(font, "floating overlay", LABEL_COLOR, 15.0f);
         label(font, "topmost wins: hover me and the panel below stays dark", CAPTION_COLOR, 11.0f);
         ui.closeContainer();
-        lightWhenHovered(overlay);
 
         // Resizing the root re-solves everything under it: the panels redistribute,
         // the swatch rows keep their fixed cells and let the gaps absorb the change,
