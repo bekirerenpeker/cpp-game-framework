@@ -37,6 +37,12 @@ struct DragState
 };
 DragState g_rootResize, g_windowResize, g_windowMove;
 
+// Same face baked twice, differing only in atlas type. TAB swaps which one UIManager
+// hands to every leaf that names no font; the pair at the bottom of the root names both
+// so the two are comparable in a single frame.
+const Font* g_mtsdfFont = nullptr;
+const Font* g_bitmapFont = nullptr;
+
 const Color BACKDROP(0.05f, 0.05f, 0.07f, 1.0f);
 const Color SURFACE(0.13f, 0.14f, 0.18f);
 const Color PANEL(0.17f, 0.18f, 0.23f);
@@ -92,11 +98,14 @@ UILayoutConfig box(UISizeSpec width, UISizeSpec height)
 
 UILayoutConfig textBox() { return box(UISizeSpec::grow(), UISizeSpec::fit()); }
 
-void label(const Font& font, std::string_view text, Color color, float size)
+// No font anywhere in the scene's own signatures: a leaf with a null font takes
+// UIManager's, and the only reason this one is passed through at all is the A/B pair at
+// the bottom, which has to name a face to compare two of them in the same frame.
+void label(std::string_view text, Color color, float size, const Font* font = nullptr)
 {
     UIManager::get().addTextLeaf(
         textBox(), {
-                       .font = &font, .text = text, .style = {.color = color, .size = size}
+                       .font = font, .text = text, .style = {.color = color, .size = size}
     }
     );
 }
@@ -104,7 +113,7 @@ void label(const Font& font, std::string_view text, Color color, float size)
 // A swatch of the style under test with its name underneath. The swatch's state comes
 // back so a caller can still rewrite the style it was just given -- nothing reads a
 // style until draw(), so a hover landing here still lands in time.
-UINodeState cell(const Font& font, const UIContainerStyleSpec& style, const char* caption)
+UINodeState cell(const UIContainerStyleSpec& style, const char* caption)
 {
     UIManager& ui = UIManager::get();
 
@@ -119,7 +128,6 @@ UINodeState cell(const Font& font, const UIContainerStyleSpec& style, const char
 
     ui.addTextLeaf(
         textBox(), {
-                       .font = &font,
                        .text = caption,
                        .style = {.color = CAPTION_COLOR, .size = 12.0f},
                        .alignment = {.horizontal = TextAlignH::Center}
@@ -181,7 +189,7 @@ void dragVec2(const UINodeState& grip, DragState& drag, Vec2& value, Vec2 minVal
 // inner container re-wraps its text as the width changes, and a corner grip. Nothing
 // here is engine state -- position and size are the scene's, exactly like the slider's
 // float, which is what makes a window ordinary composition rather than a special case.
-void resizableWindow(const Font& font)
+void resizableWindow()
 {
     UIManager& ui = UIManager::get();
 
@@ -223,8 +231,7 @@ void resizableWindow(const Font& font)
                       .onHeld = {.backgroundColor = ACCENT}}
     );
     label(
-        font, std::format("window  {} x {}", (int)g_windowSize.x, (int)g_windowSize.y), LABEL_COLOR,
-        13.0f
+        std::format("window  {} x {}", (int)g_windowSize.x, (int)g_windowSize.y), LABEL_COLOR, 13.0f
     );
     ui.closeContainer();
 
@@ -249,7 +256,6 @@ void resizableWindow(const Font& font)
         );
         ui.addTextLeaf(
             textBox(), {
-                           .font = &font,
                            .text = "An inner container inside the window body. Its width is "
                                    "whatever the window leaves it, so this paragraph re-wraps "
                                    "while you drag the corner and the line count follows the "
@@ -281,7 +287,7 @@ void resizableWindow(const Font& font)
 // handle is a container too, so a press that starts on it captures *it* rather than
 // the track -- either capture means the same gesture, and the value still comes off
 // the track's own relativeMousePos, which stays meaningful outside its rect.
-void slider(const Font& font, float& value, const char* caption)
+void slider(float& value, const char* caption)
 {
     UIManager& ui = UIManager::get();
 
@@ -338,7 +344,6 @@ void slider(const Font& font, float& value, const char* caption)
 
     ui.addTextLeaf(
         textBox(), {
-                       .font = &font,
                        .text = std::format("{}  {:.2f}", caption, value),
                        .style = {.color = CAPTION_COLOR, .size = 12.0f},
                        .alignment = {.horizontal = TextAlignH::Center}
@@ -348,7 +353,7 @@ void slider(const Font& font, float& value, const char* caption)
 }
 
 // A titled row of swatches; the caller puts cell()s between the two calls.
-void beginSection(const Font& font, const char* title)
+void beginSection(const char* title)
 {
     UIManager& ui = UIManager::get();
 
@@ -357,7 +362,7 @@ void beginSection(const Font& font, const char* title)
     column.gap = 8.0f;
 
     ui.openContainer(column);
-    label(font, title, LABEL_COLOR, 16.0f);
+    label(title, LABEL_COLOR, 16.0f);
 
     UILayoutConfig row = box(UISizeSpec::grow(), UISizeSpec::fit());
     row.gap = 12.0f;
@@ -388,33 +393,32 @@ void beginPanel()
     );
 }
 
-void buildBackgroundSection(const Font& font, GlTexture& image)
+void buildBackgroundSection(GlTexture& image)
 {
-    beginSection(font, "Background");
-    cell(font, {.backgroundColor = ACCENT}, "solid");
-    cell(font, {.backgroundColor = Color(0.30f, 0.62f, 0.95f, 0.35f)}, "alpha 0.35");
-    cell(font, {.backgroundImage = &image}, "image");
-    cell(font, {.backgroundColor = Color(1.0f, 0.55f, 0.35f), .backgroundImage = &image}, "tinted");
+    beginSection("Background");
+    cell({.backgroundColor = ACCENT}, "solid");
+    cell({.backgroundColor = Color(0.30f, 0.62f, 0.95f, 0.35f)}, "alpha 0.35");
+    cell({.backgroundImage = &image}, "image");
+    cell({.backgroundColor = Color(1.0f, 0.55f, 0.35f), .backgroundImage = &image}, "tinted");
     endSection();
 }
 
-void buildRadiusSection(const Font& font)
+void buildRadiusSection()
 {
-    beginSection(font, "Corner radius");
-    cell(font, {.backgroundColor = SWATCH, .borderRadius = 0.0f}, "0");
-    cell(font, {.backgroundColor = SWATCH, .borderRadius = 10.0f}, "10");
-    cell(font, {.backgroundColor = SWATCH, .borderRadius = 26.0f}, "26");
+    beginSection("Corner radius");
+    cell({.backgroundColor = SWATCH, .borderRadius = 0.0f}, "0");
+    cell({.backgroundColor = SWATCH, .borderRadius = 10.0f}, "10");
+    cell({.backgroundColor = SWATCH, .borderRadius = 26.0f}, "26");
     // Clamped to half the shorter side, so an absurd radius is a capsule, not a
     // distance field folded inside out.
-    cell(font, {.backgroundColor = SWATCH, .borderRadius = 999.0f}, "clamped");
+    cell({.backgroundColor = SWATCH, .borderRadius = 999.0f}, "clamped");
     endSection();
 }
 
-void buildBorderSection(const Font& font)
+void buildBorderSection()
 {
-    beginSection(font, "Border width");
+    beginSection("Border width");
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderColor = ACCENT,
          .borderWidth = 2.0f,
@@ -422,7 +426,6 @@ void buildBorderSection(const Font& font)
         "2"
     );
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderColor = ACCENT,
          .borderWidth = 6.0f,
@@ -430,7 +433,6 @@ void buildBorderSection(const Font& font)
         "6"
     );
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderColor = ACCENT,
          .borderWidth = 14.0f,
@@ -439,15 +441,14 @@ void buildBorderSection(const Font& font)
     );
     // No background at all: the ring is the whole element, and the panel behind it
     // shows through the middle.
-    cell(font, {.borderColor = ACCENT, .borderWidth = 3.0f, .borderRadius = 8.0f}, "no fill");
+    cell({.borderColor = ACCENT, .borderWidth = 3.0f, .borderRadius = 8.0f}, "no fill");
     endSection();
 }
 
-void buildBorderStyleSection(const Font& font)
+void buildBorderStyleSection()
 {
-    beginSection(font, "Border style");
+    beginSection("Border style");
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderColor = ACCENT,
          .borderWidth = 4.0f,
@@ -456,7 +457,6 @@ void buildBorderStyleSection(const Font& font)
         "solid"
     );
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderColor = ACCENT,
          .borderWidth = 4.0f,
@@ -465,7 +465,6 @@ void buildBorderStyleSection(const Font& font)
         "dashed"
     );
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderColor = ACCENT,
          .borderWidth = 4.0f,
@@ -476,7 +475,6 @@ void buildBorderStyleSection(const Font& font)
     // The dash walk is arc length around the rounded boundary, so the pattern keeps
     // its spacing through the corners instead of bunching up.
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderColor = ACCENT,
          .borderWidth = 4.0f,
@@ -487,11 +485,10 @@ void buildBorderStyleSection(const Font& font)
     endSection();
 }
 
-void buildShadowSection(const Font& font)
+void buildShadowSection()
 {
-    beginSection(font, "Shadow");
+    beginSection("Shadow");
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderRadius = 10.0f,
          .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.8f),
@@ -500,7 +497,6 @@ void buildShadowSection(const Font& font)
         "drop"
     );
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderRadius = 10.0f,
          .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.85f),
@@ -510,7 +506,6 @@ void buildShadowSection(const Font& font)
     );
     // A zero offset makes the shadow a centred glow rather than a drop.
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderRadius = 10.0f,
          .shadowColor = ACCENT,
@@ -520,7 +515,6 @@ void buildShadowSection(const Font& font)
     // The shadow is knocked out under the box the way CSS does it, so this barely
     // tinted fill shows the panel behind it rather than its own shadow.
     cell(
-        font,
         {.backgroundColor = Color(1.0f, 1.0f, 1.0f, 0.12f),
          .borderRadius = 10.0f,
          .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.85f),
@@ -530,12 +524,11 @@ void buildShadowSection(const Font& font)
     endSection();
 }
 
-void buildLiveSection(const Font& font)
+void buildLiveSection()
 {
-    beginSection(font, "Per frame");
-    cell(font, {.backgroundColor = SWATCH, .borderRadius = 2.0f + pulse(1.3f) * 30.0f}, "radius");
+    beginSection("Per frame");
+    cell({.backgroundColor = SWATCH, .borderRadius = 2.0f + pulse(1.3f) * 30.0f}, "radius");
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderColor = ACCENT,
          .borderWidth = 1.0f + pulse(1.7f) * 13.0f,
@@ -543,7 +536,6 @@ void buildLiveSection(const Font& font)
         "width"
     );
     cell(
-        font,
         {.backgroundColor = SWATCH,
          .borderRadius = 10.0f,
          .shadowColor = ACCENT,
@@ -554,7 +546,6 @@ void buildLiveSection(const Font& font)
     // The whole reactive look declared in one call. A press keeps the hover's glow and
     // only overrides the two fields it names, since each state is merged over the last.
     cell(
-        font,
         {
             .backgroundColor = SWATCH,
             .borderRadius = 10.0f,
@@ -569,7 +560,7 @@ void buildLiveSection(const Font& font)
 
 // Declared from scratch every frame. Nesting is the open/close pairing, so no id is
 // ever handled and the root is simply the container opened with nothing else open.
-void buildUi(const Font& font, GlTexture& image)
+void buildUi(GlTexture& image)
 {
     UIManager& ui = UIManager::get();
     ui.clear();
@@ -593,7 +584,7 @@ void buildUi(const Font& font, GlTexture& image)
                     }
     );
     {
-        label(font, "Container styles", TITLE_COLOR, 26.0f);
+        label("Container styles", TITLE_COLOR, 26.0f);
 
         UILayoutConfig bodyLayout = box(UISizeSpec::grow(), UISizeSpec::grow());
         bodyLayout.gap = 16.0f;
@@ -601,25 +592,25 @@ void buildUi(const Font& font, GlTexture& image)
         ui.openContainer(bodyLayout);
         {
             beginPanel();
-            buildBackgroundSection(font, image);
-            buildRadiusSection(font);
-            buildBorderSection(font);
+            buildBackgroundSection(image);
+            buildRadiusSection();
+            buildBorderSection();
             ui.closeContainer();
 
             beginPanel();
-            buildBorderStyleSection(font);
-            buildShadowSection(font);
-            buildLiveSection(font);
+            buildBorderStyleSection();
+            buildShadowSection();
+            buildLiveSection();
             ui.closeContainer();
         }
         ui.closeContainer();
 
         // Drag one past the end of its track: capture keeps the grab, and nothing
         // else lights up on the way past.
-        beginSection(font, "Sliders - caller owns the value, capture owns the drag");
-        slider(font, g_red, "red");
-        slider(font, g_green, "green");
-        slider(font, g_blue, "blue");
+        beginSection("Sliders - caller owns the value, capture owns the drag");
+        slider(g_red, "red");
+        slider(g_green, "green");
+        slider(g_blue, "blue");
         ui.openContainer(
             box(UISizeSpec::fixed(CELL_SIZE.x), UISizeSpec::fixed(SLIDER_HEIGHT)),
             {.backgroundColor = Color(g_red, g_green, g_blue),
@@ -630,16 +621,29 @@ void buildUi(const Font& font, GlTexture& image)
         ui.closeContainer();
         endSection();
 
-        // The rest of UIContainerStyle is not the quad's business: overflow needs a
-        // clip rect from the solver, and cursor and transition are input and
-        // animation concerns.
+        // The two labels on the right are the same string from the same face at the same
+        // size, one atlas each, so the readability difference is visible in one frame
+        // instead of from memory across a TAB press. They cost no extra draw call: a
+        // glyph carries its texture slot *and* its unitRange per vertex, so a second
+        // atlas -- and a second atlas type -- still shares the batch.
+        UILayoutConfig statusRow = box(UISizeSpec::grow(), UISizeSpec::fit());
+        statusRow.gap = 18.0f;
+        ui.openContainer(statusRow);
         label(
-            font,
             UIRenderer::get().getSpace() == UISpace::Screen ?
-                "screen space - pinned to the window, camera does nothing.  SPACE switches" :
+                "screen space - pinned to the window.  SPACE switches" :
                 "world space - pans and zooms with the camera.  SPACE switches",
             CAPTION_COLOR, 13.0f
         );
+        label(
+            std::format(
+                "TAB atlas: {}", UIManager::get().getFont() == g_bitmapFont ? "bitmap" : "mtsdf"
+            ),
+            LABEL_COLOR, 13.0f
+        );
+        label("mtsdf Handgloves 138", CAPTION_COLOR, 11.0f, g_mtsdfFont);
+        label("bitmap Handgloves 138", CAPTION_COLOR, 11.0f, g_bitmapFont);
+        ui.closeContainer();
 
         // Floating, so it sits over the left panel instead of taking a slot in the
         // row, and declared last so it paints last -- which is exactly what makes it
@@ -669,8 +673,8 @@ void buildUi(const Font& font, GlTexture& image)
                                .onHover = HOVER_LIGHT,
                            }
         );
-        label(font, "floating overlay", LABEL_COLOR, 15.0f);
-        label(font, "topmost wins: hover me and the panel below stays dark", CAPTION_COLOR, 11.0f);
+        label("floating overlay", LABEL_COLOR, 15.0f);
+        label("topmost wins: hover me and the panel below stays dark", CAPTION_COLOR, 11.0f);
         ui.closeContainer();
 
         // Resizing the root re-solves everything under it: the panels redistribute,
@@ -679,7 +683,7 @@ void buildUi(const Font& font, GlTexture& image)
         UINodeState rootGrip = addGrip();
         dragVec2(rootGrip, g_rootResize, g_rootSize, ROOT_MIN, -1.0f);
 
-        resizableWindow(font);
+        resizableWindow();
     }
     ui.closeContainer();
 }
@@ -689,7 +693,8 @@ void buildUi(const Font& font, GlTexture& image)
 // Every paintable field of UIContainerStyle, drawn by UIRenderer as one quad each --
 // background, border ring, corner radius, dash pattern and shadow all come out of a
 // single rounded-box distance field. SPACE switches the UI between screen and world
-// space; WASD pans and QE zooms the camera, which moves the UI only in world space.
+// space, TAB switches the UI font between an mtsdf and a bitmap atlas of the same face;
+// WASD pans and QE zooms the camera, which moves the UI only in world space.
 // Edges stay a pixel wide at any zoom because the antialiasing is driven by the
 // distance field's gradient, and hovering proves hit testing follows the space.
 int ui_test()
@@ -705,7 +710,16 @@ int ui_test()
     camera.emplace<CameraComponent>().windowId = windowId;
     camera.get<CameraComponent>().orthoSize = g_rootSize.y * 1.15f;
 
-    Font font(findFontFile(), {.atlasType = FontAtlasType::Mtsdf, .emPixelSize = 48});
+    // One face, two atlases, same em size, so TAB changes exactly one variable. The UI
+    // is told about the font once here instead of every leaf carrying one -- drop the
+    // setFont call and it bakes a system font rather than drawing nothing.
+    fs::path fontFile = findFontFile();
+    Font mtsdfFont(fontFile, {.atlasType = FontAtlasType::Mtsdf, .emPixelSize = 48});
+    Font bitmapFont(fontFile, {.atlasType = FontAtlasType::Bitmap, .emPixelSize = 48});
+    g_mtsdfFont = &mtsdfFont;
+    g_bitmapFont = &bitmapFont;
+    UIManager::get().setFont(g_mtsdfFont);
+
     GlTexture image(IMAGE_PATH, 0, GlTexture::FilterMode::Linear, GlTexture::WrapMode::ClampToEdge);
 
     GlShader quadShader("game/assets/shaders/QuadShader.glsl");
@@ -733,7 +747,13 @@ int ui_test()
             );
         }
 
-        buildUi(font, image);
+        if (Input::get().keyPressed(KeyCode::Tab)) {
+            UIManager::get().setFont(
+                UIManager::get().getFont() == g_mtsdfFont ? g_bitmapFont : g_mtsdfFont
+            );
+        }
+
+        buildUi(image);
     };
 
     auto onWindowRender = [&](IdType id, float dt) {

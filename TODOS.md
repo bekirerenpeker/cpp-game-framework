@@ -190,6 +190,15 @@ rather than leaving a stale description.
 
 ## Done
 
+- [x] **One UI font instead of one per leaf** — `UIManager::setFont(const Font*)` holds
+  the face every text leaf uses; `UITextConfig::font` stays as a per-leaf override for
+  mixing faces, and is null in almost every call. With nothing set, `getFont()` bakes a
+  system font once (Arial / Liberation / DejaVu, by OS) through `ResourceManager` and
+  logs it, so a scene that forgets the call still draws text. Mtsdf for the fallback:
+  bitmap is sharper only at the size it was baked for, which a default cannot know.
+  `ui_test` toggles atlas type with TAB and shows both at 11px side by side —
+  worth revisiting the default if a real HUD ends up drawing one fixed text size.
+
 - [x] **Per-state styles** — `openContainer` takes a `UIContainerStyleSpec`: every
   `UIContainerStyle` field plus `onHover`/`onHeld`/`onPressed`/`onReleased`, each a
   whole style. `UIManager` merges base → hover → held → pressed/released (lowest

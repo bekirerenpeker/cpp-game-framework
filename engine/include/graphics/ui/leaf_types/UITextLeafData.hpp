@@ -9,6 +9,8 @@ namespace Engine {
 
 // Everything a text leaf needs. spanStyles is index-matched to the "/s" tags in
 // text, and a short list falls back to style rather than being an error.
+// A null font means the one on UIManager, which is what almost every leaf wants --
+// set it per leaf only to mix faces inside one UI.
 struct UITextConfig
 {
     const Font* font = nullptr;

@@ -47,8 +47,15 @@ class UIManager : public Singleton<UIManager>
     std::vector<uint64_t> m_hoveredKeys;
     uint64_t m_activeKey = NO_KEY;
 
+    const Font* m_font = nullptr;
+    const Font* m_fallbackFont = nullptr;
+    bool m_fallbackAttempted = false;
+
   public:
     void clear();
+
+    void setFont(const Font* font) { m_font = font; }
+    const Font* getFont();
 
     UINodeState openContainer(
         const UILayoutConfig& layout = {}, const UIContainerStyleSpec& style = {},
