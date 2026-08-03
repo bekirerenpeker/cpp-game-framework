@@ -22,7 +22,7 @@ const float TITLE_BAR_HEIGHT = 28.0f;
 float g_red = 0.30f, g_green = 0.62f, g_blue = 0.95f;
 Vec2 g_rootSize(980.0f, 646.0f);
 Vec2 g_windowPos(600.0f, 250.0f);
-Vec2 g_windowSize(340.0f, 260.0f);
+Vec2 g_windowSize(340.0f, 200.0f);
 
 // Drag bookkeeping is caller-owned too. Only one node can hold capture at a time, so
 // these can never be contended -- but each grip needs its own, since the size it
@@ -175,6 +175,12 @@ void resizableWindow(const Font& font)
                           .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.75f),
                           .shadowOffset = Vec2(0.0f, 10.0f),
                           .shadowBlurRadius = 26.0f,
+                          // The vertical pass never shrinks a child below its content,
+                          // so a short window is exactly the case where content spills
+                          // past its own frame -- and this is what cuts it off. The
+                          // shadow survives because a node's own drawing is bounded by
+                          // its *parent's* clip, not the one it imposes on its children.
+                          .overflow = UIOverflow::Hidden,
                           // Above the overlay's layer 1, so it is the topmost thing in
                           // the scene for both painting and hit testing.
                           .zIndex = 2,
@@ -198,14 +204,19 @@ void resizableWindow(const Font& font)
     bodyLayout.padding = UIEdges(12.0f);
     ui.openContainer(bodyLayout);
     {
+        // clipY lets the box shrink below its content in the solve; overflow is what
+        // stops the overflowing part from being *painted*. The two are separate on
+        // purpose -- one is sizing, the other is rasterisation.
         UILayoutConfig innerLayout = box(UISizeSpec::grow(), UISizeSpec::grow());
         innerLayout.padding = UIEdges(10.0f);
+        innerLayout.clipY = true;
         ui.openContainer(
             innerLayout, {
                              .backgroundColor = SWATCH,
                              .borderColor = OUTLINE,
                              .borderWidth = 1.0f,
                              .borderRadius = 6.0f,
+                             .overflow = UIOverflow::Hidden,
                          }
         );
         ui.addTextLeaf(
@@ -214,7 +225,12 @@ void resizableWindow(const Font& font)
                            .text = "An inner container inside the window body. Its width is "
                                    "whatever the window leaves it, so this paragraph re-wraps "
                                    "while you drag the corner and the line count follows the "
-                                   "box -- the layout is re-solved from scratch every frame.",
+                                   "box -- the layout is re-solved from scratch every frame. "
+                                   "This container also sets overflow to Hidden, so shrink the "
+                                   "window and the text is cut off at the box edge instead of "
+                                   "spilling over the border: the clip rect is the intersection "
+                                   "of every clipping ancestor, handed to the shader per vertex, "
+                                   "so it cuts mid-glyph rather than dropping whole lines.",
                            .style = {.color = Color(0.78f, 0.80f, 0.86f), .size = 13.0f},
         }
         );
@@ -535,6 +551,7 @@ void buildUi(const Font& font, GlTexture& image)
                         .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.6f),
                         .shadowOffset = Vec2(0.0f, 12.0f),
                         .shadowBlurRadius = 28.0f,
+                        .overflow = UIOverflow::Hidden,
                     }
     );
     {

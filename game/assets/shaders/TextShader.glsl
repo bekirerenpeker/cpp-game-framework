@@ -2,14 +2,17 @@
 #version 330 core
 layout (location = 0) in vec2 iPos;
 layout (location = 1) in vec2 iTexCoords;
-layout (location = 2) in vec4 iColor;
-layout (location = 3) in vec4 iOutlineColor;
-layout (location = 4) in vec4 iShadowColor;
-layout (location = 5) in vec2 iUnitRange;
-layout (location = 6) in vec4 iShadowParams;
-layout (location = 7) in vec4 iParams;
-layout (location = 8) in int iTexIndex;
+layout (location = 2) in vec4 iClipRect;
+layout (location = 3) in vec4 iColor;
+layout (location = 4) in vec4 iOutlineColor;
+layout (location = 5) in vec4 iShadowColor;
+layout (location = 6) in vec2 iUnitRange;
+layout (location = 7) in vec4 iShadowParams;
+layout (location = 8) in vec4 iParams;
+layout (location = 9) in int iTexIndex;
 
+out vec2 vPos;
+flat out vec4 vClipRect;
 out vec4 vColor;
 out vec4 vOutlineColor;
 out vec4 vShadowColor;
@@ -23,6 +26,8 @@ uniform mat4 uMVP;
 
 void main()
 {
+    vPos = iPos;
+    vClipRect = iClipRect;
     vColor = iColor;
     vOutlineColor = iOutlineColor;
     vShadowColor = iShadowColor;
@@ -39,6 +44,8 @@ void main()
 #version 330 core
 layout (location = 0) out vec4 oColor;
 
+in vec2 vPos;
+flat in vec4 vClipRect;   // minX, minY, maxX, maxY, same space as vPos
 in vec4 vColor;
 in vec4 vOutlineColor;
 in vec4 vShadowColor;
@@ -134,6 +141,13 @@ vec4 over(vec4 dst, vec4 src)
 
 void main()
 {
+    // The accumulated box of every clipping ancestor, so a glyph half inside a scroll
+    // container is cut mid-letter. World-space text carries a rect wide enough that
+    // this never rejects, which is why it needs no branch of its own.
+    if (vPos.x < vClipRect.x || vPos.y < vClipRect.y || vPos.x > vClipRect.z ||
+        vPos.y > vClipRect.w)
+        discard;
+
     // A negative unitRange means "ignore the atlas and fill flat": underline,
     // strikethrough, and any plain UI rect later.
     if (vUnitRange.x < 0.0) {

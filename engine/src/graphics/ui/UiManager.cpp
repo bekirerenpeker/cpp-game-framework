@@ -22,11 +22,17 @@ uint64_t localKeyOf(std::string_view key, uint64_t positionalIndex)
                          hashCombine(2, std::hash<std::string_view> {}(key));
 }
 
+// A node is hittable only where it is actually visible, so the accumulated clip has to
+// be part of the test -- otherwise the half of a list item scrolled out of its
+// container still swallows clicks, which is worse than the overdraw it replaced.
 bool containsMouse(const UILayoutNode& node, Vec2 mouse)
 {
     Vec2 half = node.size * 0.5f;
     Vec2 delta = mouse - node.drawPos;
-    return Math::abs(delta.x) <= half.x && Math::abs(delta.y) <= half.y;
+    if (Math::abs(delta.x) > half.x || Math::abs(delta.y) > half.y) return false;
+
+    const Vec4& clip = node.clipRect;
+    return mouse.x >= clip.x && mouse.y >= clip.y && mouse.x <= clip.z && mouse.y <= clip.w;
 }
 
 UINodeState
@@ -256,7 +262,7 @@ void UIManager::draw()
                 if (layoutNode.paintLayer != layer) continue;
                 const UINode* node = layoutNode.node;
                 if (!node) continue;
-                node->draw(layoutNode.drawPos, layoutNode.size);
+                node->draw(layoutNode.drawPos, layoutNode.size, layoutNode.clipRect);
             }
             renderer.flush();
             TextRenderer::get().flush();

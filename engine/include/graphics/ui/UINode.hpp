@@ -31,7 +31,7 @@ struct UINode : IHasId
     UILeafWidths measureWidths() const;
     float measureHeight(float contentWidth) const;
 
-    void draw(Vec2 drawPos, Vec2 size) const;
+    void draw(Vec2 drawPos, Vec2 size, Vec4 clipRect) const;
 };
 
 }   // namespace Engine

@@ -4,16 +4,19 @@ layout (location = 0) in vec2 iPos;
 layout (location = 1) in vec2 iLocalPos;
 layout (location = 2) in vec2 iHalfSize;
 layout (location = 3) in vec4 iUvRect;
-layout (location = 4) in vec4 iFillColor;
-layout (location = 5) in vec4 iBorderColor;
-layout (location = 6) in vec4 iShadowColor;
-layout (location = 7) in vec4 iShadowParams;
-layout (location = 8) in vec4 iBorderParams;
-layout (location = 9) in int iTexIndex;
+layout (location = 4) in vec4 iClipRect;
+layout (location = 5) in vec4 iFillColor;
+layout (location = 6) in vec4 iBorderColor;
+layout (location = 7) in vec4 iShadowColor;
+layout (location = 8) in vec4 iShadowParams;
+layout (location = 9) in vec4 iBorderParams;
+layout (location = 10) in int iTexIndex;
 
 out vec2 vLocalPos;
+out vec2 vPos;
 flat out vec2 vHalfSize;
 flat out vec4 vUvRect;
+flat out vec4 vClipRect;
 flat out vec4 vFillColor;
 flat out vec4 vBorderColor;
 flat out vec4 vShadowColor;
@@ -26,8 +29,10 @@ uniform mat4 uMVP;
 void main()
 {
     vLocalPos = iLocalPos;
+    vPos = iPos;
     vHalfSize = iHalfSize;
     vUvRect = iUvRect;
+    vClipRect = iClipRect;
     vFillColor = iFillColor;
     vBorderColor = iBorderColor;
     vShadowColor = iShadowColor;
@@ -45,8 +50,10 @@ layout (location = 0) out vec4 oColor;
 // Only the local position interpolates; everything else is one value for the whole
 // quad, so flat both skips the interpolation and keeps the corner radius exact.
 in vec2 vLocalPos;
+in vec2 vPos;
 flat in vec2 vHalfSize;
 flat in vec4 vUvRect;          // uvMin.xy, uvMax.xy
+flat in vec4 vClipRect;        // minX, minY, maxX, maxY, same space as vPos
 flat in vec4 vFillColor;
 flat in vec4 vBorderColor;
 flat in vec4 vShadowColor;
@@ -155,6 +162,12 @@ vec4 over(vec4 dst, vec4 src)
 
 void main()
 {
+    // The accumulated box of every clipping ancestor. Unclipped nodes carry a rect
+    // wide enough that this never rejects, so overflow costs one compare either way.
+    if (vPos.x < vClipRect.x || vPos.y < vClipRect.y || vPos.x > vClipRect.z ||
+        vPos.y > vClipRect.w)
+        discard;
+
     float radius = vShadowParams.w;
     float blur = vShadowParams.z;
     float borderWidth = vBorderParams.x;

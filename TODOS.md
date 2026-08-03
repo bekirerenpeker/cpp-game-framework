@@ -124,14 +124,13 @@ rather than leaving a stale description.
   `getMouseUiPos` with no other call site touched, and is what a settings-menu
   "UI scale" slider or a HiDPI display would need.
 
-- [ ] **Scroll + clip** — `LayoutConfig::clipX/clipY` and `scrollOffset` are
-  honoured by the solver already (a clipped axis reports `minW = 0`, which is
-  what lets it shrink below its content), but nothing sets a scissor rect or
-  drives the offset from input. Hit testing must be clipped in the same change,
-  not before it: `UiSystem`'s cached rects are currently full rects, and
-  clipping the hit test while the renderer still draws everything unclipped
-  would produce visible elements that cannot be clicked — a worse bug than the
-  one it fixes.
+- [ ] **Scroll** — clipping landed (see Done); what is left is the *scroll* half.
+  `UILayoutConfig::scrollOffset` is honoured by the solver but nothing drives it from
+  input, so there is no wheel handling, no drag-to-scroll and no scrollbar. Needs
+  `scrollDelta` on `UINodeState` (see the drag-outputs item) plus somewhere to keep
+  the offset per container — which is the first thing that genuinely wants the
+  retained-state store, since a scroll position is engine bookkeeping rather than a
+  value the caller naturally owns.
 
 - [ ] **Terrain-type tilemap rework** — `Tileset::tilesConnect(a, b)` is
   currently just `a != 0 && a == b` ([Tileset.cpp](engine/src/graphics/tilemap/Tileset.cpp)),
@@ -203,6 +202,35 @@ rather than leaving a stale description.
   for both human and agent contributors.
 
 ## Done
+
+- [x] **Overflow clipping** — `UIContainerStyle::overflow` is honoured: `Hidden` or
+  `Scroll` bounds everything inside the node to its rect. The clip is resolved
+  **once, in the solver**, not walked per draw: `computeClipRects` runs strictly
+  top-down (free, since the tree is built preorder, so a parent's rect is final
+  before its children are reached) and intersects each node's inherited box with its
+  own. Every node then carries the finished rect into the vertex data, and both
+  fragment shaders `discard` outside it.
+  The non-obvious part is that each node stores **two** rects: `clipRect` bounds the
+  node's *own* drawing, `childClipRect` is what it hands down. They differ by the
+  node's own overflow, and keeping them apart is what stops a clipping container from
+  cutting off its own shadow — a shadow lives outside the rect by definition, so
+  intersecting a node with itself would erase it.
+  Text needed the same treatment, since a clipped container full of glyphs is the
+  whole point: `TextVertex` gained a clip rect and `TextRenderer::setClipRect` /
+  `clearClipRect` bound whatever is emitted next. It deliberately does **not** flush
+  on change the way the view-proj override does — the rect is per-vertex, so text
+  under different clips still shares one draw call. World-space text carries a rect
+  far enough out that the test never rejects, so it costs one compare and no branch.
+  Glyphs are cut **mid-letter** rather than dropped whole, which is what makes a
+  half-scrolled line look right.
+  Hit testing was clipped in the same change rather than left for later: a node
+  clipped away visually but still clickable is a worse bug than the overdraw it
+  replaced, and it is the exact failure the old combined scroll+clip item warned
+  about.
+  Known gap, deliberately not unified: `UILayoutConfig::clipX/clipY` (sizing — lets a
+  box shrink below its content) and `style.overflow` (painting) are separate flags a
+  caller must set together, and `overflow` clips both axes rather than honouring the
+  per-axis distinction.
 
 - [x] **Mouse capture, and paint layers for cross-batch ordering** — two things
   the slider in `ui_test` needed.

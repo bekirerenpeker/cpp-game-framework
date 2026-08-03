@@ -1,6 +1,7 @@
 #pragma once
 
 #include "utils/math/Vec2.hpp"
+#include "utils/math/Vec4.hpp"
 
 namespace Engine {
 
@@ -30,7 +31,7 @@ struct IUILeafData
 
     virtual UILeafWidths measureWidths() = 0;
     virtual float measureHeight(float contentWidth) = 0;
-    virtual void draw(Vec2 drawPos, Vec2 size) = 0;
+    virtual void draw(Vec2 drawPos, Vec2 size, Vec4 clipRect) = 0;
 };
 
 }   // namespace Engine

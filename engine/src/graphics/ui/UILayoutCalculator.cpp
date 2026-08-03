@@ -56,6 +56,7 @@ const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Ve
     computePositions();
     applyTransforms();
     computeDrawPositions(rootTopLeft);
+    computeClipRects();
 
     // Snapshotted for next frame's lookups, not this frame's draw -- .node would
     // dangle by then, so it is dropped here rather than left to rot.
@@ -217,6 +218,33 @@ void UILayoutCalculator::computeDrawPositions(Vec2 rootTopLeft)
         node.drawPos = Vec2(
             rootTopLeft.x + node.pos.x + node.size.x * 0.5f,
             rootTopLeft.y - (node.pos.y + node.size.y * 0.5f)
+        );
+    }
+}
+
+// Strictly top-down, which is free here: the tree was built preorder, so a parent's
+// rect is always already final by the time its children are reached. A node inherits
+// whatever box its ancestors have narrowed it to, and narrows that further for its own
+// children if it clips -- so the rect a fragment is tested against is the intersection
+// of every clipping ancestor, computed once instead of walked per draw.
+void UILayoutCalculator::computeClipRects()
+{
+    for (UILayoutNode& node : m_nodes) {
+        Vec4 inherited =
+            node.parent == NO_LAYOUT_NODE ? UI_NO_CLIP : m_nodes[node.parent].childClipRect;
+        node.clipRect = inherited;
+        node.childClipRect = inherited;
+
+        UIOverflow overflow = node.node->style.overflow.value_or(UIOverflow::Visible);
+        if (overflow == UIOverflow::Visible) continue;
+
+        // drawPos is the centre in a y-up space, so the rect is centre +/- half.
+        Vec2 half = node.size * 0.5f;
+        node.childClipRect = Vec4(
+            Math::max(inherited.x, node.drawPos.x - half.x),
+            Math::max(inherited.y, node.drawPos.y - half.y),
+            Math::min(inherited.z, node.drawPos.x + half.x),
+            Math::min(inherited.w, node.drawPos.y + half.y)
         );
     }
 }

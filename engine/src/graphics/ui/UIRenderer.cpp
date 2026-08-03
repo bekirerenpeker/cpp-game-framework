@@ -21,6 +21,7 @@ void UIRenderer::init(GlShader* shader, size_t maxQuadCount)
             {GlDataType::Float, 4},
             {GlDataType::Float, 4},
             {GlDataType::Float, 4},
+            {GlDataType::Float, 4},
             {  GlDataType::Int, 1},
     },
         shader
@@ -107,9 +108,13 @@ bool UIRenderer::ensureReady()
     return true;
 }
 
-void UIRenderer::addContainerQuad(Vec2 drawPos, Vec2 size, const UIContainerStyle& style)
+void UIRenderer::addContainerQuad(
+    Vec2 drawPos, Vec2 size, const UIContainerStyle& style, Vec4 clipRect
+)
 {
     if (size.x <= 0.0f || size.y <= 0.0f) return;
+    // Fully clipped away, so the quad would produce no fragments at all.
+    if (clipRect.z <= clipRect.x || clipRect.w <= clipRect.y) return;
 
     const GlTexture* image = style.backgroundImage.value_or(nullptr);
     // An image with no colour set draws untinted; a colour with no image is the plain
@@ -174,6 +179,7 @@ void UIRenderer::addContainerQuad(Vec2 drawPos, Vec2 size, const UIContainerStyl
             corners[i],
             half,
             Vec4(0.0f, 0.0f, 1.0f, 1.0f),
+            clipRect,
             fillColor,
             borderColor,
             shadowColor,

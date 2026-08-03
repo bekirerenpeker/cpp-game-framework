@@ -9,6 +9,18 @@
 
 namespace Engine {
 
+TextRenderer::TextRenderer()
+    : m_clipRect(-NO_CLIP_EXTENT, -NO_CLIP_EXTENT, NO_CLIP_EXTENT, NO_CLIP_EXTENT)
+{
+}
+
+void TextRenderer::setClipRect(const Vec4& clipRect) { m_clipRect = clipRect; }
+
+void TextRenderer::clearClipRect()
+{
+    m_clipRect = Vec4(-NO_CLIP_EXTENT, -NO_CLIP_EXTENT, NO_CLIP_EXTENT, NO_CLIP_EXTENT);
+}
+
 void TextRenderer::init(GlShader* shader, size_t maxQuadCount)
 {
     m_batch.init(
@@ -16,6 +28,7 @@ void TextRenderer::init(GlShader* shader, size_t maxQuadCount)
         {
             {GlDataType::Float, 2},
             {GlDataType::Float, 2},
+            {GlDataType::Float, 4},
             {GlDataType::Float, 4},
             {GlDataType::Float, 4},
             {GlDataType::Float, 4},
@@ -314,6 +327,7 @@ void TextRenderer::writeQuad(
         quad.verts[i] = {
             corners[i],
             uvs[i],
+            m_clipRect,
             appearance.color,
             appearance.outlineColor,
             appearance.shadowColor,

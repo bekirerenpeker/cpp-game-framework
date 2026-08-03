@@ -30,7 +30,8 @@ struct UIBoxVertex
     Vec2 pos;
     Vec2 localPos;
     Vec2 halfSize;
-    Vec4 uvRect;   // uvMin.xy, uvMax.xy
+    Vec4 uvRect;     // uvMin.xy, uvMax.xy
+    Vec4 clipRect;   // minX, minY, maxX, maxY, in the same space as pos
     Color fillColor;
     Color borderColor;
     Color shadowColor;
@@ -68,7 +69,7 @@ class UIRenderer : public Singleton<UIRenderer>
     Vec2 getRootOrigin() const;
     Vec2 getMouseUiPos() const;
 
-    void addContainerQuad(Vec2 drawPos, Vec2 size, const UIContainerStyle& style);
+    void addContainerQuad(Vec2 drawPos, Vec2 size, const UIContainerStyle& style, Vec4 clipRect);
 
     void flush();
 

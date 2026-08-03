@@ -2,11 +2,16 @@
 
 #include "graphics/ui/UINode.hpp"
 #include "utils/Singleton.hpp"
+#include "utils/math/Vec4.hpp"
 #include <vector>
 
 namespace Engine {
 
 constexpr uint NO_LAYOUT_NODE = (uint)-1;
+
+// Wide enough that no real geometry reaches it, so an unclipped node needs no branch
+// anywhere -- the shader always tests, it just always passes.
+#define UI_NO_CLIP Vec4(-UI_UNBOUNDED, -UI_UNBOUNDED, UI_UNBOUNDED, UI_UNBOUNDED)
 
 // A flat mirror of one UINode for the duration of a solve. minWidth/maxWidth are
 // scratch for the intrinsic passes; pos/size are the solved geometry in layout
@@ -41,6 +46,13 @@ struct UILayoutNode
     Vec2 pos = VEC2_ZERO;
     Vec2 size = VEC2_ZERO;
     Vec2 drawPos = VEC2_ZERO;
+
+    // minX, minY, maxX, maxY in draw space. clipRect is what this node's own drawing
+    // is bounded by, childClipRect is what it passes down -- they differ by this
+    // node's own overflow. Keeping them apart is what stops a clipping container from
+    // cutting off its own shadow, which lives outside its rect by definition.
+    Vec4 clipRect = UI_NO_CLIP;
+    Vec4 childClipRect = UI_NO_CLIP;
 };
 
 class UILayoutCalculator : public Singleton<UILayoutCalculator>
@@ -74,6 +86,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     void computePositions();
     void applyTransforms();
     void computeDrawPositions(Vec2 rootTopLeft);
+    void computeClipRects();
 
     void aggregateIntrinsic(uint index, UILayoutAxis axis);
     void finalizeIntrinsic(uint index, UILayoutAxis axis);

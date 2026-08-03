@@ -16,16 +16,16 @@ float UINode::measureHeight(float contentWidth) const
     return 0.0f;
 }
 
-void UINode::draw(Vec2 drawPos, Vec2 size) const
+void UINode::draw(Vec2 drawPos, Vec2 size, Vec4 clipRect) const
 {
     if (!isVisible) return;
 
     if (leafData) {
-        leafData->draw(drawPos, size);
+        leafData->draw(drawPos, size, clipRect);
         return;
     }
 
-    UIRenderer::get().addContainerQuad(drawPos, size, style);
+    UIRenderer::get().addContainerQuad(drawPos, size, style, clipRect);
 }
 
 }   // namespace Engine

@@ -26,10 +26,15 @@ float UITextLeafData::measureHeight(float contentWidth)
     return TextLayoutCalculator::get().calculate(m_block, contentWidth);
 }
 
-void UITextLeafData::draw(Vec2 drawPos, Vec2 size)
+void UITextLeafData::draw(Vec2 drawPos, Vec2 size, Vec4 clipRect)
 {
     Vec2 topLeft = Vec2(drawPos.x - size.x * 0.5f, drawPos.y + size.y * 0.5f);
+
+    // Cleared afterwards so world-space text drawn later in the frame is not still
+    // bounded by whatever UI container happened to be emitted last.
+    TextRenderer::get().setClipRect(clipRect);
     TextRenderer::get().draw(m_block, topLeft, size);
+    TextRenderer::get().clearClipRect();
 }
 
 }   // namespace Engine

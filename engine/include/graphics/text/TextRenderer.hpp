@@ -19,6 +19,7 @@ struct TextVertex
 {
     Vec2 pos;
     Vec2 uv;
+    Vec4 clipRect;   // minX, minY, maxX, maxY, in the same space as pos
     Color color;
     Color outlineColor;
     Color shadowColor;
@@ -42,9 +43,13 @@ class TextRenderer : public Singleton<TextRenderer>
     // ascender instead.
     static constexpr float STRIKETHROUGH_ASCENDER_RATIO = 0.28f;
     static constexpr float SOLID_UNIT_RANGE = -1.0f;
+    // Far enough out that no real geometry reaches it, so unclipped text needs no
+    // branch -- the shader always tests the rect, it just always passes.
+    static constexpr float NO_CLIP_EXTENT = 1e30f;
 
     BatchRenderer<TextVertex> m_batch;
     Mat4 m_viewProjOverride;
+    Vec4 m_clipRect;
     bool m_hasViewProjOverride = false;
     bool m_initialized = false;
     bool m_warnedDirtyBlock = false;
@@ -54,6 +59,12 @@ class TextRenderer : public Singleton<TextRenderer>
 
     void setViewProjOverride(const Mat4& viewProj);
     void clearViewProjOverride();
+
+    // Bounds every glyph emitted from here on, in the space the text is drawn in.
+    // Unlike the view-proj override this needs no flush: the rect is per-vertex, so
+    // text under different clips still shares one draw call.
+    void setClipRect(const Vec4& clipRect);
+    void clearClipRect();
 
     Vec2 draw(const TextBlock& block, Vec2 origin, Vec2 boxSize = VEC2_ZERO);
 
@@ -69,7 +80,7 @@ class TextRenderer : public Singleton<TextRenderer>
     void flush();
 
   private:
-    TextRenderer() = default;
+    TextRenderer();
     ~TextRenderer() = default;
 
     struct GlyphAppearance
