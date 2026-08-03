@@ -217,4 +217,56 @@ void Renderer::addQuad(
     }
 }
 
+void Renderer::addLine(Vec2 start, Vec2 end, Color color, float thickness)
+{
+    if (m_boundWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
+    if (!context || !context->srcBuffer()) return;
+
+    Vec2 direction = end - start;
+    float length = direction.magnitude();
+    if (length == 0) return;
+
+    Vec2 center = (start + end) * 0.5f;
+    float angle = std::atan2(direction.y, direction.x);
+
+    addQuad(
+        center, Vec2(length, thickness), color, context->srcBuffer()->getTexture(), VEC2_ZERO,
+        VEC2_ONE, angle
+    );
+}
+
+void Renderer::addFrame(Vec2 pos, Vec2 size, Color color, float thickness)
+{
+    if (m_boundWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
+    if (!context || !context->srcBuffer()) return;
+
+    GlTexture* texture = context->srcBuffer()->getTexture();
+
+    // Top edge (full width)
+    addQuad(
+        pos + Vec2(size.x * 0.5f, thickness * 0.5f), Vec2(size.x, thickness), color, texture,
+        VEC2_ZERO, VEC2_ONE
+    );
+
+    // Bottom edge (full width)
+    addQuad(
+        pos + Vec2(size.x * 0.5f, size.y - thickness * 0.5f), Vec2(size.x, thickness), color,
+        texture, VEC2_ZERO, VEC2_ONE
+    );
+
+    // Left edge (excluding corners)
+    addQuad(
+        pos + Vec2(thickness * 0.5f, size.y * 0.5f), Vec2(thickness, size.y - 2 * thickness), color,
+        texture, VEC2_ZERO, VEC2_ONE
+    );
+
+    // Right edge (excluding corners)
+    addQuad(
+        pos + Vec2(size.x - thickness * 0.5f, size.y * 0.5f),
+        Vec2(thickness, size.y - 2 * thickness), color, texture, VEC2_ZERO, VEC2_ONE
+    );
+}
+
 }   // namespace Engine

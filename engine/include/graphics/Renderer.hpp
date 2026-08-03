@@ -50,6 +50,8 @@ class Renderer : public Singleton<Renderer>
         Vec2 pos, Vec2 size, Color color, const GlTexture* texture, Vec2 uvMin = VEC2_ZERO,
         Vec2 uvMax = VEC2_ONE, float angleRad = 0.0f
     );
+    void addLine(Vec2 start, Vec2 end, Color color, float thickness = 1.0f);
+    void addFrame(Vec2 pos, Vec2 size, Color color, float thickness = 1.0f);
 
   private:
     void syncRenderContext();
