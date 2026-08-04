@@ -5,6 +5,7 @@
 #include "graphics/ui/UILayoutCalculator.hpp"
 #include "graphics/ui/UIRenderer.hpp"
 #include "utils/math/MathFuncs.hpp"
+#include <algorithm>
 #include <functional>
 
 namespace Engine {
@@ -282,6 +283,57 @@ IdType UIManager::addShaderLeaf(const UILayoutConfig& layout, const UIShaderConf
     m_leaves.push_back(leaf);
     node->leafData = leaf;
     return state.id;
+}
+
+void UIManager::removeChildren(IdType id)
+{
+    UINode* node = m_nodes.get(id);
+    if (!node) return;
+
+    for (IdType childId = node->firstChild; childId != INVALID_ID;) {
+        const UINode* child = m_nodes.get(childId);
+        if (!child) break;
+
+        IdType next = child->nextSibling;
+        destroyNode(childId);
+        childId = next;
+    }
+
+    // Re-fetched: removing the children swap-removes entries, which moves the storage
+    // this pointer was aimed at.
+    node = m_nodes.get(id);
+    if (!node) return;
+
+    node->firstChild = INVALID_ID;
+    node->lastChild = INVALID_ID;
+    node->childCount = 0;
+}
+
+void UIManager::destroyNode(IdType id)
+{
+    const UINode* node = m_nodes.get(id);
+    if (!node) return;
+
+    for (IdType childId = node->firstChild; childId != INVALID_ID;) {
+        const UINode* child = m_nodes.get(childId);
+        if (!child) break;
+
+        IdType next = child->nextSibling;
+        destroyNode(childId);
+        childId = next;
+    }
+
+    node = m_nodes.get(id);
+    if (!node) return;
+
+    if (node->leafData) {
+        auto found = std::find(m_leaves.begin(), m_leaves.end(), node->leafData);
+        if (found != m_leaves.end()) {
+            delete *found;
+            m_leaves.erase(found);
+        }
+    }
+    m_nodes.remove(id);
 }
 
 void UIManager::draw()

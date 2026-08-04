@@ -13,6 +13,8 @@ void demoWindow()
     static bool checkedA = true;
     static bool checkedB = false;
     static int radioChoice = 1;
+    static int filterChoice = 1;
+    static int menuChoice = 0;
     static Color pickedColor(0.30f, 0.62f, 0.95f);
     static Color popupColor(0.95f, 0.55f, 0.25f);
 
@@ -27,7 +29,7 @@ void demoWindow()
 
         button("Button");
 
-        openContainer({.gap = 10, .direction = UILayoutDirection::Row});
+        openContainer({.gap = 10.0f, .direction = UILayoutDirection::Row});
         tooltip(
             "A tooltip declared inside the window, escaping its clip",
             button("Hover for a tooltip").isHovered
@@ -61,6 +63,16 @@ void demoWindow()
         horizontalDivider();
 
         radioGroup({"First", "Second", "Third"}, radioChoice);
+
+        horizontalDivider();
+
+        openContainer({.gap = 10.0f, .alignCross = UIAlign::Center});
+        dropdown({"Nearest", "Bilinear", "Trilinear", "Anisotropic 16x"}, filterChoice);
+        dropdown(
+            {"New scene", "Open scene", "Save scene as a very long file name"}, menuChoice,
+            {.label = "File"}
+        );
+        closeContainer();
         break;
     }
 

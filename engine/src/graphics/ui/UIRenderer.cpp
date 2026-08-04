@@ -199,7 +199,7 @@ void UIRenderer::addContainerQuad(
             shadowColor,
             shadowOffset,
             shadowBlur,
-            0.0f,
+            *style.imageRotation,
             radii,
             borderWidth,
             dashPeriod,

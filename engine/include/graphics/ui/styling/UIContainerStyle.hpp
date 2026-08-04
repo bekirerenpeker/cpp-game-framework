@@ -69,6 +69,7 @@ struct UICorners
 #define UI_CONTAINER_STYLE_FIELDS(X)                                                               \
     X(Color, backgroundColor, COLOR_CLEAR)                                                         \
     X(GlTexture*, backgroundImage, nullptr)                                                        \
+    X(float, imageRotation, 0.0f)                                                                  \
     X(Color, borderColor, COLOR_CLEAR)                                                             \
     X(float, borderWidth, 0.0f)                                                                    \
     X(UICorners, borderRadius, UICorners {})                                                       \

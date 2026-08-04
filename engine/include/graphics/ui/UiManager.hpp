@@ -62,6 +62,11 @@ class UIManager : public Singleton<UIManager>
     IdType addTextLeaf(const UILayoutConfig& layout, const UITextConfig& config);
     IdType addShaderLeaf(const UILayoutConfig& layout, const UIShaderConfig& config);
 
+    // Discards a subtree that was already declared this frame. Immediate mode gives a
+    // widget no way to stop its caller declaring content, so a collapsed window throws
+    // the content away afterwards instead.
+    void removeChildren(IdType id);
+
     void draw();
 
     UINode* getNode(IdType id) { return m_nodes.get(id); }
@@ -76,6 +81,7 @@ class UIManager : public Singleton<UIManager>
     bool isKeyHovered(uint64_t key) const;
 
     UINodeState addNode(const UILayoutConfig& layout, std::string_view key = {});
+    void destroyNode(IdType id);
 };
 
 }   // namespace Engine

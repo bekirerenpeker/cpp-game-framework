@@ -11,6 +11,7 @@ namespace UIWidgets {
 // base components interfaces
 void clear();
 UINode* getNode(IdType id);
+void removeChildren(IdType id);
 
 UINodeState openContainer(
     const UILayoutConfig& layout = {}, const UIContainerStyleSpec& style = {},
@@ -142,6 +143,33 @@ struct RadioGroupConfig
 };
 void radioGroup(
     const std::vector<std::string>& items, int& selected, const RadioGroupConfig& config = {}
+);
+
+struct DropdownConfig
+{
+    UILayoutConfig wrapperLayout;
+    UILayoutConfig buttonLayout;
+    UIContainerStyleSpec buttonStyle;
+    UILayoutConfig labelLayout;
+    UITextConfig labelTextConfig;
+    UILayoutConfig arrowLayout;
+    UIContainerStyleSpec arrowStyle;
+    UILayoutConfig panelLayout;
+    UIContainerStyleSpec panelStyle;
+    UILayoutConfig itemLayout;
+    UIContainerStyleSpec itemStyle;
+    UIContainerStyleSpec selectedItemStyle;
+    UILayoutConfig itemTextLayout;
+    UITextConfig itemTextConfig;
+    UITextStyle selectedItemTextStyle;
+    // Shown on the closed dropdown instead of the selected item, which is what turns it
+    // into a menu that always reads the same while still tracking a selection.
+    std::string_view label;
+    Vec2 panelOffset = Vec2(0.0f, 4.0f);
+    std::string_view key;
+};
+int dropdown(
+    const std::vector<std::string>& items, int& selected, const DropdownConfig& config = {}
 );
 
 struct TooltipConfig

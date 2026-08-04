@@ -36,8 +36,8 @@ struct UIBoxVertex
     Color shadowColor;
     Vec2 shadowOffset;
     float shadowBlur;
-    float shadowReserved;   // pads the attribute out to a full vec4 slot, unused in the shader
-    Vec4 cornerRadii;       // topLeft, topRight, bottomRight, bottomLeft
+    float imageRotation;   // radians, counter-clockwise, about the box's centre
+    Vec4 cornerRadii;      // topLeft, topRight, bottomRight, bottomLeft
     float borderWidth;
     float dashPeriod;
     float dashRatio;

@@ -60,7 +60,7 @@ flat in vec4 vClipRect;        // minX, minY, maxX, maxY, same space as vPos
 flat in vec4 vFillColor;
 flat in vec4 vBorderColor;
 flat in vec4 vShadowColor;
-flat in vec4 vShadowParams;    // xy = offset, z = blur radius
+flat in vec4 vShadowParams;    // xy = offset, z = blur radius, w = image rotation
 flat in vec4 vCornerRadii;     // topLeft, topRight, bottomRight, bottomLeft
 flat in vec4 vBorderParams;    // x = width, y = dash period, z = dash ratio
 flat in int vTexIndex;
@@ -213,6 +213,17 @@ void main()
     // The quad is padded out for the shadow, so uv comes off the box's own extents
     // rather than the interpolated corners, clamped for the padding and the aa fringe.
     vec2 uv = clamp(vLocalPos / vHalfSize * 0.5 + 0.5, 0.0, 1.0);
+
+    // Sampled through the opposite rotation, since turning the lookup one way turns the
+    // image the other. Clamped again because a non-square box rotates out of its own uv.
+    float imageRotation = vShadowParams.w;
+    if (imageRotation != 0.0) {
+        float s = sin(-imageRotation);
+        float c = cos(-imageRotation);
+        vec2 centred = uv - 0.5;
+        uv = clamp(vec2(centred.x * c - centred.y * s, centred.x * s + centred.y * c) + 0.5, 0.0, 1.0);
+    }
+
     vec4 fill = vFillColor * sampleTexture(mix(vUvRect.xy, vUvRect.zw, uv));
     result = over(result, vec4(fill.rgb, fill.a * inner));
 

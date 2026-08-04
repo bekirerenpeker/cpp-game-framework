@@ -9,8 +9,6 @@ rather than leaving a stale description.
 
 ## In progress / next up
 
-- [ ] move required assets to the engines assets folder
-
 - [ ] **Widget layer over the primitives** — the target shape for the UI: the
   primitives (`UIManager`'s container/leaf tree, `UILayoutCalculator`,
   `UIRenderer`, `UIContainerStyle`) are treated as **finished and closed**, and
@@ -185,11 +183,18 @@ rather than leaving a stale description.
 - [ ] **Overlay widgets that still need building** — the machinery under them is
   done: `ignoreClip` escapes every clipping ancestor, `ignoreInput` makes a
   subtree transparent to hit testing, `zIndex` lifts a paint layer, and hit
-  resolution now orders by the same three keys the painter uses. `tooltip` and
-  `colorPickerPopup` are built on it. Still missing: **`dropdown`** and
-  **`contextMenu`**, which need no new primitives, only the widget plus a
-  decision on where the open/closed state lives (the popup picker keys it on the
-  bound value's address, which does not generalise to a menu with no value).
+  resolution now orders by the same three keys the painter uses. `tooltip`,
+  `colorPickerPopup` and `dropdown` are built on it. Still missing:
+  **`contextMenu`**, which needs no new primitives, only the widget plus a
+  decision on where its open/closed state lives — `dropdown` keys on the address
+  of the caller's `int& selected`, which a menu with no bound value has not got.
+
+- [ ] **`TextOverflow::Ellipsis`** — declared but not honoured; everything
+  behaves as `Visible`, and `dropdown` already asks for it on both its closed
+  label and its list items. Needs `TextLayoutCalculator` to measure the ellipsis,
+  find the last run that fits inside `availableWidth`, and truncate it — one
+  change in the single-line path, since a wrapping block never overflows
+  horizontally.
 
 ## Later
 
