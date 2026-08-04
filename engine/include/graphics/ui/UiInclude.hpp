@@ -7,4 +7,6 @@
 #include "UILayoutConfig.hpp"
 #include "UINode.hpp"
 #include "UIRenderer.hpp"
+#include "UITextStyle.hpp"
+#include "UIWidgets.hpp"
 #include "UiManager.hpp"

@@ -40,28 +40,32 @@ enum class UITransition
 };
 
 // The field list lives once, here, and every struct that carries a container's look is
-// generated from it -- adding a field is one line and both structs follow.
+// generated from it -- adding a field is one line and both structs follow. The third
+// column is the plain, unthemed fallback fillDefaults() uses: never a themed colour,
+// just "don't show this" (CLEAR / zero) or the most neutral concrete value.
 // std::optional<Gradient> backgroundGradient belongs in here once gradients exist.
 #define UI_CONTAINER_STYLE_FIELDS(X)                                                               \
-    X(Color, backgroundColor)                                                                      \
-    X(GlTexture*, backgroundImage)                                                                 \
-    X(Color, borderColor)                                                                          \
-    X(float, borderWidth)                                                                          \
-    X(float, borderRadius)                                                                         \
-    X(UIBorderStyle, borderStyle)                                                                  \
-    X(Color, shadowColor)                                                                          \
-    X(Vec2, shadowOffset)                                                                          \
-    X(float, shadowBlurRadius)                                                                     \
-    X(UIOverflow, overflow)                                                                        \
-    X(int, zIndex)                                                                                 \
-    X(UICursor, cursor)                                                                            \
-    X(float, transitionDuration)                                                                   \
-    X(UITransition, transition)
+    X(Color, backgroundColor, COLOR_CLEAR)                                                         \
+    X(GlTexture*, backgroundImage, nullptr)                                                        \
+    X(Color, borderColor, COLOR_CLEAR)                                                             \
+    X(float, borderWidth, 0.0f)                                                                    \
+    X(float, borderRadius, 0.0f)                                                                   \
+    X(UIBorderStyle, borderStyle, UIBorderStyle::Solid)                                            \
+    X(Color, shadowColor, COLOR_CLEAR)                                                             \
+    X(Vec2, shadowOffset, VEC2_ZERO)                                                               \
+    X(float, shadowBlurRadius, 0.0f)                                                               \
+    X(UIOverflow, overflow, UIOverflow::Visible)                                                   \
+    X(int, zIndex, 0)                                                                              \
+    X(UICursor, cursor, UICursor::Default)                                                         \
+    X(float, transitionDuration, 0.0f)                                                             \
+    X(UITransition, transition, UITransition::Linear)
 
-#define UI_STYLE_DECLARE_FIELD(type, name) std::optional<type> name;
-#define UI_STYLE_MERGE_FIELD(type, name)                                                           \
+#define UI_STYLE_DECLARE_FIELD(type, name, def) std::optional<type> name;
+#define UI_STYLE_MERGE_FIELD(type, name, def)                                                      \
     if (other.name) name = other.name;
-#define UI_STYLE_COPY_FIELD(type, name) style.name = name;
+#define UI_STYLE_COPY_FIELD(type, name, def) style.name = name;
+#define UI_STYLE_FILL_DEFAULT_FIELD(type, name, def)                                               \
+    if (!name) name = def;
 
 struct UIContainerStyle
 {
@@ -78,6 +82,21 @@ struct UIContainerStyle
         UIContainerStyle result = *this;
         result.combine(other);
         return result;
+    }
+
+    // Guarantees every field holds a value regardless of what a theme (or a caller)
+    // left unset -- fields already set are untouched. The values that get filled in
+    // carry no theming of their own, so a style with nothing configured stays inert
+    // (invisible background/border/shadow) rather than acquiring an opinionated look.
+    UIContainerStyle& fillDefaults()
+    {
+        // Ahead of the generic fill, whose CLEAR would win the !backgroundColor test
+        // below it: an image with no colour of its own draws untinted, so white is its
+        // plain default, while a container with neither stays invisible.
+        if (!backgroundColor && backgroundImage.value_or(nullptr)) backgroundColor = COLOR_WHITE;
+
+        UI_CONTAINER_STYLE_FIELDS(UI_STYLE_FILL_DEFAULT_FIELD)
+        return *this;
     }
 };
 

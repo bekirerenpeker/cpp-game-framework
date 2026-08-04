@@ -8,7 +8,17 @@
 
 namespace Engine {
 
-void ViewContext::setActiveWindow(IdType windowId) { m_activeWindowId = windowId; }
+void ViewContext::setActiveWindow(IdType windowId)
+{
+    m_activeWindowId = windowId;
+
+    Window* window = getActiveWindow();
+    m_windowProjMat =
+        window ? Mat4::ortho(
+                     0.0f, (float)window->getWidth(), 0.0f, (float)window->getHeight(), -1.0f, 1.0f
+                 ) :
+                 Mat4();
+}
 
 Window* ViewContext::getActiveWindow() const
 {
@@ -32,10 +42,10 @@ void ViewContext::updateCamera(Registry& registry)
         float bottom = -cam.orthoSize * 0.5f;
         float top = cam.orthoSize * 0.5f;
 
-        Mat4 viewMat = Mat4::view(transform.position, transform.rotation);
-        Mat4 projMat = Mat4::ortho(left, right, bottom, top, cam.nearClip, cam.farClip);
+        m_viewMat = Mat4::view(transform.position, transform.rotation);
+        m_projMat = Mat4::ortho(left, right, bottom, top, cam.nearClip, cam.farClip);
+        m_viewProjMat = m_projMat * m_viewMat;
 
-        m_viewProjMat = projMat * viewMat;
         m_activeCamera = entity;
         m_cameraPos = Vec2(transform.position.x, transform.position.y);
         m_cameraRotation = transform.rotation;
@@ -60,6 +70,8 @@ void ViewContext::updateCamera(Registry& registry)
 void ViewContext::resetCamera()
 {
     m_activeCamera = NULL_ENTITY;
+    m_viewMat = Mat4();
+    m_projMat = Mat4();
     m_viewProjMat = Mat4();
     m_visibleBounds = WorldBounds {};
     m_cameraPos = VEC2_ZERO;

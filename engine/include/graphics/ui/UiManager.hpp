@@ -47,9 +47,6 @@ class UIManager : public Singleton<UIManager>
   public:
     void clear();
 
-    // Null is the normal state, not a missing setting: a text leaf with no font of its
-    // own resolves to FontLoader's default down in the text path, so the UI never has to
-    // own a fallback of its own.
     void setFont(const Font* font) { m_font = font; }
     const Font* getFont() const { return m_font; }
 

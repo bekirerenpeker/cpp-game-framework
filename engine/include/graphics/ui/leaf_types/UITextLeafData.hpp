@@ -2,6 +2,7 @@
 
 #include "IUILeafData.hpp"
 #include "graphics/text/TextLayout.hpp"
+#include "graphics/ui/UITextStyle.hpp"
 #include <string_view>
 #include <vector>
 
@@ -15,8 +16,8 @@ struct UITextConfig
 {
     const Font* font = nullptr;
     std::string_view text;
-    TextStyle style;
-    std::vector<TextStyle> spanStyles;
+    UITextStyle style;
+    std::vector<UITextStyle> spanStyles;
     TextAlignment alignment;
     TextOverflow overflow = TextOverflow::Visible;
     bool wrapEnabled = true;

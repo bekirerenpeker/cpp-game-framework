@@ -47,12 +47,7 @@ void UIRenderer::setSpace(UISpace space)
 Mat4 UIRenderer::getViewProjMat() const
 {
     if (m_space == UISpace::World) return ViewContext::get().getViewProjMat();
-
-    Window* window = ViewContext::get().getActiveWindow();
-    if (!window) return Mat4();
-    return Mat4::ortho(
-        0.0f, (float)window->getWidth(), 0.0f, (float)window->getHeight(), -1.0f, 1.0f
-    );
+    return ViewContext::get().getWindowProjMat();
 }
 
 // Where a root's top-left corner sits. Screen puts it in the window's top-left, which
@@ -112,26 +107,27 @@ void UIRenderer::addContainerQuad(
     // Fully clipped away, so the quad would produce no fragments at all.
     if (clipRect.z <= clipRect.x || clipRect.w <= clipRect.y) return;
 
-    const GlTexture* image = style.backgroundImage.value_or(nullptr);
-    // An image with no colour set draws untinted; a colour with no image is the plain
-    // fill, since the batch resolves a null texture to its white default slot.
-    Color fillColor = style.backgroundColor.value_or(image ? COLOR_WHITE : COLOR_CLEAR);
-    Color borderColor = style.borderColor.value_or(COLOR_CLEAR);
-    Color shadowColor = style.shadowColor.value_or(COLOR_CLEAR);
+    // Dereferenced rather than defaulted: a style reaching here has been through
+    // UIContainerStyle::fillDefaults (UIManager does it once per node, after the state
+    // styles merge), so every field is set and no default is decided twice.
+    const GlTexture* image = *style.backgroundImage;
+    Color fillColor = *style.backgroundColor;
+    Color borderColor = *style.borderColor;
+    Color shadowColor = *style.shadowColor;
 
     Vec2 half = size * 0.5f;
     float halfMin = Math::min(half.x, half.y);
     // Past half the shorter side the radius folds the distance field inside out, and
     // a border thicker than that would cross the box's own centre.
-    float radius = Math::clamp(style.borderRadius.value_or(0.0f), 0.0f, halfMin);
+    float radius = Math::clamp(*style.borderRadius, 0.0f, halfMin);
     float borderWidth =
-        borderColor.a > 0.0f ? Math::clamp(style.borderWidth.value_or(0.0f), 0.0f, halfMin) : 0.0f;
+        borderColor.a > 0.0f ? Math::clamp(*style.borderWidth, 0.0f, halfMin) : 0.0f;
 
     float shadowBlur = 0.0f;
     Vec2 shadowOffset = VEC2_ZERO;
     if (shadowColor.a > 0.0f) {
-        shadowBlur = Math::max(style.shadowBlurRadius.value_or(0.0f), 0.0f);
-        shadowOffset = style.shadowOffset.value_or(VEC2_ZERO);
+        shadowBlur = Math::max(*style.shadowBlurRadius, 0.0f);
+        shadowOffset = *style.shadowOffset;
         // The style names the offset the way CSS does, y growing downwards, while
         // every geometric field from here on is in the renderer's y-up draw space.
         shadowOffset.y = -shadowOffset.y;
@@ -143,7 +139,7 @@ void UIRenderer::addContainerQuad(
     if (!ensureReady()) return;
 
     float dashPeriod = 0.0f, dashRatio = 0.0f;
-    UIBorderStyle borderStyle = style.borderStyle.value_or(UIBorderStyle::Solid);
+    UIBorderStyle borderStyle = *style.borderStyle;
     if (borderWidth > 0.0f && borderStyle != UIBorderStyle::Solid) {
         Vec2 straight(Math::max(half.x - radius, 0.0f), Math::max(half.y - radius, 0.0f));
         float perimeter = 4.0f * (straight.x + straight.y) + 2.0f * (float)PI * radius;

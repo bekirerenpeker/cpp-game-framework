@@ -102,7 +102,7 @@ UILayoutConfig textBox() { return box(UISizeSpec::grow(), UISizeSpec::fit()); }
 // the bottom, which has to name a face to compare two of them in the same frame.
 void label(std::string_view text, Color color, float size, const Font* font = nullptr)
 {
-    UIManager::get().addTextLeaf(
+    UIWidgets::addTextLeaf(
         textBox(), {
                        .font = font, .text = text, .style = {.color = color, .size = size}
     }
@@ -114,25 +114,23 @@ void label(std::string_view text, Color color, float size, const Font* font = nu
 // style until draw(), so a hover landing here still lands in time.
 UINodeState cell(const UIContainerStyleSpec& style, const char* caption)
 {
-    UIManager& ui = UIManager::get();
-
     UILayoutConfig column = box(UISizeSpec::fixed(CELL_SIZE.x), UISizeSpec::fit());
     column.direction = UILayoutDirection::Column;
     column.gap = 6.0f;
 
-    ui.openContainer(column);
+    UIWidgets::openContainer(column);
     UINodeState state =
-        ui.openContainer(box(UISizeSpec::grow(), UISizeSpec::fixed(CELL_SIZE.y)), style);
-    ui.closeContainer();
+        UIWidgets::openContainer(box(UISizeSpec::grow(), UISizeSpec::fixed(CELL_SIZE.y)), style);
+    UIWidgets::closeContainer();
 
-    ui.addTextLeaf(
+    UIWidgets::addTextLeaf(
         textBox(), {
                        .text = caption,
                        .style = {.color = CAPTION_COLOR, .size = 12.0f},
                        .alignment = {.horizontal = TextAlignH::Center}
     }
     );
-    ui.closeContainer();
+    UIWidgets::closeContainer();
 
     return state;
 }
@@ -143,19 +141,21 @@ UINodeState addGrip()
 {
     UILayoutConfig layout = box(UISizeSpec::fixed(GRIP_SIZE), UISizeSpec::fixed(GRIP_SIZE));
     layout.isFloating = true;
-    layout.floating.anchorX = UIAlign::End;
-    layout.floating.anchorY = UIAlign::End;
-    layout.floating.selfX = UIAlign::End;
-    layout.floating.selfY = UIAlign::End;
-    layout.floating.offset = Vec2(-4.0f, -4.0f);
+    layout.floating = UIFloatingConfig {
+        .offset = Vec2(-4.0f, -4.0f),
+        .anchorX = UIAlign::End,
+        .anchorY = UIAlign::End,
+        .selfX = UIAlign::End,
+        .selfY = UIAlign::End,
+    };
 
-    UINodeState grip = UIManager::get().openContainer(
+    UINodeState grip = UIWidgets::openContainer(
         layout, {.backgroundColor = ACCENT,
                  .borderRadius = 3.0f,
                  .onHover = {.backgroundColor = COLOR_WHITE},
                  .onHeld = DRAG_GLOW}
     );
-    UIManager::get().closeContainer();
+    UIWidgets::closeContainer();
     return grip;
 }
 
@@ -189,15 +189,13 @@ void dragVec2(const UINodeState& grip, DragState& drag, Vec2& value, Vec2 minVal
 // composition rather than a special case.
 void resizableWindow()
 {
-    UIManager& ui = UIManager::get();
-
     UILayoutConfig windowLayout =
         box(UISizeSpec::fixed(g_windowSize.x), UISizeSpec::fixed(g_windowSize.y));
     windowLayout.isFloating = true;
-    windowLayout.floating.offset = g_windowPos;
+    windowLayout.floating = UIFloatingConfig {.offset = g_windowPos};
     windowLayout.direction = UILayoutDirection::Column;
 
-    ui.openContainer(
+    UIWidgets::openContainer(
         windowLayout, {
                           .backgroundColor = Color(0.16f, 0.17f, 0.22f),
                           .borderColor = OUTLINE,
@@ -221,7 +219,7 @@ void resizableWindow()
     titleLayout.padding = UIEdges(12.0f, 0.0f);
     titleLayout.alignCross = UIAlign::Center;
 
-    UINodeState titleBar = ui.openContainer(
+    UINodeState titleBar = UIWidgets::openContainer(
         titleLayout, {.backgroundColor = Color(0.24f, 0.26f, 0.34f),
                       .borderRadius = 9.0f,
                       .onHover = {.backgroundColor = Color(0.30f, 0.33f, 0.42f)},
@@ -230,11 +228,11 @@ void resizableWindow()
     label(
         std::format("window  {} x {}", (int)g_windowSize.x, (int)g_windowSize.y), LABEL_COLOR, 13.0f
     );
-    ui.closeContainer();
+    UIWidgets::closeContainer();
 
     UILayoutConfig bodyLayout = box(UISizeSpec::grow(), UISizeSpec::grow());
     bodyLayout.padding = UIEdges(12.0f);
-    ui.openContainer(bodyLayout);
+    UIWidgets::openContainer(bodyLayout);
     {
         // clipY lets the box shrink below its content in the solve; overflow is what
         // stops the overflowing part from being *painted*. The two are separate on
@@ -242,7 +240,7 @@ void resizableWindow()
         UILayoutConfig innerLayout = box(UISizeSpec::grow(), UISizeSpec::grow());
         innerLayout.padding = UIEdges(10.0f);
         innerLayout.clipY = true;
-        ui.openContainer(
+        UIWidgets::openContainer(
             innerLayout, {
                              .backgroundColor = SWATCH,
                              .borderColor = OUTLINE,
@@ -251,7 +249,7 @@ void resizableWindow()
                              .overflow = UIOverflow::Hidden,
                          }
         );
-        ui.addTextLeaf(
+        UIWidgets::addTextLeaf(
             textBox(), {
                            .text = "An inner container inside the window body. Its width is "
                                    "whatever the window leaves it, so this paragraph re-wraps "
@@ -265,12 +263,12 @@ void resizableWindow()
                            .style = {.color = Color(0.78f, 0.80f, 0.86f), .size = 13.0f},
         }
         );
-        ui.closeContainer();
+        UIWidgets::closeContainer();
     }
-    ui.closeContainer();
+    UIWidgets::closeContainer();
 
     UINodeState grip = addGrip();
-    ui.closeContainer();
+    UIWidgets::closeContainer();
 
     // The title bar moves the window, so its y follows the pointer directly; the grip
     // grows it, so its y is inverted.
@@ -284,14 +282,12 @@ void resizableWindow()
 // captures *it* instead, but the value still comes off the track's relativeMousePos.
 void slider(float& value, const char* caption)
 {
-    UIManager& ui = UIManager::get();
-
     UILayoutConfig column = box(UISizeSpec::fixed(CELL_SIZE.x * 1.6f), UISizeSpec::fit());
     column.direction = UILayoutDirection::Column;
     column.gap = 6.0f;
-    ui.openContainer(column);
+    UIWidgets::openContainer(column);
 
-    UINodeState track = ui.openContainer(
+    UINodeState track = UIWidgets::openContainer(
         box(UISizeSpec::grow(), UISizeSpec::fixed(SLIDER_HEIGHT)),
         {.backgroundColor = SWATCH,
          .borderColor = OUTLINE,
@@ -304,10 +300,11 @@ void slider(float& value, const char* caption)
     UILayoutConfig handleLayout =
         box(UISizeSpec::fixed(SLIDER_HEIGHT), UISizeSpec::fixed(SLIDER_HEIGHT));
     handleLayout.isFloating = true;
-    handleLayout.floating.offset =
-        Vec2(Math::clamp(value, 0.0f, 1.0f) * (CELL_SIZE.x * 1.6f - SLIDER_HEIGHT), 0.0f);
+    handleLayout.floating = UIFloatingConfig {
+        .offset = Vec2(Math::clamp(value, 0.0f, 1.0f) * (CELL_SIZE.x * 1.6f - SLIDER_HEIGHT), 0.0f)
+    };
 
-    UINodeState handle = ui.openContainer(
+    UINodeState handle = UIWidgets::openContainer(
         handleLayout,
         {
             .backgroundColor = ACCENT,
@@ -321,8 +318,8 @@ void slider(float& value, const char* caption)
             .onHeld = {.borderWidth = 3.0f, .shadowColor = ACCENT, .shadowBlurRadius = 14.0f},
     }
     );
-    ui.closeContainer();
-    ui.closeContainer();
+    UIWidgets::closeContainer();
+    UIWidgets::closeContainer();
 
     if (track.isActive || handle.isActive)
         value = Math::clamp(track.relativeMousePos.x, 0.0f, 1.0f);
@@ -330,44 +327,42 @@ void slider(float& value, const char* caption)
     // The state styles above are constants; this one *is* the value, which no constant
     // can express, so it stays on the escape hatch. A declared node is still writable
     // right up to draw().
-    if (UINode* node = ui.getNode(handle.id)) {
+    if (UINode* node = UIManager::get().getNode(handle.id)) {
         node->style.backgroundColor = Color(
             Math::lerp(ACCENT.r, 1.0f, value), Math::lerp(ACCENT.g, 1.0f, value),
             Math::lerp(ACCENT.b, 1.0f, value)
         );
     }
 
-    ui.addTextLeaf(
+    UIWidgets::addTextLeaf(
         textBox(), {
                        .text = std::format("{}  {:.2f}", caption, value),
                        .style = {.color = CAPTION_COLOR, .size = 12.0f},
                        .alignment = {.horizontal = TextAlignH::Center}
     }
     );
-    ui.closeContainer();
+    UIWidgets::closeContainer();
 }
 
 // A titled row of swatches; the caller puts cell()s between the two calls.
 void beginSection(const char* title)
 {
-    UIManager& ui = UIManager::get();
-
     UILayoutConfig column = box(UISizeSpec::grow(), UISizeSpec::fit());
     column.direction = UILayoutDirection::Column;
     column.gap = 8.0f;
 
-    ui.openContainer(column);
+    UIWidgets::openContainer(column);
     label(title, LABEL_COLOR, 16.0f);
 
     UILayoutConfig row = box(UISizeSpec::grow(), UISizeSpec::fit());
     row.gap = 12.0f;
-    ui.openContainer(row);
+    UIWidgets::openContainer(row);
 }
 
 void endSection()
 {
-    UIManager::get().closeContainer();
-    UIManager::get().closeContainer();
+    UIWidgets::closeContainer();
+    UIWidgets::closeContainer();
 }
 
 void beginPanel()
@@ -377,7 +372,7 @@ void beginPanel()
     layout.padding = UIEdges(16.0f);
     layout.gap = 16.0f;
 
-    UIManager::get().openContainer(
+    UIWidgets::openContainer(
         layout, {
                     .backgroundColor = PANEL,
                     .borderColor = OUTLINE,
@@ -557,8 +552,7 @@ void buildLiveSection()
 // ever handled and the root is simply the container opened with nothing else open.
 void buildUi(GlTexture& image)
 {
-    UIManager& ui = UIManager::get();
-    ui.clear();
+    UIManager::get().clear();
 
     UILayoutConfig rootLayout =
         box(UISizeSpec::fixed(g_rootSize.x), UISizeSpec::fixed(g_rootSize.y));
@@ -566,7 +560,7 @@ void buildUi(GlTexture& image)
     rootLayout.padding = UIEdges(24.0f);
     rootLayout.gap = 16.0f;
 
-    ui.openContainer(
+    UIWidgets::openContainer(
         rootLayout, {
                         .backgroundColor = SURFACE,
                         .borderColor = OUTLINE,
@@ -584,21 +578,21 @@ void buildUi(GlTexture& image)
         UILayoutConfig bodyLayout = box(UISizeSpec::grow(), UISizeSpec::grow());
         bodyLayout.gap = 16.0f;
 
-        ui.openContainer(bodyLayout);
+        UIWidgets::openContainer(bodyLayout);
         {
             beginPanel();
             buildBackgroundSection(image);
             buildRadiusSection();
             buildBorderSection();
-            ui.closeContainer();
+            UIWidgets::closeContainer();
 
             beginPanel();
             buildBorderStyleSection();
             buildShadowSection();
             buildLiveSection();
-            ui.closeContainer();
+            UIWidgets::closeContainer();
         }
-        ui.closeContainer();
+        UIWidgets::closeContainer();
 
         // Drag one past the end of its track: capture keeps the grab, and nothing
         // else lights up on the way past.
@@ -606,14 +600,14 @@ void buildUi(GlTexture& image)
         slider(g_red, "red");
         slider(g_green, "green");
         slider(g_blue, "blue");
-        ui.openContainer(
+        UIWidgets::openContainer(
             box(UISizeSpec::fixed(CELL_SIZE.x), UISizeSpec::fixed(SLIDER_HEIGHT)),
             {.backgroundColor = Color(g_red, g_green, g_blue),
              .borderColor = OUTLINE,
              .borderWidth = 1.0f,
              .borderRadius = 6.0f}
         );
-        ui.closeContainer();
+        UIWidgets::closeContainer();
         endSection();
 
         // The two labels on the right are the same string, face and size, one atlas
@@ -622,7 +616,7 @@ void buildUi(GlTexture& image)
         // are both per-vertex.
         UILayoutConfig statusRow = box(UISizeSpec::grow(), UISizeSpec::fit());
         statusRow.gap = 18.0f;
-        ui.openContainer(statusRow);
+        UIWidgets::openContainer(statusRow);
         label(
             UIRenderer::get().getSpace() == UISpace::Screen ?
                 "screen space - pinned to the window.  SPACE switches" :
@@ -637,7 +631,7 @@ void buildUi(GlTexture& image)
         );
         label("mtsdf Handgloves 138", CAPTION_COLOR, 11.0f, g_mtsdfFont);
         label("bitmap Handgloves 138", CAPTION_COLOR, 11.0f, g_bitmapFont);
-        ui.closeContainer();
+        UIWidgets::closeContainer();
 
         // Floating, so it sits over the left panel instead of taking a row slot, and
         // declared last so it paints last -- which is what makes it the topmost hit.
@@ -645,12 +639,12 @@ void buildUi(GlTexture& image)
         // would still flush after this box and land on top of it.
         UILayoutConfig overlayLayout = box(UISizeSpec::fixed(300.0f), UISizeSpec::fit());
         overlayLayout.isFloating = true;
-        overlayLayout.floating.offset = Vec2(70.0f, 190.0f);
+        overlayLayout.floating = UIFloatingConfig {.offset = Vec2(70.0f, 190.0f)};
         overlayLayout.direction = UILayoutDirection::Column;
         overlayLayout.padding = UIEdges(14.0f);
         overlayLayout.gap = 6.0f;
 
-        ui.openContainer(
+        UIWidgets::openContainer(
             overlayLayout, {
                                .backgroundColor = Color(0.22f, 0.24f, 0.32f),
                                .borderColor = OUTLINE,
@@ -665,7 +659,7 @@ void buildUi(GlTexture& image)
         );
         label("floating overlay", LABEL_COLOR, 15.0f);
         label("topmost wins: hover me and the panel below stays dark", CAPTION_COLOR, 11.0f);
-        ui.closeContainer();
+        UIWidgets::closeContainer();
 
         // Resizing the root re-solves everything under it: the panels redistribute,
         // the swatch rows keep their fixed cells and let the gaps absorb the change,
@@ -675,7 +669,7 @@ void buildUi(GlTexture& image)
 
         resizableWindow();
     }
-    ui.closeContainer();
+    UIWidgets::closeContainer();
 }
 
 }   // namespace

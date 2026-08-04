@@ -4,10 +4,17 @@
 
 namespace Engine {
 
+// Styles are resolved to concrete TextStyles here, on the way into the block: this is
+// the last point before the text path, and TextBlock is what everything downstream --
+// measuring, wrapping, drawing -- reads, so nothing past it can meet an unset field.
 UITextLeafData::UITextLeafData(const UITextConfig& config)
-    : IUILeafData(UILeafType::Text), m_block(config.font, config.text, config.style)
+    : IUILeafData(UILeafType::Text), m_block(config.font, config.text, config.style.resolve())
 {
-    m_block.setSpanStyles(config.spanStyles);
+    std::vector<TextStyle> spanStyles;
+    spanStyles.reserve(config.spanStyles.size());
+    for (const UITextStyle& style : config.spanStyles) spanStyles.push_back(style.resolve());
+
+    m_block.setSpanStyles(spanStyles);
     m_block.setAlignH(config.alignment.horizontal);
     m_block.setAlignV(config.alignment.vertical);
     m_block.setOverflow(config.overflow);

@@ -35,7 +35,9 @@ void setIntrinsic(UILayoutNode& node, UILayoutAxis axis, float min, float max)
     }
 }
 
-bool isFloating(const UILayoutNode& node) { return node.node->layout.isFloating; }
+// Every read below dereferences: UIManager::addNode fills a node's layout and style on
+// creation, so nothing that reaches the solver carries an unset field.
+bool isFloating(const UILayoutNode& node) { return *node.node->layout.isFloating; }
 
 }   // namespace
 
@@ -97,7 +99,7 @@ uint UILayoutCalculator::buildSubtree(IdType nodeId, uint parentIndex)
     // reference to it. zIndex is relative to the parent rather than global, which is
     // what keeps a child from ever falling behind its own container.
     uint parentLayer = parentIndex == NO_LAYOUT_NODE ? 0 : m_nodes[parentIndex].paintLayer;
-    int zIndex = node->style.zIndex.value_or(0);
+    int zIndex = *node->style.zIndex;
 
     UILayoutNode layoutNode;
     layoutNode.node = node;
@@ -130,11 +132,12 @@ void UILayoutCalculator::computeIntrinsicWidths()
     for (size_t i = m_nodes.size(); i-- > 0;) {
         uint index = (uint)i;
         const UILayoutConfig& layout = m_nodes[index].node->layout;
+        const UIEdges& padding = *layout.padding;
 
         if (m_nodes[index].node->leafData && m_nodes[index].firstChild == NO_LAYOUT_NODE) {
             UILeafWidths widths = m_nodes[index].node->measureWidths();
-            m_nodes[index].minWidth = widths.min + layout.padding.horizontal();
-            m_nodes[index].maxWidth = widths.max + layout.padding.horizontal();
+            m_nodes[index].minWidth = widths.min + padding.horizontal();
+            m_nodes[index].maxWidth = widths.max + padding.horizontal();
         } else {
             aggregateIntrinsic(index, UILayoutAxis::Horizontal);
         }
@@ -156,12 +159,12 @@ void UILayoutCalculator::computeIntrinsicHeights()
     for (size_t i = m_nodes.size(); i-- > 0;) {
         uint index = (uint)i;
         const UILayoutConfig& layout = m_nodes[index].node->layout;
+        const UIEdges& padding = *layout.padding;
 
         if (m_nodes[index].node->leafData && m_nodes[index].firstChild == NO_LAYOUT_NODE) {
-            float contentWidth =
-                Math::max(m_nodes[index].size.x - layout.padding.horizontal(), 0.0f);
+            float contentWidth = Math::max(m_nodes[index].size.x - padding.horizontal(), 0.0f);
             m_nodes[index].size.y =
-                m_nodes[index].node->measureHeight(contentWidth) + layout.padding.vertical();
+                m_nodes[index].node->measureHeight(contentWidth) + padding.vertical();
         } else {
             aggregateIntrinsic(index, UILayoutAxis::Vertical);
         }
@@ -195,11 +198,13 @@ void UILayoutCalculator::applyTransforms()
 {
     for (UILayoutNode& node : m_nodes) {
         const UILayoutConfig& layout = node.node->layout;
-        if (layout.offset == VEC2_ZERO && layout.scale == VEC2_ONE) continue;
+        const Vec2& offset = *layout.offset;
+        const Vec2& scale = *layout.scale;
+        if (offset == VEC2_ZERO && scale == VEC2_ONE) continue;
 
         Vec2 center = node.pos + node.size * 0.5f;
-        node.size = node.size * layout.scale;
-        node.pos = center - node.size * 0.5f + layout.offset;
+        node.size = node.size * scale;
+        node.pos = center - node.size * 0.5f + offset;
     }
 }
 
@@ -228,7 +233,7 @@ void UILayoutCalculator::computeClipRects()
         node.clipRect = inherited;
         node.childClipRect = inherited;
 
-        UIOverflow overflow = node.node->style.overflow.value_or(UIOverflow::Visible);
+        UIOverflow overflow = *node.node->style.overflow;
         if (overflow == UIOverflow::Visible) continue;
 
         // drawPos is the centre in a y-up space, so the rect is centre +/- half.
@@ -245,7 +250,7 @@ void UILayoutCalculator::computeClipRects()
 void UILayoutCalculator::aggregateIntrinsic(uint index, UILayoutAxis axis)
 {
     const UILayoutConfig& layout = m_nodes[index].node->layout;
-    bool alongMain = axis == mainAxisOf(layout.direction);
+    bool alongMain = axis == mainAxisOf(*layout.direction);
 
     float min = 0.0f;
     float max = 0.0f;
@@ -253,7 +258,7 @@ void UILayoutCalculator::aggregateIntrinsic(uint index, UILayoutAxis axis)
          child = m_nodes[child].nextSibling) {
         if (isFloating(m_nodes[child])) continue;
 
-        float childMargin = axisPadding(m_nodes[child].node->layout.margin, axis);
+        float childMargin = axisPadding(*m_nodes[child].node->layout.margin, axis);
         float childMin = intrinsicMin(m_nodes[child], axis) + childMargin;
         float childMax = intrinsicMax(m_nodes[child], axis) + childMargin;
         if (alongMain) {
@@ -271,7 +276,7 @@ void UILayoutCalculator::aggregateIntrinsic(uint index, UILayoutAxis axis)
         max += gaps;
     }
 
-    float pad = axisPadding(layout.padding, axis);
+    float pad = axisPadding(*layout.padding, axis);
     setIntrinsic(m_nodes[index], axis, min + pad, max + pad);
 }
 
@@ -305,12 +310,12 @@ void UILayoutCalculator::distributeChildren(uint index, UILayoutAxis axis, bool 
     if (m_nodes[index].firstChild == NO_LAYOUT_NODE) return;
 
     const UILayoutConfig& layout = m_nodes[index].node->layout;
-    if (axis != mainAxisOf(layout.direction)) {
+    if (axis != mainAxisOf(*layout.direction)) {
         resolveCrossAxis(index, axis);
         return;
     }
 
-    float inner = sizeOf(m_nodes[index], axis) - axisPadding(layout.padding, axis);
+    float inner = sizeOf(m_nodes[index], axis) - axisPadding(*layout.padding, axis);
     float available = inner - gapTotal(index) - marginTotal(index, axis);
 
     m_scratch.clear();
@@ -335,7 +340,7 @@ void UILayoutCalculator::distributeChildren(uint index, UILayoutAxis axis, bool 
 void UILayoutCalculator::resolveCrossAxis(uint index, UILayoutAxis axis)
 {
     const UILayoutConfig& layout = m_nodes[index].node->layout;
-    float inner = sizeOf(m_nodes[index], axis) - axisPadding(layout.padding, axis);
+    float inner = sizeOf(m_nodes[index], axis) - axisPadding(*layout.padding, axis);
 
     for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
          child = m_nodes[child].nextSibling) {
@@ -344,7 +349,7 @@ void UILayoutCalculator::resolveCrossAxis(uint index, UILayoutAxis axis)
         // it" for a margin to carve out.
         float childInner = isFloating(m_nodes[child]) ?
                                inner :
-                               inner - axisPadding(m_nodes[child].node->layout.margin, axis);
+                               inner - axisPadding(*m_nodes[child].node->layout.margin, axis);
         setSizeOf(m_nodes[child], axis, resolveChildAgainst(child, axis, childInner));
     }
 }
@@ -371,11 +376,13 @@ void UILayoutCalculator::positionChildren(uint index)
     if (m_nodes[index].firstChild == NO_LAYOUT_NODE) return;
 
     const UILayoutConfig& layout = m_nodes[index].node->layout;
-    UILayoutAxis mainAxis = mainAxisOf(layout.direction);
-    UILayoutAxis crossAxis = crossAxisOf(layout.direction);
+    UILayoutDirection direction = *layout.direction;
+    UILayoutAxis mainAxis = mainAxisOf(direction);
+    UILayoutAxis crossAxis = crossAxisOf(direction);
 
-    float innerMain = sizeOf(m_nodes[index], mainAxis) - axisPadding(layout.padding, mainAxis);
-    float innerCross = sizeOf(m_nodes[index], crossAxis) - axisPadding(layout.padding, crossAxis);
+    const UIEdges& padding = *layout.padding;
+    float innerMain = sizeOf(m_nodes[index], mainAxis) - axisPadding(padding, mainAxis);
+    float innerCross = sizeOf(m_nodes[index], crossAxis) - axisPadding(padding, crossAxis);
 
     float used = gapTotal(index) + marginTotal(index, mainAxis);
     for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
@@ -384,8 +391,8 @@ void UILayoutCalculator::positionChildren(uint index)
         used += sizeOf(m_nodes[child], mainAxis);
     }
 
-    Vec2 origin = m_nodes[index].pos + layout.padding.topLeft() - layout.scrollOffset;
-    float cursor = axisGet(origin, mainAxis) + alignOffset(layout.alignMain, innerMain - used);
+    Vec2 origin = m_nodes[index].pos + padding.topLeft() - *layout.scrollOffset;
+    float cursor = axisGet(origin, mainAxis) + alignOffset(*layout.alignMain, innerMain - used);
     float crossOrigin = axisGet(origin, crossAxis);
 
     for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
@@ -395,7 +402,7 @@ void UILayoutCalculator::positionChildren(uint index)
             continue;
         }
 
-        const UIEdges& childMargin = m_nodes[child].node->layout.margin;
+        const UIEdges& childMargin = *m_nodes[child].node->layout.margin;
         cursor += axisLeading(childMargin, mainAxis);
 
         float childCross = sizeOf(m_nodes[child], crossAxis);
@@ -405,18 +412,18 @@ void UILayoutCalculator::positionChildren(uint index)
         axisSet(
             pos, crossAxis,
             crossOrigin + axisLeading(childMargin, crossAxis) +
-                alignOffset(layout.alignCross, innerCross - childCross - crossMargin)
+                alignOffset(*layout.alignCross, innerCross - childCross - crossMargin)
         );
         m_nodes[child].pos = pos;
 
         cursor +=
-            sizeOf(m_nodes[child], mainAxis) + axisTrailing(childMargin, mainAxis) + layout.gap;
+            sizeOf(m_nodes[child], mainAxis) + axisTrailing(childMargin, mainAxis) + *layout.gap;
     }
 }
 
 void UILayoutCalculator::positionFloatingChild(uint parentIndex, uint childIndex)
 {
-    const UIFloatingConfig& floating = m_nodes[childIndex].node->layout.floating;
+    const UIFloatingConfig& floating = *m_nodes[childIndex].node->layout.floating;
     const UILayoutNode& parent = m_nodes[parentIndex];
     UILayoutNode& child = m_nodes[childIndex];
 
@@ -573,7 +580,7 @@ float UILayoutCalculator::contentFloor(uint index, UILayoutAxis axis) const
 {
     // clipX was already folded into minWidth by finalizeIntrinsic, but the vertical
     // axis stores a single height, so clipY has to be honoured here instead.
-    if (axis == UILayoutAxis::Vertical && m_nodes[index].node->layout.clipY) return 0.0f;
+    if (axis == UILayoutAxis::Vertical && *m_nodes[index].node->layout.clipY) return 0.0f;
     return intrinsicMin(m_nodes[index], axis);
 }
 
@@ -596,7 +603,7 @@ float UILayoutCalculator::gapTotal(uint index) const
 {
     uint count = layoutChildCount(index);
     if (count < 2) return 0.0f;
-    return m_nodes[index].node->layout.gap * (float)(count - 1);
+    return *m_nodes[index].node->layout.gap * (float)(count - 1);
 }
 
 float UILayoutCalculator::marginTotal(uint index, UILayoutAxis axis) const
@@ -605,7 +612,7 @@ float UILayoutCalculator::marginTotal(uint index, UILayoutAxis axis) const
     for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
          child = m_nodes[child].nextSibling) {
         if (isFloating(m_nodes[child])) continue;
-        total += axisPadding(m_nodes[child].node->layout.margin, axis);
+        total += axisPadding(*m_nodes[child].node->layout.margin, axis);
     }
     return total;
 }

@@ -3,6 +3,7 @@
 #include "utils/TypeAliases.hpp"
 #include "utils/math/Vec2.hpp"
 #include <cstdint>
+#include <optional>
 
 namespace Engine {
 
@@ -88,23 +89,62 @@ struct UIFloatingConfig
     UIAlign selfY = UIAlign::Start;
 };
 
+// The field list lives once, here, and the struct, combine() and fillDefaults() are
+// all generated from it -- adding a field is one line. Every field is optional for the
+// same reason UIContainerStyle's are: combine() has to tell "caller left this
+// untouched" apart from "caller set it to the same value the default happens to be,"
+// and only absence can carry that, a concrete field never can. The third column is
+// what UILayoutConfig's fields used to default-construct to before they became
+// optional -- Fit/0/Row/Start, not a theme choice, just the plain fallback for a field
+// nobody ever set. Unlike the style structs there is no per-state spec here -- no
+// theme feeds this, and a layout that changed with hover would feed this frame's
+// geometry off last frame's hit test and could oscillate, so state-reactive layout
+// stays off the table.
+#define UI_LAYOUT_CONFIG_FIELDS(X)                                                                 \
+    X(UISizeSpec, width, UISizeSpec {})                                                            \
+    X(UISizeSpec, height, UISizeSpec {})                                                           \
+    X(UIEdges, padding, UIEdges {})                                                                \
+    X(UIEdges, margin, UIEdges {})                                                                 \
+    X(UIFloatingConfig, floating, UIFloatingConfig {})                                             \
+    X(Vec2, scrollOffset, VEC2_ZERO)                                                               \
+    X(Vec2, offset, VEC2_ZERO)                                                                     \
+    X(Vec2, scale, VEC2_ONE)                                                                       \
+    X(float, gap, 0.0f)                                                                            \
+    X(UILayoutDirection, direction, UILayoutDirection::Row)                                        \
+    X(UIAlign, alignMain, UIAlign::Start)                                                          \
+    X(UIAlign, alignCross, UIAlign::Start)                                                         \
+    X(bool, isFloating, false)                                                                     \
+    X(bool, clipX, false)                                                                          \
+    X(bool, clipY, false)
+
+#define UI_LAYOUT_DECLARE_FIELD(type, name, def) std::optional<type> name;
+#define UI_LAYOUT_MERGE_FIELD(type, name, def)                                                     \
+    if (other.name) name = other.name;
+#define UI_LAYOUT_FILL_DEFAULT_FIELD(type, name, def)                                              \
+    if (!name) name = def;
+
 struct UILayoutConfig
 {
-    UISizeSpec width;
-    UISizeSpec height;
-    UIEdges padding;
-    UIEdges margin;
-    UIFloatingConfig floating;
-    Vec2 scrollOffset = VEC2_ZERO;
-    Vec2 offset = VEC2_ZERO;
-    Vec2 scale = VEC2_ONE;
-    float gap = 0.0f;
-    UILayoutDirection direction = UILayoutDirection::Row;
-    UIAlign alignMain = UIAlign::Start;
-    UIAlign alignCross = UIAlign::Start;
-    bool isFloating = false;
-    bool clipX = false;
-    bool clipY = false;
+    UI_LAYOUT_CONFIG_FIELDS(UI_LAYOUT_DECLARE_FIELD)
+
+    UILayoutConfig& combine(const UILayoutConfig& other)
+    {
+        UI_LAYOUT_CONFIG_FIELDS(UI_LAYOUT_MERGE_FIELD)
+        return *this;
+    }
+
+    UILayoutConfig combined(const UILayoutConfig& other) const
+    {
+        UILayoutConfig result = *this;
+        result.combine(other);
+        return result;
+    }
+
+    UILayoutConfig& fillDefaults()
+    {
+        UI_LAYOUT_CONFIG_FIELDS(UI_LAYOUT_FILL_DEFAULT_FIELD)
+        return *this;
+    }
 };
 
 inline UILayoutAxis mainAxisOf(UILayoutDirection direction)
@@ -117,14 +157,17 @@ inline UILayoutAxis crossAxisOf(UILayoutDirection direction)
     return direction == UILayoutDirection::Row ? UILayoutAxis::Vertical : UILayoutAxis::Horizontal;
 }
 
+// Everything below dereferences rather than defaulting: UIManager::addNode runs
+// fillDefaults on the layout of every node it creates, so a config that has reached the
+// solver has no unset field left. Nothing here re-decides a default.
 inline const UISizeSpec& axisSpec(const UILayoutConfig& config, UILayoutAxis axis)
 {
-    return axis == UILayoutAxis::Horizontal ? config.width : config.height;
+    return axis == UILayoutAxis::Horizontal ? *config.width : *config.height;
 }
 
-inline float axisPadding(const UIEdges& padding, UILayoutAxis axis)
+inline float axisPadding(const UIEdges& edges, UILayoutAxis axis)
 {
-    return axis == UILayoutAxis::Horizontal ? padding.horizontal() : padding.vertical();
+    return axis == UILayoutAxis::Horizontal ? edges.horizontal() : edges.vertical();
 }
 
 inline float axisLeading(const UIEdges& edges, UILayoutAxis axis)
@@ -139,7 +182,7 @@ inline float axisTrailing(const UIEdges& edges, UILayoutAxis axis)
 
 inline bool axisClipped(const UILayoutConfig& config, UILayoutAxis axis)
 {
-    return axis == UILayoutAxis::Horizontal ? config.clipX : config.clipY;
+    return axis == UILayoutAxis::Horizontal ? *config.clipX : *config.clipY;
 }
 
 // Vec2 is a union of anonymous structs, so (&v.x)[axis] is not something to rely on.

@@ -80,6 +80,11 @@ UIContainerStyle resolveStyle(const UIContainerStyleSpec& spec, const UINodeStat
     if (state.isActive) style.combine(spec.onHeld);
     if (state.isPressed) style.combine(spec.onPressed);
     if (state.isReleased) style.combine(spec.onReleased);
+
+    // Filled once the states have all merged, so every field is engaged by the time the
+    // node is stored -- the renderer then reads plain values instead of re-deciding a
+    // default per field, and the defaults themselves live only in UIContainerStyle.
+    style.fillDefaults();
     return style;
 }
 
@@ -166,7 +171,15 @@ UINodeState UIManager::addNode(const UILayoutConfig& layout, std::string_view ke
 {
     IdType id = m_nodes.add();
     UINode* node = m_nodes.get(id);
+
+    // Both filled here, at the single point every node passes through, so the solver and
+    // the renderer can dereference straight through instead of each read site naming a
+    // default of its own. The style matters for a *leaf* especially: openContainer is
+    // what resolves a container's, and nothing else would ever fill this one, yet the
+    // solver still reads zIndex and overflow off every node it walks.
     node->layout = layout;
+    node->layout.fillDefaults();
+    node->style.fillDefaults();
 
     if (m_openStack.empty()) {
         node->parent = INVALID_ID;
