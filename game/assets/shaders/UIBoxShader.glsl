@@ -9,8 +9,9 @@ layout (location = 5) in vec4 iFillColor;
 layout (location = 6) in vec4 iBorderColor;
 layout (location = 7) in vec4 iShadowColor;
 layout (location = 8) in vec4 iShadowParams;
-layout (location = 9) in vec4 iBorderParams;
-layout (location = 10) in int iTexIndex;
+layout (location = 9) in vec4 iCornerRadii;
+layout (location = 10) in vec4 iBorderParams;
+layout (location = 11) in int iTexIndex;
 
 out vec2 vLocalPos;
 out vec2 vPos;
@@ -21,6 +22,7 @@ flat out vec4 vFillColor;
 flat out vec4 vBorderColor;
 flat out vec4 vShadowColor;
 flat out vec4 vShadowParams;
+flat out vec4 vCornerRadii;
 flat out vec4 vBorderParams;
 flat out int vTexIndex;
 
@@ -37,6 +39,7 @@ void main()
     vBorderColor = iBorderColor;
     vShadowColor = iShadowColor;
     vShadowParams = iShadowParams;
+    vCornerRadii = iCornerRadii;
     vBorderParams = iBorderParams;
     vTexIndex = iTexIndex;
 
@@ -57,7 +60,8 @@ flat in vec4 vClipRect;        // minX, minY, maxX, maxY, same space as vPos
 flat in vec4 vFillColor;
 flat in vec4 vBorderColor;
 flat in vec4 vShadowColor;
-flat in vec4 vShadowParams;    // xy = offset, z = blur radius, w = corner radius
+flat in vec4 vShadowParams;    // xy = offset, z = blur radius
+flat in vec4 vCornerRadii;     // topLeft, topRight, bottomRight, bottomLeft
 flat in vec4 vBorderParams;    // x = width, y = dash period, z = dash ratio
 flat in int vTexIndex;
 
@@ -104,10 +108,20 @@ vec4 sampleTexture(vec2 uv)
     return vec4(1.0);
 }
 
+// Which corner a fragment belongs to, so the four radii can differ. Local space is
+// y-up, so a positive y is the top of the box.
+float cornerRadius(vec2 p, vec4 radii)
+{
+    float top = p.x > 0.0 ? radii.y : radii.x;
+    float bottom = p.x > 0.0 ? radii.z : radii.w;
+    return p.y > 0.0 ? top : bottom;
+}
+
 // Signed distance to a rounded box centred on the origin: negative inside, zero on
 // the edge, positive outside. Everything the UI draws is one evaluation of this.
-float sdRoundedBox(vec2 p, vec2 halfSize, float radius)
+float sdRoundedBox(vec2 p, vec2 halfSize, vec4 radii)
 {
+    float radius = cornerRadius(p, radii);
     vec2 q = abs(p) - halfSize + radius;
     return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - radius;
 }
@@ -168,11 +182,13 @@ void main()
         vPos.y > vClipRect.w)
         discard;
 
-    float radius = vShadowParams.w;
     float blur = vShadowParams.z;
     float borderWidth = vBorderParams.x;
+    // The dash walk mirrors one quadrant onto the other three, so it has room for only
+    // one radius; the mean is exact when the corners match.
+    float dashRadius = dot(vCornerRadii, vec4(0.25));
 
-    float dist = sdRoundedBox(vLocalPos, vHalfSize, radius);
+    float dist = sdRoundedBox(vLocalPos, vHalfSize, vCornerRadii);
     // The gradient of the distance itself, so an edge stays one screen pixel wide
     // whatever the camera zoom is -- these are world units, not pixels.
     float aa = max(fwidth(dist), 0.0001);
@@ -185,7 +201,7 @@ void main()
     vec4 result = vec4(0.0);
 
     if (vShadowColor.a > 0.0) {
-        float shadowDist = sdRoundedBox(vLocalPos - vShadowParams.xy, vHalfSize, radius);
+        float shadowDist = sdRoundedBox(vLocalPos - vShadowParams.xy, vHalfSize, vCornerRadii);
         // A linear ramp across 2 * blur is not a gaussian, but it is the cheap stand-in
         // every UI does, and it fades to exactly nothing at the padded quad's edge.
         float shadow = coverage(shadowDist, max(2.0 * blur, aa));
@@ -203,7 +219,7 @@ void main()
     if (borderWidth > 0.0 && vBorderColor.a > 0.0) {
         float ring = outer - inner;
         if (vBorderParams.y > 0.0)
-            ring *= dashMask(vLocalPos, vHalfSize, radius, vBorderParams.yz, aa);
+            ring *= dashMask(vLocalPos, vHalfSize, dashRadius, vBorderParams.yz, aa);
         result = over(result, vec4(vBorderColor.rgb, vBorderColor.a * ring));
     }
 

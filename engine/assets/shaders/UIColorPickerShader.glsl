@@ -10,13 +10,15 @@ layout (location = 6) in vec4 iParams1;
 layout (location = 7) in vec4 iUnused0;
 layout (location = 8) in vec4 iUnused1;
 layout (location = 9) in vec4 iUnused2;
-layout (location = 10) in int iTexIndex;
+layout (location = 10) in vec4 iUnused3;
+layout (location = 11) in int iTexIndex;
 
 out vec2 vLocalPos;
 out vec2 vPos;
 flat out vec2 vHalfSize;
 flat out vec4 vClipRect;
 flat out vec4 vParams0;
+flat out vec4 vParams1;
 
 uniform mat4 uMVP;
 
@@ -27,6 +29,7 @@ void main()
     vHalfSize = iHalfSize;
     vClipRect = iClipRect;
     vParams0 = iParams0;
+    vParams1 = iParams1;
 
     gl_Position = uMVP * vec4(iPos, 0.0, 1.0);
 }
@@ -39,12 +42,14 @@ in vec2 vLocalPos;
 in vec2 vPos;
 flat in vec2 vHalfSize;
 flat in vec4 vClipRect;
-flat in vec4 vParams0;   // x = mode (0 sat/val square, 1 hue strip), y = hue
+flat in vec4 vParams0;   // x = mode (0 sat/val square, 1 hue strip, 2 alpha strip), y = hue
+flat in vec4 vParams1;   // rgb = the colour an alpha strip fades in
+
+const float CHECKER_SIZE = 6.0;
 
 vec3 hueToRgb(float h)
 {
-    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
-    return rgb;
+    return clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
 }
 
 void main()
@@ -65,7 +70,14 @@ void main()
         vec3 color = mix(vec3(1.0), hue, uv.x);
         color *= 1.0 - uv.y;
         oColor = vec4(color, 1.0);
-    } else {
+    } else if (vParams0.x < 1.5) {
         oColor = vec4(hueToRgb(uv.y), 1.0);
+    } else {
+        // Composited against a checkerboard rather than drawn translucent, or the strip
+        // reads as a gradient of the panel behind it instead of one of transparency.
+        vec2 cell = floor(gl_FragCoord.xy / CHECKER_SIZE);
+        float check = mod(cell.x + cell.y, 2.0);
+        vec3 backdrop = mix(vec3(0.32), vec3(0.52), check);
+        oColor = vec4(mix(backdrop, vParams1.rgb, uv.x), 1.0);
     }
 }

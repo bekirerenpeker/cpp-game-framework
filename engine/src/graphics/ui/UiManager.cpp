@@ -30,6 +30,16 @@ uint64_t localKeyOf(std::string_view key, uint64_t positionalIndex)
 // A node is hittable only where it is actually visible, so the accumulated clip has to
 // be part of the test -- otherwise the half of a list item scrolled out of its
 // container still swallows clicks, which is worse than the overdraw it replaced.
+// The painter walks roots in order, then layers inside a root, then preorder inside a
+// layer. Hit testing has to break ties the same way or a node that visibly covers
+// another can still lose the click to it.
+bool paintsAbove(const UILayoutNode& node, const UILayoutNode& other)
+{
+    if (node.rootOrder != other.rootOrder) return node.rootOrder > other.rootOrder;
+    if (node.paintLayer != other.paintLayer) return node.paintLayer > other.paintLayer;
+    return true;
+}
+
 bool containsMouse(const UILayoutNode& node, Vec2 mouse)
 {
     Vec2 half = node.size * 0.5f;
@@ -66,7 +76,9 @@ computeState(IdType id, const UILayoutNode* prev, bool hovered, bool hoveredDire
         hovered && Input::get().mouseButtonReleased(MouseButton::Left),
         hovered && Input::get().mouseButtonHeld(MouseButton::Left),
         relative,
-        local
+        local,
+        prev->pos,
+        prev->size
     };
 }
 
@@ -145,7 +157,9 @@ void UIManager::resolveInput()
     } else {
         for (uint i = 0; i < (uint)prev.size(); i++) {
             if (!prev[i].acceptsInput) continue;
-            if (containsMouse(prev[i], mouse)) hit = i;
+            if (!containsMouse(prev[i], mouse)) continue;
+            if (hit != NO_LAYOUT_NODE && !paintsAbove(prev[i], prev[hit])) continue;
+            hit = i;
         }
         if (hit != NO_LAYOUT_NODE && input.mouseButtonPressed(MouseButton::Left))
             m_activeKey = prev[hit].persistentKey;

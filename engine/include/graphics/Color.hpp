@@ -4,6 +4,7 @@
 
 namespace Engine {
 
+class Vec3;
 class Vec4;
 
 class Color
@@ -17,6 +18,9 @@ class Color
     Color();
 
     operator Vec4() const;
+
+    Vec3 toHsv() const;   // hue, saturation, value, all 0..1
+    static Color fromHsv(const Vec3& hsv, float a = 1.0f);
 };
 
 #define COLOR_BLACK   Color(0, 0, 0, 1)

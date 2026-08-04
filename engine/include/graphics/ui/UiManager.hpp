@@ -25,6 +25,8 @@ struct UINodeState
     bool isHeld = false;
     Vec2 relativeMousePos = VEC2_ZERO;
     Vec2 localMousePos = VEC2_ZERO;
+    Vec2 pos = VEC2_ZERO;
+    Vec2 size = VEC2_ZERO;
 };
 
 class UIManager : public Singleton<UIManager>

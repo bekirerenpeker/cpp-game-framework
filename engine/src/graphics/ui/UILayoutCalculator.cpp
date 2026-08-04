@@ -67,6 +67,7 @@ const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Ve
     for (size_t i = base; i < m_prevFrameNodes.size(); i++) {
         UILayoutNode& node = m_prevFrameNodes[i];
         node.node = nullptr;
+        node.rootOrder = m_rootOrder;
         // Index links are relative to this root's own solve, so they have to be
         // rebased onto the concatenated snapshot -- an un-rebased parent walk lands
         // in whichever root happens to sit at that offset.
@@ -75,6 +76,7 @@ const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Ve
         if (node.lastChild != NO_LAYOUT_NODE) node.lastChild += (uint)base;
         if (node.nextSibling != NO_LAYOUT_NODE) node.nextSibling += (uint)base;
     }
+    m_rootOrder++;
 
     return m_nodes;
 }
@@ -99,12 +101,15 @@ uint UILayoutCalculator::buildSubtree(IdType nodeId, uint parentIndex)
     // reference to it. zIndex is relative to the parent rather than global, which is
     // what keeps a child from ever falling behind its own container.
     uint parentLayer = parentIndex == NO_LAYOUT_NODE ? 0 : m_nodes[parentIndex].paintLayer;
+    bool parentIgnoresInput =
+        parentIndex == NO_LAYOUT_NODE ? false : m_nodes[parentIndex].ignoresInput;
     int zIndex = *node->style.zIndex;
 
     UILayoutNode layoutNode;
     layoutNode.node = node;
     layoutNode.persistentKey = node->persistentKey;
-    layoutNode.acceptsInput = node->isContainer() && node->isVisible;
+    layoutNode.ignoresInput = parentIgnoresInput || *node->style.ignoreInput;
+    layoutNode.acceptsInput = node->isContainer() && node->isVisible && !layoutNode.ignoresInput;
     layoutNode.paintLayer = parentLayer + (uint)(zIndex > 0 ? zIndex : 0);
     layoutNode.parent = parentIndex;
     m_nodes.push_back(layoutNode);
@@ -230,6 +235,11 @@ void UILayoutCalculator::computeClipRects()
     for (UILayoutNode& node : m_nodes) {
         Vec4 inherited =
             node.parent == NO_LAYOUT_NODE ? UI_NO_CLIP : m_nodes[node.parent].childClipRect;
+        // Dropped for the whole subtree, not just this node, which is what lets a popup
+        // paint past the container it was declared in. Hit testing reads the same rect,
+        // so an escaped node is clickable out there too.
+        if (*node.node->style.ignoreClip) inherited = UI_NO_CLIP;
+
         node.clipRect = inherited;
         node.childClipRect = inherited;
 
@@ -365,7 +375,12 @@ float UILayoutCalculator::resolveChildAgainst(uint index, UILayoutAxis axis, flo
     case UISizeMode::Percent: size = spec.value * inner; break;
     case UISizeMode::Grow   : size = Math::max(inner, floorValue); break;
     default:
-        size = Math::min(intrinsicMax(m_nodes[index], axis), Math::max(inner, floorValue));
+        // A floating child never sat in the parent's flow, so the parent's inner size is
+        // not a bound on it -- clamping to it collapses a Fit box anchored inside a
+        // zero-width parent down to min-content, which for text is the longest word.
+        size = isFloating(m_nodes[index]) ?
+                   intrinsicMax(m_nodes[index], axis) :
+                   Math::min(intrinsicMax(m_nodes[index], axis), Math::max(inner, floorValue));
         break;
     }
     return clampToSpec(index, axis, size);

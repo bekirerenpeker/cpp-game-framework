@@ -39,6 +39,28 @@ enum class UITransition
     EaseInOut
 };
 
+// Deliberately not UIEdges: its four names are left/right/top/bottom, which would have
+// to be read as corners to be useful here. The single-float constructor keeps the
+// common uniform case a plain `.borderRadius = 6.0f`.
+struct UICorners
+{
+    float topLeft = 0.0f;
+    float topRight = 0.0f;
+    float bottomRight = 0.0f;
+    float bottomLeft = 0.0f;
+
+    UICorners() = default;
+    UICorners(float all) : topLeft(all), topRight(all), bottomRight(all), bottomLeft(all) {}
+    UICorners(float top, float bottom)
+        : topLeft(top), topRight(top), bottomRight(bottom), bottomLeft(bottom)
+    {
+    }
+    UICorners(float topLeft, float topRight, float bottomRight, float bottomLeft)
+        : topLeft(topLeft), topRight(topRight), bottomRight(bottomRight), bottomLeft(bottomLeft)
+    {
+    }
+};
+
 // The field list lives once, here, and every struct that carries a container's look is
 // generated from it -- adding a field is one line and both structs follow. The third
 // column is the plain, unthemed fallback fillDefaults() uses: never a themed colour,
@@ -49,12 +71,14 @@ enum class UITransition
     X(GlTexture*, backgroundImage, nullptr)                                                        \
     X(Color, borderColor, COLOR_CLEAR)                                                             \
     X(float, borderWidth, 0.0f)                                                                    \
-    X(float, borderRadius, 0.0f)                                                                   \
+    X(UICorners, borderRadius, UICorners {})                                                       \
     X(UIBorderStyle, borderStyle, UIBorderStyle::Solid)                                            \
     X(Color, shadowColor, COLOR_CLEAR)                                                             \
     X(Vec2, shadowOffset, VEC2_ZERO)                                                               \
     X(float, shadowBlurRadius, 0.0f)                                                               \
     X(UIOverflow, overflow, UIOverflow::Visible)                                                   \
+    X(bool, ignoreClip, false)                                                                     \
+    X(bool, ignoreInput, false)                                                                    \
     X(int, zIndex, 0)                                                                              \
     X(UICursor, cursor, UICursor::Default)                                                         \
     X(float, transitionDuration, 0.0f)                                                             \

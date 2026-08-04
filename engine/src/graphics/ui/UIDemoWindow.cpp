@@ -1,4 +1,5 @@
 #include "graphics/ui/UIDemoWindow.hpp"
+#include "graphics/Renderer.hpp"
 #include "graphics/ui/UIWidgets.hpp"
 
 namespace Engine {
@@ -14,20 +15,44 @@ void demoWindow()
     static bool checkedB = false;
     static int radioChoice = 1;
     static Color pickedColor(0.30f, 0.62f, 0.95f);
-
-    bool hoveringTooltipTarget = false;
+    static Color popupColor(0.95f, 0.55f, 0.25f);
 
     openWindow("Demo Window");
 
     toolbarMenu({"Widgets", "Sliders", "Color"}, selectedMenu);
 
     switch (selectedMenu) {
-    case 0:
+    case 0: {
         text("Text leaf and simple widgets");
         horizontalDivider();
 
         button("Button");
-        hoveringTooltipTarget = button("Hover for a tooltip").isHovered;
+
+        openContainer({.gap = 10, .direction = UILayoutDirection::Row});
+        tooltip(
+            "A tooltip declared inside the window, escaping its clip",
+            button("Hover for a tooltip").isHovered
+        );
+
+        UINodeState centered = button("Hover for a centered tooltip");
+        tooltip(
+            "Anchored to the button's centre and aligned by its own middle, so it sits on the "
+            "button instead of following the cursor",
+            centered.isHovered,
+            {.anchor = centered.pos + centered.size * 0.5f,
+             .anchorAlignX = UIAlign::Center,
+             .anchorAlignY = UIAlign::Center}
+        );
+
+        UINodeState above = button("Tooltip above");
+        tooltip(
+            "Anchored to the button's top edge, aligned by its own bottom", above.isHovered,
+            {.anchor = above.pos + Vec2(above.size.x * 0.5f, 0.0f),
+             .anchorOffset = Vec2(0.0f, -6.0f),
+             .anchorAlignX = UIAlign::Center,
+             .anchorAlignY = UIAlign::End}
+        );
+        closeContainer();
 
         horizontalDivider();
 
@@ -38,6 +63,7 @@ void demoWindow()
 
         radioGroup({"First", "Second", "Third"}, radioChoice);
         break;
+    }
 
     case 1:
         text("Sliders");
@@ -48,9 +74,12 @@ void demoWindow()
         break;
 
     case 2:
-        text("Color picker");
+        text("Popup picker");
+        colorPickerPopup(popupColor);
+
         horizontalDivider();
 
+        text("Inline picker");
         colorPicker(pickedColor);
         break;
 
@@ -58,10 +87,6 @@ void demoWindow()
     }
 
     closeWindow();
-
-    // Outside the window, since the window clips its own content and a tooltip has to
-    // be able to sit past that edge.
-    tooltip("A floating tooltip that follows the cursor", hoveringTooltipTarget);
 }
 
 }   // namespace UIWidgets

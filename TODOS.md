@@ -9,6 +9,8 @@ rather than leaving a stale description.
 
 ## In progress / next up
 
+- [ ] move required assets to the engines assets folder
+
 - [ ] **Widget layer over the primitives** — the target shape for the UI: the
   primitives (`UIManager`'s container/leaf tree, `UILayoutCalculator`,
   `UIRenderer`, `UIContainerStyle`) are treated as **finished and closed**, and
@@ -180,27 +182,14 @@ rather than leaving a stale description.
   full `Color`s. Pack both to RGBA8 and consider halving `unitRange`/`params`;
   same change as the `TileVertex` item above, so do them together.
 
-- [ ] **Clip-escaping popup layer** — the one thing blocking every overlay
-  widget. A clipping ancestor currently truncates its descendants
-  unconditionally: `computeClipRects` intersects each node's inherited box with
-  its own and hands the result down, with no way for a child to opt out. That
-  makes anything which must paint *outside* its parent impossible to write
-  correctly today. Three widgets are waiting on it:
-  **`tooltip`** already exists but has to be declared at top level, outside any
-  window, or the window's `overflow: Hidden` cuts it — the demo works around this
-  by calling it after `closeWindow()`, which is a real API wart, not a
-  convention. **`dropdown`/`contextMenu`** cannot be written at all: the popup
-  opens past its container's edge by definition. **`colorPicker`** should open as
-  a popup from a swatch button rather than sitting inline eating 150px of window
-  height, which is what it does now.
-  Likely shape: a node opts out of inherited clipping (an escape flag consumed by
-  `computeClipRects`, resetting `clipRect` to `UI_NO_CLIP` rather than
-  intersecting), plus a way to be painted after everything else. `zIndex` already
-  raises a subtree's paint layer, but layers are per root and popups probably want
-  to be *separate roots* declared last, since paint order across roots is already
-  well defined and hit testing follows it. Decide which before building it —
-  escaping the clip and escaping the paint order are two different problems and
-  a popup needs both.
+- [ ] **Overlay widgets that still need building** — the machinery under them is
+  done: `ignoreClip` escapes every clipping ancestor, `ignoreInput` makes a
+  subtree transparent to hit testing, `zIndex` lifts a paint layer, and hit
+  resolution now orders by the same three keys the painter uses. `tooltip` and
+  `colorPickerPopup` are built on it. Still missing: **`dropdown`** and
+  **`contextMenu`**, which need no new primitives, only the widget plus a
+  decision on where the open/closed state lives (the popup picker keys it on the
+  bound value's address, which does not generalise to a menu with no value).
 
 ## Later
 

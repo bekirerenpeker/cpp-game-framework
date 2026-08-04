@@ -22,6 +22,7 @@ void UIRenderer::init(GlShader* shader, size_t maxQuadCount)
             {GlDataType::Float, 4},
             {GlDataType::Float, 4},
             {GlDataType::Float, 4},
+            {GlDataType::Float, 4},
             {  GlDataType::Int, 1},
     },
         shader
@@ -117,9 +118,19 @@ void UIRenderer::addContainerQuad(
 
     Vec2 half = size * 0.5f;
     float halfMin = Math::min(half.x, half.y);
-    // Past half the shorter side the radius folds the distance field inside out, and
+    // Past half the shorter side a radius folds the distance field inside out, and
     // a border thicker than that would cross the box's own centre.
-    float radius = Math::clamp(*style.borderRadius, 0.0f, halfMin);
+    const UICorners& cornerRadius = *style.borderRadius;
+    Vec4 radii(
+        Math::clamp(cornerRadius.topLeft, 0.0f, halfMin),
+        Math::clamp(cornerRadius.topRight, 0.0f, halfMin),
+        Math::clamp(cornerRadius.bottomRight, 0.0f, halfMin),
+        Math::clamp(cornerRadius.bottomLeft, 0.0f, halfMin)
+    );
+    // The dash walk mirrors one quadrant onto the other three, so it only has room for a
+    // single radius; the mean is exact whenever the corners match and a close enough
+    // approximation of the arc length when they do not.
+    float dashRadius = (radii.x + radii.y + radii.z + radii.w) * 0.25f;
     float borderWidth =
         borderColor.a > 0.0f ? Math::clamp(*style.borderWidth, 0.0f, halfMin) : 0.0f;
 
@@ -141,8 +152,8 @@ void UIRenderer::addContainerQuad(
     float dashPeriod = 0.0f, dashRatio = 0.0f;
     UIBorderStyle borderStyle = *style.borderStyle;
     if (borderWidth > 0.0f && borderStyle != UIBorderStyle::Solid) {
-        Vec2 straight(Math::max(half.x - radius, 0.0f), Math::max(half.y - radius, 0.0f));
-        float perimeter = 4.0f * (straight.x + straight.y) + 2.0f * (float)PI * radius;
+        Vec2 straight(Math::max(half.x - dashRadius, 0.0f), Math::max(half.y - dashRadius, 0.0f));
+        float perimeter = 4.0f * (straight.x + straight.y) + 2.0f * (float)PI * dashRadius;
         float widths =
             borderStyle == UIBorderStyle::Dashed ? DASH_PERIOD_WIDTHS : DOT_PERIOD_WIDTHS;
         // Divided into a whole number of repeats here rather than in the shader, so
@@ -177,7 +188,8 @@ void UIRenderer::addContainerQuad(
             shadowColor,
             shadowOffset,
             shadowBlur,
-            radius,
+            0.0f,
+            radii,
             borderWidth,
             dashPeriod,
             dashRatio,
@@ -221,6 +233,7 @@ void UIRenderer::addShaderQuad(
             VEC2_ZERO,
             0.0f,
             0.0f,
+            Vec4(0.0f, 0.0f, 0.0f, 0.0f),
             0.0f,
             0.0f,
             0.0f,

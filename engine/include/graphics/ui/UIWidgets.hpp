@@ -151,6 +151,14 @@ struct TooltipConfig
     UILayoutConfig labelLayout;
     UITextConfig labelTextConfig;
     Vec2 cursorOffset = Vec2(14.0f, 18.0f);
+    // Layout space, y-down -- a UINodeState::pos, optionally plus its size. Unset
+    // follows the cursor instead.
+    std::optional<Vec2> anchor;
+    Vec2 anchorOffset = VEC2_ZERO;
+    // Which point of the tooltip lands on the anchor: Start its top-left, Center its
+    // middle, End its bottom-right.
+    UIAlign anchorAlignX = UIAlign::Start;
+    UIAlign anchorAlignY = UIAlign::Start;
     std::string_view key;
 };
 void tooltip(const std::string label, bool visible, const TooltipConfig& config = {});
@@ -165,13 +173,33 @@ struct ColorPickerConfig
     UIContainerStyleSpec markerStyle;
     UILayoutConfig hueMarkerLayout;
     UIContainerStyleSpec hueMarkerStyle;
+    UILayoutConfig alphaLayout;
+    UILayoutConfig alphaMarkerLayout;
+    UIContainerStyleSpec alphaMarkerStyle;
     UILayoutConfig previewLayout;
     UIContainerStyleSpec previewStyle;
+    UILayoutConfig valuesLayout;
+    UITextConfig valuesTextConfig;
     float squareHeight = 120.0f;
     float hueWidth = 18.0f;
+    float alphaHeight = 14.0f;
+    bool showValues = true;
     std::string_view key;
 };
 void colorPicker(Color& color, const ColorPickerConfig& config = {});
+
+struct ColorPickerPopupConfig
+{
+    UILayoutConfig wrapperLayout;
+    UILayoutConfig swatchLayout;
+    UIContainerStyleSpec swatchStyle;
+    UILayoutConfig panelLayout;
+    UIContainerStyleSpec panelStyle;
+    ColorPickerConfig pickerConfig;
+    Vec2 panelOffset = Vec2(0.0f, 4.0f);
+    std::string_view key;
+};
+void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config = {});
 
 }   // namespace UIWidgets
 

@@ -26,10 +26,16 @@ struct UILayoutNode
     // to live here. A leaf hands back no state, so hitting one would silently swallow
     // the hover its container should have had.
     bool acceptsInput = false;
+    // Sticky down the subtree: an overlay that should not block what it covers has to
+    // stop its children blocking too, or its own contents take the hit instead.
+    bool ignoresInput = false;
     // Paint order is the preorder walk, so the tree already says what is above what.
     // This is the escape hatch for when that is not enough: a layer raises a node and
     // its whole subtree above everything in lower layers, whatever the walk says.
     uint paintLayer = 0;
+    // Roots are drawn one after another, so a later root covers an earlier one whatever
+    // its layers say. Hit testing has to order by the same three keys the painter uses.
+    uint rootOrder = 0;
 
     uint parent = NO_LAYOUT_NODE;
     uint firstChild = NO_LAYOUT_NODE;
@@ -61,6 +67,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
 
     std::vector<UILayoutNode> m_prevFrameNodes, m_nodes;
     std::vector<uint> m_scratch;
+    uint m_rootOrder = 0;
 
   public:
     const std::vector<UILayoutNode>& calculate(IdType rootId, Vec2 rootTopLeft = VEC2_ZERO);
@@ -68,7 +75,11 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     const std::vector<UILayoutNode>& getPrevFrameNodes() const { return m_prevFrameNodes; }
 
     const UILayoutNode* getPrevFrameLayout(uint64_t key) const;
-    void beginFrame() { m_prevFrameNodes.clear(); }
+    void beginFrame()
+    {
+        m_prevFrameNodes.clear();
+        m_rootOrder = 0;
+    }
 
   private:
     UILayoutCalculator() = default;
