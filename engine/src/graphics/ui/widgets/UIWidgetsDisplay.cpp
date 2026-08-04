@@ -1,4 +1,4 @@
-#include "graphics/ui/UIWidgets.hpp"
+#include "graphics/ui/widgets/UIWidgets.hpp"
 #include "graphics/ui/UiManager.hpp"
 
 namespace Engine {
@@ -137,7 +137,6 @@ void tooltip(const std::string label, bool visible, const TooltipConfig& config)
     closeContainer();
     closeContainer();
 }
-
 
 }   // namespace UIWidgets
 

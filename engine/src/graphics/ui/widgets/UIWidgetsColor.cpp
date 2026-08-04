@@ -1,4 +1,4 @@
-#include "graphics/ui/UIWidgets.hpp"
+#include "graphics/ui/widgets/UIWidgets.hpp"
 #include "core/file_management/FileManager.hpp"
 #include "core/input/Input.hpp"
 #include "core/logging/LoggerMacros.hpp"
@@ -344,7 +344,6 @@ void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config)
 
     closeContainer();
 }
-
 
 }   // namespace UIWidgets
 

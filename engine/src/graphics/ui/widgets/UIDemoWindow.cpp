@@ -1,5 +1,5 @@
-#include "graphics/ui/UIDemoWindow.hpp"
-#include "graphics/ui/UIWidgets.hpp"
+#include "graphics/ui/widgets/UIDemoWindow.hpp"
+#include "graphics/ui/widgets/UIWidgets.hpp"
 
 namespace Engine {
 

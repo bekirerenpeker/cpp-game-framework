@@ -1,5 +1,5 @@
-#include "graphics/ui/UIWidgets.hpp"
-#include "UIWidgetsInternal.hpp"
+#include "graphics/ui/widgets/UIWidgets.hpp"
+#include "graphics/ui/widgets/UIWidgetsInternal.hpp"
 #include "core/input/Input.hpp"
 #include "graphics/ui/UiManager.hpp"
 #include "utils/math/MathFuncs.hpp"
