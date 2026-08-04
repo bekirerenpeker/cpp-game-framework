@@ -1,5 +1,7 @@
 #include "graphics/Renderer.hpp"
 #include "components/TransformComponent.hpp"
+#include "core/file_management/FileManager.hpp"
+#include "core/resource_management/ResourceManager.hpp"
 #include "components/SpriteComponent.hpp"
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/WindowManager.hpp"
@@ -27,8 +29,20 @@ void Renderer::init(size_t maxQuadCount, GlShader* shader)
             {GlDataType::Float, 4},
             {  GlDataType::Int, 1},
     },
-        shader
+        shader ? shader : getDefaultShader()
     );
+}
+
+// Owned by the ResourceManager like any other heap resource, and loaded on first ask so
+// a caller that supplies its own shader never pays for one it will not use.
+GlShader* Renderer::getDefaultShader()
+{
+    if (m_defaultShaderId == INVALID_ID) {
+        m_defaultShaderId = ResourceManager::get().addResource<GlShader>(
+            FileManager::get().engineAsset("shaders/QuadShader.glsl")
+        );
+    }
+    return ResourceManager::get().getResource<GlShader>(m_defaultShaderId);
 }
 
 void Renderer::clear()

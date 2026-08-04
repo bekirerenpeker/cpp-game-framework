@@ -1,5 +1,7 @@
 #include "graphics/text/TextRenderer.hpp"
+#include "core/file_management/FileManager.hpp"
 #include "core/logging/LoggerMacros.hpp"
+#include "core/resource_management/ResourceManager.hpp"
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/Window.hpp"
 #include "graphics/text/FontLoader.hpp"
@@ -24,6 +26,13 @@ void TextRenderer::clearClipRect()
 
 void TextRenderer::init(GlShader* shader, size_t maxQuadCount)
 {
+    if (!shader) {
+        m_defaultShaderId = ResourceManager::get().addResource<GlShader>(
+            FileManager::get().engineAsset("shaders/TextShader.glsl")
+        );
+        shader = ResourceManager::get().getResource<GlShader>(m_defaultShaderId);
+    }
+
     m_batch.init(
         maxQuadCount,
         {
@@ -42,6 +51,8 @@ void TextRenderer::init(GlShader* shader, size_t maxQuadCount)
     );
     m_initialized = true;
 }
+
+void TextRenderer::setShader(GlShader* shader) { m_batch.setShader(shader); }
 
 // Text drawn in a different space cannot share a draw call with text already queued,
 // so switching flushes. Submit all world text, then all screen text.

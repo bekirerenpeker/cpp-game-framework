@@ -52,10 +52,14 @@ class TextRenderer : public Singleton<TextRenderer>
     Vec4 m_clipRect;
     bool m_hasViewProjOverride = false;
     bool m_initialized = false;
+    IdType m_defaultShaderId = INVALID_ID;
     bool m_warnedDirtyBlock = false;
 
   public:
-    void init(GlShader* shader, size_t maxQuadCount = 4000);
+    // A null shader takes the engine's own, which is what almost every caller wants;
+    // pass one only to render the glyph batch through something else.
+    void init(GlShader* shader = nullptr, size_t maxQuadCount = 4000);
+    void setShader(GlShader* shader);
 
     void setViewProjOverride(const Mat4& viewProj);
     void clearViewProjOverride();

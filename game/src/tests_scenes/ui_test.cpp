@@ -51,12 +51,9 @@ int ui_test()
     g_bitmapFont = &bitmapFont;
     UIManager::get().setFont(g_bitmapFont);
 
-    GlShader quadShader("game/assets/shaders/QuadShader.glsl");
-    GlShader textShader("game/assets/shaders/TextShader.glsl");
-    GlShader uiShader("game/assets/shaders/UIBoxShader.glsl");
-    Renderer::get().init(2000, &quadShader);
-    TextRenderer::get().init(&textShader);
-    UIRenderer::get().init(&uiShader);
+    Renderer::get().init();
+    TextRenderer::get().init();
+    UIRenderer::get().init();
 
     Input::get().addAxis("Horizontal", {KeyCode::D, KeyCode::A});
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
@@ -88,7 +85,7 @@ int ui_test()
         Renderer::get().clearColor(BACKDROP);
 
         Renderer::get().beginPass();
-        Renderer::get().setShader(&quadShader);
+        Renderer::get().setShader(Renderer::get().getDefaultShader());
         Renderer::get().drawToWindow();
 
         UIWidgets::clear();

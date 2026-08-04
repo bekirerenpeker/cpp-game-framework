@@ -1,5 +1,7 @@
 #include "graphics/tilemap/TilemapRenderer.hpp"
 #include "core/Time.hpp"
+#include "core/file_management/FileManager.hpp"
+#include "core/resource_management/ResourceManager.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/WindowManager.hpp"
@@ -12,6 +14,13 @@ namespace Engine {
 
 void TilemapRenderer::init(GlShader* shader, size_t maxQuadCount)
 {
+    if (!shader) {
+        m_defaultShaderId = ResourceManager::get().addResource<GlShader>(
+            FileManager::get().engineAsset("shaders/TilemapShader.glsl")
+        );
+        shader = ResourceManager::get().getResource<GlShader>(m_defaultShaderId);
+    }
+
     m_batch.init(
         maxQuadCount,
         {
@@ -24,6 +33,8 @@ void TilemapRenderer::init(GlShader* shader, size_t maxQuadCount)
     );
     m_initialized = true;
 }
+
+void TilemapRenderer::setShader(GlShader* shader) { m_batch.setShader(shader); }
 
 void TilemapRenderer::render(Registry& registry)
 {

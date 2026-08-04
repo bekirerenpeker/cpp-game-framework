@@ -159,12 +159,11 @@ int text_rendering_test()
     }
 
     GlShader atlasShader("game/assets/shaders/AtlasDebugShader.glsl");
-    GlShader textShader("game/assets/shaders/TextShader.glsl");
     // Plain pass-through for the final blit instead of PostProcessingShader, whose
     // UV gradient would tint everything and make the styled colours unverifiable.
-    GlShader blitShader("game/assets/shaders/QuadShader.glsl");
+    GlShader* blitShader = Renderer::get().getDefaultShader();
     Renderer::get().init(1000, &atlasShader);
-    TextRenderer::get().init(&textShader);
+    TextRenderer::get().init();
 
     Input::get().addAxis("Horizontal", {KeyCode::D, KeyCode::A});
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
@@ -366,7 +365,7 @@ int text_rendering_test()
         }
 
         Renderer::get().beginPass();
-        Renderer::get().setShader(&blitShader);
+        Renderer::get().setShader(blitShader);
         Renderer::get().drawToWindow();
     };
 

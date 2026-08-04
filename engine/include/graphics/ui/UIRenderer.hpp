@@ -58,9 +58,13 @@ class UIRenderer : public Singleton<UIRenderer>
     BatchRenderer<UIBoxVertex> m_batch;
     UISpace m_space = UISpace::Screen;
     bool m_initialized = false;
+    IdType m_defaultShaderId = INVALID_ID;
 
   public:
-    void init(GlShader* shader, size_t maxQuadCount = 2000);
+    // A null shader takes the engine's own, which is what almost every caller wants;
+    // pass one only to render the box batch through something else.
+    void init(GlShader* shader = nullptr, size_t maxQuadCount = 2000);
+    void setShader(GlShader* shader);
 
     void setSpace(UISpace space);
     UISpace getSpace() const { return m_space; }

@@ -42,10 +42,8 @@ int tilemap_test()
     float frequency = 0.1f;
     float scrollSpeed = 0.32f;
 
-    GlShader tilemapShader("game/assets/shaders/TilemapShader.glsl");
-    GlShader quadShader("game/assets/shaders/QuadShader.glsl");
-    Renderer::get().init(10000, &quadShader);
-    TilemapRenderer::get().init(&tilemapShader, mapWidth * mapHeight);
+    Renderer::get().init(10000);
+    TilemapRenderer::get().init(nullptr, mapWidth * mapHeight);
 
     Input::get().addAxis("Horizontal", {KeyCode::D, KeyCode::A, KeyCode::Right, KeyCode::Left});
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S, KeyCode::Up, KeyCode::Down});

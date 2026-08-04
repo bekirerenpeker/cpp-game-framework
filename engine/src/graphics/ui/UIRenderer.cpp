@@ -1,5 +1,7 @@
 #include "graphics/ui/UIRenderer.hpp"
+#include "core/file_management/FileManager.hpp"
 #include "core/input/Input.hpp"
+#include "core/resource_management/ResourceManager.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/Window.hpp"
@@ -9,6 +11,13 @@ namespace Engine {
 
 void UIRenderer::init(GlShader* shader, size_t maxQuadCount)
 {
+    if (!shader) {
+        m_defaultShaderId = ResourceManager::get().addResource<GlShader>(
+            FileManager::get().engineAsset("shaders/UIBoxShader.glsl")
+        );
+        shader = ResourceManager::get().getResource<GlShader>(m_defaultShaderId);
+    }
+
     m_batch.init(
         maxQuadCount,
         {
@@ -29,6 +38,8 @@ void UIRenderer::init(GlShader* shader, size_t maxQuadCount)
     );
     m_initialized = true;
 }
+
+void UIRenderer::setShader(GlShader* shader) { m_batch.setShader(shader); }
 
 // Boxes drawn in a different space cannot share a draw call with boxes already
 // queued, so switching flushes -- same rule as TextRenderer's view-proj override.
