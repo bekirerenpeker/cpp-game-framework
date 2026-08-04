@@ -20,6 +20,9 @@ class FileManager : public Singleton<FileManager>
 {
     friend class Singleton<FileManager>;
 
+  private:
+    fs::path m_engineAssetRoot;
+
   public:
     bool doesPathExist(const fs::path& path);
     bool isDirectory(const fs::path& path);
@@ -32,8 +35,14 @@ class FileManager : public Singleton<FileManager>
 
     fs::path getCurrentFolder();
 
+    // Anchored at the engine folder, never the working directory, so an engine
+    // resource resolves the same wherever the executable was launched from.
+    void setEngineAssetRoot(const fs::path& root);
+    const fs::path& getEngineAssetRoot() const;
+    fs::path engineAsset(const fs::path& relativePath) const;
+
   private:
-    FileManager() = default;
+    FileManager();
     ~FileManager() = default;
 };
 

@@ -10,6 +10,7 @@ enum class UILeafType
     None = 0,
     Text,
     Image,
+    Shader,
 };
 
 struct UILeafWidths

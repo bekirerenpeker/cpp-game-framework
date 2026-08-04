@@ -120,6 +120,23 @@ struct UIContainerStyleSpec
         UI_CONTAINER_STYLE_FIELDS(UI_STYLE_COPY_FIELD)
         return style;
     }
+
+    UIContainerStyleSpec& combine(const UIContainerStyleSpec& other)
+    {
+        UI_CONTAINER_STYLE_FIELDS(UI_STYLE_MERGE_FIELD)
+        onHover.combine(other.onHover);
+        onHeld.combine(other.onHeld);
+        onPressed.combine(other.onPressed);
+        onReleased.combine(other.onReleased);
+        return *this;
+    }
+
+    UIContainerStyleSpec combined(const UIContainerStyleSpec& other) const
+    {
+        UIContainerStyleSpec result = *this;
+        result.combine(other);
+        return result;
+    }
 };
 
 }   // namespace Engine

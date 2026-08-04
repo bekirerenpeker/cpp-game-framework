@@ -187,6 +187,52 @@ void UIRenderer::addContainerQuad(
     }
 }
 
+// A custom shader cannot share a draw call with the box batch, so the pending boxes are
+// resolved first and the leaf's quad is drawn on its own before the shader is put back.
+void UIRenderer::addShaderQuad(
+    GlShader* shader, Vec2 drawPos, Vec2 size, Vec4 clipRect, Vec4 params0, Vec4 params1
+)
+{
+    if (!shader || size.x <= 0.0f || size.y <= 0.0f) return;
+    if (clipRect.z <= clipRect.x || clipRect.w <= clipRect.y) return;
+    if (!ensureReady()) return;
+
+    m_batch.flush();
+
+    GlShader* boxShader = m_batch.getShader();
+    m_batch.setShader(shader);
+
+    Vec2 half = size * 0.5f;
+    const Vec2 corners[4] = {
+        Vec2(-half.x, -half.y), Vec2(half.x, -half.y), Vec2(half.x, half.y), Vec2(-half.x, half.y)
+    };
+
+    BatchRenderer<UIBoxVertex>::Quad quad = m_batch.nextQuad();
+    for (int i = 0; i < 4; i++) {
+        quad.verts[i] = {
+            drawPos + corners[i],
+            corners[i],
+            half,
+            Vec4(0.0f, 0.0f, 1.0f, 1.0f),
+            clipRect,
+            Color(params0.x, params0.y, params0.z, params0.w),
+            Color(params1.x, params1.y, params1.z, params1.w),
+            COLOR_CLEAR,
+            VEC2_ZERO,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            0.0f,
+            quad.texIndex
+        };
+    }
+
+    m_batch.flush();
+    m_batch.setShader(boxShader);
+}
+
 void UIRenderer::flush()
 {
     if (!ensureReady()) return;

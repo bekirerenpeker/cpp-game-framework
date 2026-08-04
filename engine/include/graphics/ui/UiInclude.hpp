@@ -1,12 +1,11 @@
 #pragma once
 
-#include "leaf_types/LeafTypesInclude.hpp"
+#include "leafs/LeafsInclude.hpp"
+#include "styling/StylingInclude.hpp"
 
-#include "UIContainerStyle.hpp"
+#include "UIDemoWindow.hpp"
 #include "UILayoutCalculator.hpp"
-#include "UILayoutConfig.hpp"
 #include "UINode.hpp"
 #include "UIRenderer.hpp"
-#include "UITextStyle.hpp"
 #include "UIWidgets.hpp"
 #include "UiManager.hpp"

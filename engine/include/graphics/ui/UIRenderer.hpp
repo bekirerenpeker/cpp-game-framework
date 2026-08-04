@@ -2,7 +2,7 @@
 
 #include "graphics/BatchRenderer.hpp"
 #include "graphics/Color.hpp"
-#include "graphics/ui/UIContainerStyle.hpp"
+#include "graphics/ui/styling/UIContainerStyle.hpp"
 #include "utils/Singleton.hpp"
 #include "utils/math/Mat4.hpp"
 #include "utils/math/Vec2.hpp"
@@ -69,6 +69,9 @@ class UIRenderer : public Singleton<UIRenderer>
     Vec2 getMouseUiPos() const;
 
     void addContainerQuad(Vec2 drawPos, Vec2 size, const UIContainerStyle& style, Vec4 clipRect);
+    void addShaderQuad(
+        GlShader* shader, Vec2 drawPos, Vec2 size, Vec4 clipRect, Vec4 params0, Vec4 params1
+    );
 
     void flush();
 

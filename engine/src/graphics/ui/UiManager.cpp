@@ -258,6 +258,18 @@ IdType UIManager::addTextLeaf(const UILayoutConfig& layout, const UITextConfig& 
     return state.id;
 }
 
+IdType UIManager::addShaderLeaf(const UILayoutConfig& layout, const UIShaderConfig& config)
+{
+    UINodeState state = addNode(layout);
+    UINode* node = m_nodes.get(state.id);
+    if (!node) return state.id;
+
+    UIShaderLeafData* leaf = new UIShaderLeafData(config);
+    m_leaves.push_back(leaf);
+    node->leafData = leaf;
+    return state.id;
+}
+
 void UIManager::draw()
 {
     if (!m_openStack.empty()) {

@@ -1,7 +1,8 @@
 #pragma once
 
 #include "graphics/ui/UINode.hpp"
-#include "graphics/ui/leaf_types/UITextLeafData.hpp"
+#include "graphics/ui/leafs/UIShaderLeafData.hpp"
+#include "graphics/ui/leafs/UITextLeafData.hpp"
 #include "utils/IdIndexedVector.hpp"
 #include "utils/Singleton.hpp"
 #include <string_view>
@@ -57,6 +58,7 @@ class UIManager : public Singleton<UIManager>
     void closeContainer();
 
     IdType addTextLeaf(const UILayoutConfig& layout, const UITextConfig& config);
+    IdType addShaderLeaf(const UILayoutConfig& layout, const UIShaderConfig& config);
 
     void draw();
 

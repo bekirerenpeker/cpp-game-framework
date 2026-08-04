@@ -1,8 +1,8 @@
 #pragma once
 
-#include "graphics/ui/UIContainerStyle.hpp"
-#include "graphics/ui/UILayoutConfig.hpp"
-#include "leaf_types/IUILeafData.hpp"
+#include "graphics/ui/styling/UIContainerStyle.hpp"
+#include "graphics/ui/styling/UILayoutConfig.hpp"
+#include "leafs/IUILeafData.hpp"
 #include "utils/IdIndexedVector.hpp"
 #include "utils/TypeAliases.hpp"
 

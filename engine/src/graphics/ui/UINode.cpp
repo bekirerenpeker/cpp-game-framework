@@ -1,6 +1,6 @@
 #include "graphics/ui/UINode.hpp"
 #include "graphics/ui/UIRenderer.hpp"
-#include "graphics/ui/leaf_types/IUILeafData.hpp"
+#include "graphics/ui/leafs/IUILeafData.hpp"
 
 namespace Engine {
 

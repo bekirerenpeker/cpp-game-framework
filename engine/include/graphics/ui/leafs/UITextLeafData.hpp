@@ -2,7 +2,7 @@
 
 #include "IUILeafData.hpp"
 #include "graphics/text/TextLayout.hpp"
-#include "graphics/ui/UITextStyle.hpp"
+#include "graphics/ui/styling/UITextStyle.hpp"
 #include <string_view>
 #include <vector>
 

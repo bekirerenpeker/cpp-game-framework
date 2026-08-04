@@ -4,6 +4,22 @@
 
 namespace Engine {
 
+// Baked by CMake rather than defaulted in the header, since ENGINE_ASSET_DIR is private
+// to the engine target and the game compiles this header too.
+#ifndef ENGINE_ASSET_DIR
+#define ENGINE_ASSET_DIR "engine/assets"
+#endif
+
+FileManager::FileManager() : m_engineAssetRoot(ENGINE_ASSET_DIR) {}
+
+void FileManager::setEngineAssetRoot(const fs::path& root) { m_engineAssetRoot = root; }
+const fs::path& FileManager::getEngineAssetRoot() const { return m_engineAssetRoot; }
+
+fs::path FileManager::engineAsset(const fs::path& relativePath) const
+{
+    return m_engineAssetRoot / relativePath;
+}
+
 bool FileManager::doesPathExist(const fs::path& path) { return fs::exists(path); }
 bool FileManager::isDirectory(const fs::path& path) { return fs::is_directory(path); }
 
