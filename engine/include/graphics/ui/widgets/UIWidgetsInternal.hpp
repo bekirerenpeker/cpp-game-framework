@@ -1,10 +1,16 @@
 #pragma once
 
+#include "graphics/ui/widgets/UIWidgets.hpp"
+
 namespace Engine {
 
 class GlTexture;
 
 namespace UIWidgets {
+
+// The one thing a widget cannot work out from this frame alone: whether the gesture was
+// already live last frame, which is what turns "is being dragged" into "was just let go".
+UIInputState dragInputState(const UINodeState& node, bool isEditing, bool isChanged);
 
 // Shared between widget translation units, and deliberately not part of UIWidgets.hpp:
 // these are the built-in widgets' own assets, not something a caller composes with.

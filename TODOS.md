@@ -21,56 +21,51 @@ schedule, just the sequence that avoids rework.
   few lines in `resolveInput`; together they stop every widget re-deriving the
   same drag math — the window and the sliders each hand-roll it today.
 
-- [ ] **3. Richer input return values** — a widget hands back only the new value, so a
-  caller cannot tell a live drag from a finished one and has to redo expensive work
-  every frame. Return the current value plus `isEditing`/`isReleased`, so an
-  expensive update can wait for release.
-
-- [ ] **4. Event consumption** — press bubbles with hover, so clicking a child
+- [ ] **3. Event consumption** — press bubbles with hover, so clicking a child
   also fires every container above it. Fine while ancestors are inert panels,
   wrong the first time a button sits in a clickable row. Needs the hit node to be
   able to stop propagation — split "the node that owns the click" from "the nodes
   containing the cursor". `ignoreInput` (the cheap half) already landed.
 
-- [ ] **5. Keyboard focus + text input** — the biggest one, and the gate on
+- [ ] **4. Keyboard focus + text input** — the biggest one, and the gate on
   `textField`, numeric entry and editable colour values. Needs a focused key in
-  the state store, consumption (4), `Input` character events, then a caret,
+  the state store, consumption (3), `Input` character events, then a caret,
   selection, and clipboard. Do it as one widget first, generalise after.
 
-- [ ] **6. `contextMenu` and a menu bar** — the overlay machinery is done and
+- [ ] **5. `contextMenu` and a menu bar** — the overlay machinery is done and
   `dropdown` proves it; both are compositions on top, and the state store now
   gives them somewhere to keep their open flag.
 
-- [ ] **7. A screen-space root that fills the window** — `resolveRootSize` sizes a
+- [ ] **6. A screen-space root that fills the window** — `resolveRootSize` sizes a
   root from its own spec with nothing passed in, so `Grow`/`Percent` fall back to
   max-content. A HUD wants a root that *is* the window, which needs an available
   size threaded into the root solve — and collides with the invariant that a root
   is deliberately not clamped to its content floor. A design call, not a patch.
 
-- [ ] **8. `cursor` and `transition`** — both declared on `UIContainerStyle` and
+- [ ] **7. `cursor` and `transition`** — both declared on `UIContainerStyle` and
   both dead. `cursor` is a glfw cursor set from the hovered node, once per frame.
   `transition` is a per-key animated value in the state store plus a rule for what
   a style field interpolates as.
 
-- [ ] **9. Grid** — a track list where each track carries a `UISizeSpec`, run
+- [ ] **8. Grid** — a track list where each track carries a `UISizeSpec`, run
   through the solver's existing distribution routine, then row-major placement
   with an optional span. ~80% of grid's value; skip auto-fit/minmax/dense.
 
-- [ ] **10. More widgets** — cheap compositions now theming has landed: `image`,
+- [ ] **9. More widgets** — cheap compositions now theming has landed: `image`,
   `progressBar`, `tabs` (`toolbarMenu` is most of it), `treeView`, `groupBox`,
   `dragFloat` (slider without a track). Each is a config struct plus a subtree.
 
-- [ ] **11. Rename `UIWidgets` to `UI`** — the namespace already forwards the bare
+- [ ] **10. Rename `UIWidgets` to `UI`** — the namespace already forwards the bare
   primitives alongside the widgets, which was the point; the name still says
   "widgets". A rename, nothing more, but do it before call sites multiply.
 
-- [ ] **12. One batch for UI rects and UI glyphs** — a panel and its label cost
+- [ ] **11. One batch for UI rects and UI glyphs** — a panel and its label cost
   two draw calls, since the rect shader is a rounded-box SDF and the glyph shader
   is a field sampler. Merging means one shader branching on a per-vertex mode and
   one vertex format wide enough for both. Only worth it when a real UI shows the
   draw calls matter.
 
-- [ ] **13. Text perf** — three separate small ones: pack `TextVertex` (7
+- [ ] **12. Text perf** — three separate small ones: pack `TextVertex` (7
   attributes, 68 bytes, two full `Color`s → RGBA8); a cross-block layout cache
   keyed on `hash(text, style, maxWidth)` so N identical labels cost one walk; and
   named style tags (`/b`, `/i`, `/color=red`) through `TextTags::isTagAt`, the
@@ -106,6 +101,19 @@ schedule, just the sequence that avoids rework.
 ## Done
 
 ### UI
+
+- [x] **Richer input return values** — every bound-value widget returns a
+  `UIInputState`: its `UINodeState` plus `isChanged` / `isEditing` / `isReleased`,
+  so an expensive update hangs off release instead of running every frame of a
+  drag. The value still travels through the caller's reference; the struct only
+  says *when* to act. A widget with no drag to it (checkbox, radio, dropdown,
+  toolbar) completes on the click, so it fires `isChanged` and `isReleased`
+  together and never `isEditing` — otherwise a caller waiting on release would
+  wait forever. `dragInputState` holds the one bit that cannot be derived from the
+  frame (was a gesture live last frame) in the state store. Sliders measure change
+  *after* snapping, so clamping a caller's out-of-range value is not reported as an
+  edit, and the picker measures on hsv rather than the colour, which it rebuilds
+  every frame and so drifts a bit or two when untouched.
 
 - [x] **Scroll** — `overflow = UIOverflow::Scroll` is the entire interface: it clips,
   gives both axes a zero content floor, drives the offset and draws the bars. The

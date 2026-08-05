@@ -276,13 +276,26 @@ void demoWindow()
         break;
     }
 
-    case 1:
+    case 1: {
         text("Sliders");
         horizontalDivider();
 
-        sliderFloat("Float", sliderValue, 0.0f, 1.0f);
+        // The point of the return value: isChanged fires all the way through a drag,
+        // isReleased once at the end, so an expensive rebuild can wait for the latter.
+        static int commits = 0;
+        UIInputState slider = sliderFloat("Float", sliderValue, 0.0f, 1.0f);
+        if (slider.isReleased) commits++;
+
         sliderInt("Int", stepCount, 0, 10);
+
+        text(
+            std::format(
+                "editing: {}    changed this frame: {}    commits on release: {}",
+                slider.isEditing ? "yes" : "no", slider.isChanged ? "yes" : "no", commits
+            )
+        );
         break;
+    }
 
     case 2:
         text("Popup picker");

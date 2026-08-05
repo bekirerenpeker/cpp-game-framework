@@ -2,6 +2,7 @@
 #include "graphics/ui/widgets/UIWidgetsInternal.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "graphics/gl_wrappers/GlTexture.hpp"
+#include "graphics/ui/UIStateStore.hpp"
 #include "graphics/ui/UiManager.hpp"
 
 namespace Engine {
@@ -33,6 +34,20 @@ GlTexture* dropdownTexture()
 {
     static GlTexture* texture = loadWidgetTexture("images/dropdown.png");
     return texture;
+}
+
+UIInputState dragInputState(const UINodeState& node, bool isEditing, bool isChanged)
+{
+    UIStateFlag wasEditing = UIStateStore::get().flag(node.persistentKey, "inputEditing");
+
+    UIInputState result;
+    result.node = node;
+    result.isChanged = isChanged;
+    result.isEditing = isEditing;
+    result.isReleased = wasEditing && !isEditing;
+
+    wasEditing = isEditing;
+    return result;
 }
 
 float uiScale() { return UIThemeManager::get().getScale(); }

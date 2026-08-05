@@ -9,6 +9,20 @@ namespace Engine {
 
 namespace UIWidgets {
 
+// What a widget with a bound value hands back. The value itself still travels through
+// the reference the caller passed; this only says *when* to act on it. isChanged fires
+// on every frame a drag moves the value and isReleased once as the gesture ends, which
+// is the one an expensive update should hang off. A widget with no drag to it -- a
+// checkbox, a dropdown item -- completes the instant it is clicked, so for those the two
+// fire together and isEditing never does.
+struct UIInputState
+{
+    UINodeState node;
+    bool isChanged = false;
+    bool isEditing = false;
+    bool isReleased = false;
+};
+
 // base components interfaces
 void clear();
 UINode* getNode(IdType id);
@@ -108,7 +122,7 @@ struct ToolbarMenuConfig
     UITextStyle selectedItemTextStyle;
     std::string_view key;
 };
-void toolbarMenu(
+UIInputState toolbarMenu(
     const std::vector<std::string>& items, int& selected, const ToolbarMenuConfig& config = {}
 );
 
@@ -127,11 +141,11 @@ struct SliderConfig
     int decimals = 2;
     std::string_view key;
 };
-void sliderFloat(
+UIInputState sliderFloat(
     const std::string label, float& value, float minValue, float maxValue,
     const SliderConfig& config = {}
 );
-void sliderInt(
+UIInputState sliderInt(
     const std::string label, int& value, int minValue, int maxValueExcluded,
     const SliderConfig& config = {}
 );
@@ -156,7 +170,7 @@ struct CheckBoxConfig
     UITextConfig labelTextConfig;
     std::string_view key;
 };
-UINodeState checkBox(const std::string label, bool& checked, const CheckBoxConfig& config = {});
+UIInputState checkBox(const std::string label, bool& checked, const CheckBoxConfig& config = {});
 
 struct RadioGroupConfig
 {
@@ -172,7 +186,7 @@ struct RadioGroupConfig
     UITextStyle selectedLabelTextStyle;
     std::string_view key;
 };
-void radioGroup(
+UIInputState radioGroup(
     const std::vector<std::string>& items, int& selected, const RadioGroupConfig& config = {}
 );
 
@@ -199,9 +213,8 @@ struct DropdownConfig
     Vec2 panelOffset = Vec2(0.0f, 4.0f);
     std::string_view key;
 };
-int dropdown(
-    const std::vector<std::string>& items, int& selected, const DropdownConfig& config = {}
-);
+UIInputState
+dropdown(const std::vector<std::string>& items, int& selected, const DropdownConfig& config = {});
 
 struct TooltipConfig
 {
@@ -245,7 +258,7 @@ struct ColorPickerConfig
     bool showValues = true;
     std::string_view key;
 };
-void colorPicker(Color& color, const ColorPickerConfig& config = {});
+UIInputState colorPicker(Color& color, const ColorPickerConfig& config = {});
 
 struct ColorPickerPopupConfig
 {
@@ -258,7 +271,7 @@ struct ColorPickerPopupConfig
     Vec2 panelOffset = Vec2(0.0f, 4.0f);
     std::string_view key;
 };
-void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config = {});
+UIInputState colorPickerPopup(Color& color, const ColorPickerPopupConfig& config = {});
 
 }   // namespace UIWidgets
 

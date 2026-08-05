@@ -81,12 +81,11 @@ UINodeState button(const std::string text, const ButtonConfig& config)
     return state;
 }
 
-void toolbarMenu(
-    const std::vector<std::string>& items, int& selected, const ToolbarMenuConfig& config
-)
+UIInputState
+toolbarMenu(const std::vector<std::string>& items, int& selected, const ToolbarMenuConfig& config)
 {
     int count = (int)items.size();
-    if (count == 0) return;
+    if (count == 0) return {};
     if (selected < 0 || selected >= count) selected = 0;
 
     const UIThemeColors& colors = UITheming::colors();
@@ -133,7 +132,7 @@ void toolbarMenu(
     defaultConfig.hoveredItemTextStyle.combine(config.hoveredItemTextStyle);
     defaultConfig.selectedItemTextStyle.combine(config.selectedItemTextStyle);
 
-    openContainer(
+    UINodeState menu = openContainer(
         {.width = UISizeSpec::grow(), .direction = UILayoutDirection::Column}, {}, config.key
     );
     openContainer(defaultConfig.menuLayout, defaultConfig.menuStyle);
@@ -163,9 +162,12 @@ void toolbarMenu(
     closeContainer();
     horizontalDivider();
     closeContainer();
+
+    bool isChanged = selected != active;
+    return {.node = menu, .isChanged = isChanged, .isReleased = isChanged};
 }
 
-void sliderFloat(
+UIInputState sliderFloat(
     const std::string label, float& value, float minValue, float maxValue,
     const SliderConfig& config
 )
@@ -240,7 +242,12 @@ void sliderFloat(
     value = snapValue(value, minValue, maxValue, config.step);
     float fraction = range > 0.0f ? Math::clamp((value - minValue) / range, 0.0f, 1.0f) : 0.0f;
 
-    openContainer(defaultConfig.sliderLayout, defaultConfig.sliderStyle, config.key);
+    // Taken after the snap, so a caller handing in an out-of-range value is corrected
+    // silently rather than being reported back to it as an edit it never made.
+    float startValue = value;
+
+    UINodeState slider =
+        openContainer(defaultConfig.sliderLayout, defaultConfig.sliderStyle, config.key);
 
     int decimals = config.decimals > 0 ? config.decimals : 0;
     UITextConfig labelText = config.labelTextConfig;
@@ -266,15 +273,17 @@ void sliderFloat(
     // the three is topmost; all of them drive the same value, read off the track's rect.
     // relativeMousePos is measured against that rect whether or not the cursor is still
     // inside it, which is what lets a drag run off the end and clamp.
-    if (range > 0.0f && (track.isActive || fill.isActive || handle.isActive)) {
+    bool isEditing = range > 0.0f && (track.isActive || fill.isActive || handle.isActive);
+    if (isEditing) {
         value = minValue + Math::clamp(track.relativeMousePos.x, 0.0f, 1.0f) * range;
         value = snapValue(value, minValue, maxValue, config.step);
     }
 
     closeContainer();
+    return dragInputState(slider, isEditing, value != startValue);
 }
 
-void sliderInt(
+UIInputState sliderInt(
     const std::string label, int& value, int minValue, int maxValueExcluded,
     const SliderConfig& config
 )
@@ -286,11 +295,13 @@ void sliderInt(
     intConfig.decimals = 0;
 
     float floatValue = (float)value;
-    sliderFloat(label, floatValue, (float)minValue, (float)maxValue, intConfig);
+    UIInputState state =
+        sliderFloat(label, floatValue, (float)minValue, (float)maxValue, intConfig);
     value = (int)Math::round(floatValue);
+    return state;
 }
 
-UINodeState checkBox(const std::string label, bool& checked, const CheckBoxConfig& config)
+UIInputState checkBox(const std::string label, bool& checked, const CheckBoxConfig& config)
 {
     const UIThemeColors& colors = UITheming::colors();
     const UIThemeMetrics& metrics = UITheming::metrics();
@@ -363,15 +374,18 @@ UINodeState checkBox(const std::string label, bool& checked, const CheckBoxConfi
     addTextLeaf(defaultConfig.labelLayout, labelText);
 
     closeContainer();
-    return row;
+
+    // No drag to finish, so the click is the whole gesture: it is complete the moment it
+    // lands, and a caller waiting for isReleased must not wait forever.
+    bool isChanged = checked != wasChecked;
+    return {.node = row, .isChanged = isChanged, .isReleased = isChanged};
 }
 
-void radioGroup(
-    const std::vector<std::string>& items, int& selected, const RadioGroupConfig& config
-)
+UIInputState
+radioGroup(const std::vector<std::string>& items, int& selected, const RadioGroupConfig& config)
 {
     int count = (int)items.size();
-    if (count == 0) return;
+    if (count == 0) return {};
     if (selected < 0 || selected >= count) selected = 0;
 
     const UIThemeColors& colors = UITheming::colors();
@@ -425,7 +439,8 @@ void radioGroup(
     defaultConfig.labelTextConfig.style.combine(config.labelTextConfig.style);
     defaultConfig.selectedLabelTextStyle.combine(config.selectedLabelTextStyle);
 
-    openContainer(defaultConfig.groupLayout, defaultConfig.groupStyle, config.key);
+    UINodeState group =
+        openContainer(defaultConfig.groupLayout, defaultConfig.groupStyle, config.key);
 
     int active = selected;
     for (int i = 0; i < count; i++) {
@@ -448,13 +463,19 @@ void radioGroup(
     }
 
     closeContainer();
+
+    bool isChanged = selected != active;
+    return {.node = group, .isChanged = isChanged, .isReleased = isChanged};
 }
 
-int dropdown(const std::vector<std::string>& items, int& selected, const DropdownConfig& config)
+UIInputState
+dropdown(const std::vector<std::string>& items, int& selected, const DropdownConfig& config)
 {
     int count = (int)items.size();
-    if (count == 0) return 0;
+    if (count == 0) return {};
     if (selected < 0 || selected >= count) selected = 0;
+
+    int active = selected;
 
     const UIThemeColors& colors = UITheming::colors();
     const UIThemeMetrics& metrics = UITheming::metrics();
@@ -621,7 +642,9 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
     }
 
     closeContainer();
-    return selected;
+
+    bool isChanged = selected != active;
+    return {.node = wrapper, .isChanged = isChanged, .isReleased = isChanged};
 }
 
 }   // namespace UIWidgets

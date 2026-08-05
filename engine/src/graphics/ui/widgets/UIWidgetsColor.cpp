@@ -1,4 +1,5 @@
 #include "graphics/ui/widgets/UIWidgets.hpp"
+#include "graphics/ui/widgets/UIWidgetsInternal.hpp"
 #include "core/file_management/FileManager.hpp"
 #include "core/input/Input.hpp"
 #include "core/logging/LoggerMacros.hpp"
@@ -36,7 +37,7 @@ GlShader* colorPickerShader()
 
 }   // namespace
 
-void colorPicker(Color& color, const ColorPickerConfig& config)
+UIInputState colorPicker(Color& color, const ColorPickerConfig& config)
 {
     const UIThemeColors& colors = UITheming::colors();
     const UIThemeMetrics& metrics = UITheming::metrics();
@@ -243,6 +244,13 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
 
     // The markers and their spacers sit over the shader quads, so a press can land on
     // any of them; all of them drive the value off their own control's rect.
+    Vec3 heldHsv = hsv;
+    float heldAlpha = alpha;
+
+    bool isEditing = square.isActive || squareAnchor.isActive || squareMarker.isActive ||
+                     hueStrip.isActive || hueAnchor.isActive || hueMarker.isActive ||
+                     alphaStrip.isActive || alphaAnchor.isActive || alphaMarker.isActive;
+
     if (square.isActive || squareAnchor.isActive || squareMarker.isActive) {
         hsv.y = Math::clamp(square.relativeMousePos.x, 0.0f, 1.0f);
         hsv.z = 1.0f - Math::clamp(square.relativeMousePos.y, 0.0f, 1.0f);
@@ -251,6 +259,11 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
         hsv.x = Math::clamp(hueStrip.relativeMousePos.y, 0.0f, 0.9999f);
     if (alphaStrip.isActive || alphaAnchor.isActive || alphaMarker.isActive)
         alpha = Math::clamp(alphaStrip.relativeMousePos.x, 0.0f, 1.0f);
+
+    // Measured on hsv rather than on the colour, which is rebuilt from it every frame
+    // and so drifts by a bit or two even when nothing was touched.
+    bool isChanged =
+        hsv.x != heldHsv.x || hsv.y != heldHsv.y || hsv.z != heldHsv.z || alpha != heldAlpha;
 
     color = Color::fromHsv(hsv, alpha);
 
@@ -283,9 +296,10 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
     }
 
     closeContainer();
+    return dragInputState(picker, isEditing, isChanged);
 }
 
-void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config)
+UIInputState colorPickerPopup(Color& color, const ColorPickerPopupConfig& config)
 {
     const UIThemeColors& colors = UITheming::colors();
     const UIThemeMetrics& metrics = UITheming::metrics();
@@ -329,6 +343,7 @@ void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config)
     defaultConfig.panelLayout.combine(config.panelLayout);
     defaultConfig.panelStyle.combine(config.panelStyle);
 
+    UIInputState result;
     UINodeState wrapper = openContainer(defaultConfig.wrapperLayout, {}, config.key);
     UIStateFlag open = UIStateStore::get().flag(wrapper.persistentKey, "pickerOpen");
 
@@ -347,7 +362,7 @@ void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config)
             UIFloatingConfig {.offset = Vec2(0.0f, unscale(swatch.size.y)) + config.panelOffset};
 
         UINodeState panel = openContainer(defaultConfig.panelLayout, defaultConfig.panelStyle);
-        colorPicker(color, config.pickerConfig);
+        result = colorPicker(color, config.pickerConfig);
         closeContainer();
 
         if (Input::get().mouseButtonPressed(MouseButton::Left) && !panel.isHovered &&
@@ -357,6 +372,11 @@ void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config)
     }
 
     closeContainer();
+
+    // The inner picker's flags with the popup's own box: a caller holds the swatch, not
+    // the panel, and the panel does not exist at all while the popup is shut.
+    result.node = wrapper;
+    return result;
 }
 
 }   // namespace UIWidgets
