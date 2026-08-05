@@ -18,6 +18,7 @@ class TextLayoutCalculator : public Singleton<TextLayoutCalculator>
     ~TextLayoutCalculator() = default;
 
     static void syncFontVersion(TextBlock& block);
+    static void applyEllipsis(TextBlock& block, float availableWidth);
     static void applyHorizontalAlign(TextBlock& block, float contentWidth);
 };
 

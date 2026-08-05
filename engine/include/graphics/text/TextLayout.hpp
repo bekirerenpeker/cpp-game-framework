@@ -31,7 +31,10 @@ struct TextAlignment
     TextAlignV vertical = TextAlignV::Top;
 };
 
-// Declared, not honoured: every value currently lays out and draws as Visible.
+// What to do with text that does not fit the width it was solved against. Clip is a
+// draw-time bound only; Ellipsis also cuts the layout back and marks it. Both bound the
+// glyphs to the box identically -- ellipsis fits horizontally by construction, but a
+// block taller than its box still has to be cut somewhere.
 enum class TextOverflow
 {
     Visible = 0,

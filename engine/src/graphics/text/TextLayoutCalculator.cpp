@@ -10,6 +10,10 @@ namespace {
 
 constexpr float BOUNDED_EPSILON = 0.0001f;
 
+// Three ASCII dots rather than U+2026: the marker has to exist in whatever face is
+// baked, and a single-glyph ellipsis sits outside Latin-1.
+constexpr std::string_view ELLIPSIS = "...";
+
 // The last break-space seen on the current line, saved in case a later word doesn't
 // fit and the walk has to backtrack to it.
 struct WrapPoint
@@ -19,6 +23,30 @@ struct WrapPoint
     float runX = 0.0f, width = 0.0f;
     float ascent = 0.0f, descent = 0.0f, height = 0.0f;
 };
+
+// Same walk the layout and the measure both run, so a width worked out here cannot
+// drift from the one they agreed on.
+float runWidth(const Font& font, const TextStyle& style, std::string_view text)
+{
+    float width = 0.0f;
+    uint32_t prev = 0;
+
+    size_t i = 0;
+    while (i < text.size()) {
+        if (TextTags::isEscapedTagAt(text, i)) {
+            i++;
+            continue;
+        }
+
+        uint32_t codepoint = Utf8::next(text, i);
+        if (codepoint == 0) break;
+
+        GlyphStep glyphStep = TextMetrics::step(font, style, codepoint, prev);
+        prev = glyphStep.kerningPrev;
+        width += glyphStep.total();
+    }
+    return width;
+}
 
 }   // namespace
 
@@ -281,8 +309,110 @@ float TextLayoutCalculator::calculate(TextBlock& block, float availableWidth)
     if (!lines.empty()) height += lines.back().ascent + lines.back().descent;
 
     block.m_bounds = Vec2(widest, height);
-    applyHorizontalAlign(block, bounded ? budget : widest);
+    applyEllipsis(block, availableWidth);
+
+    // Aligned inside the width it was given rather than only inside its own longest
+    // line, or right-aligned text that never wraps would have no slack to move in. The
+    // max keeps a single unbreakable word from producing negative slack, and a caller
+    // that passed no width (world-space text) still aligns against its own bounds.
+    applyHorizontalAlign(block, Math::max(availableWidth, block.m_bounds.x));
     return height;
+}
+
+// Run before alignment, since cutting a line back changes the slack it is aligned
+// against. Lines that already fit are copied through untouched, and a block whose
+// widest line fits returns before any of this, so the common case costs one compare.
+void TextLayoutCalculator::applyEllipsis(TextBlock& block, float availableWidth)
+{
+    if (block.m_overflow != TextOverflow::Ellipsis) return;
+    if (availableWidth <= BOUNDED_EPSILON) return;
+    if (block.m_bounds.x <= availableWidth + BOUNDED_EPSILON) return;
+
+    const Font& font = *block.m_resolvedFont;
+
+    // Rebuilt rather than edited in place: dropping runs from the middle would shift
+    // every later line's firstRun, and one forward pass is cheaper than patching them.
+    std::vector<TextRun> kept;
+    kept.reserve(block.m_runs.size() + block.m_lines.size());
+
+    float widest = 0.0f;
+    for (TextLine& line : block.m_lines) {
+        uint firstRun = (uint)kept.size();
+
+        if (line.runCount == 0 || line.width <= availableWidth + BOUNDED_EPSILON) {
+            for (uint i = 0; i < line.runCount; i++)
+                kept.push_back(block.m_runs[line.firstRun + i]);
+
+            line.firstRun = firstRun;
+            widest = Math::max(widest, line.width);
+            continue;
+        }
+
+        // The marker takes the style of the run the cut lands in, so it reads as part of
+        // the text it stands in for rather than as the block's default leaking through.
+        const TextRun& lastRun = block.m_runs[line.firstRun + line.runCount - 1];
+        const TextStyle& markerStyle = block.styleForRun(lastRun.styleIndex);
+        float markerWidth = runWidth(font, markerStyle, ELLIPSIS);
+
+        float lineStart = block.m_runs[line.firstRun].offset.x;
+        float budget = lineStart + availableWidth - markerWidth;
+
+        float pen = lineStart;
+        bool isCut = false;
+        for (uint i = 0; i < line.runCount && !isCut; i++) {
+            const TextRun& run = block.m_runs[line.firstRun + i];
+            const TextStyle& style = block.styleForRun(run.styleIndex);
+
+            uint32_t prev = 0;
+            size_t byteIdx = 0;
+            while (byteIdx < run.text.size()) {
+                if (TextTags::isEscapedTagAt(run.text, byteIdx)) {
+                    byteIdx++;
+                    continue;
+                }
+
+                size_t charStart = byteIdx;
+                uint32_t codepoint = Utf8::next(run.text, byteIdx);
+                if (codepoint == 0) break;
+
+                GlyphStep glyphStep = TextMetrics::step(font, style, codepoint, prev);
+                if (pen + glyphStep.total() > budget) {
+                    byteIdx = charStart;
+                    isCut = true;
+                    break;
+                }
+
+                prev = glyphStep.kerningPrev;
+                pen += glyphStep.total();
+            }
+
+            if (byteIdx == 0) continue;
+
+            TextRun head = run;
+            head.text = run.text.substr(0, byteIdx);
+            kept.push_back(head);
+        }
+
+        TextRun marker;
+        marker.text = ELLIPSIS;
+        marker.styleIndex = lastRun.styleIndex;
+        marker.offset = Vec2(pen, block.m_runs[line.firstRun].offset.y);
+        kept.push_back(marker);
+
+        line.firstRun = firstRun;
+        line.width = pen + markerWidth - lineStart;
+        widest = Math::max(widest, line.width);
+    }
+
+    // Counts are settled after the fact, since a line only knows how many runs it kept
+    // once the next line's start is known.
+    for (size_t i = 0; i < block.m_lines.size(); i++) {
+        uint end = i + 1 < block.m_lines.size() ? block.m_lines[i + 1].firstRun : (uint)kept.size();
+        block.m_lines[i].runCount = end - block.m_lines[i].firstRun;
+    }
+
+    block.m_runs = std::move(kept);
+    block.m_bounds.x = widest;
 }
 
 // Baked into the run offsets rather than applied at draw, because the width to

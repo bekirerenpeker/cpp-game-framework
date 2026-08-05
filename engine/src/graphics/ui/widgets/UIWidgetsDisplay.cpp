@@ -14,9 +14,9 @@ UINodeState horizontalDivider(const DividerConfig& config)
         .dividerLayout =
             {
                             .width = UISizeSpec::grow(),
-                            .height = UISizeSpec::fixed(metrics.borderWidth.thin),
+                            .height = UISizeSpec::fixed(metrics.borderWidth.thin + 1),
                             },
-        .dividerStyle = {.backgroundColor = colors.border                          },
+        .dividerStyle = {.backgroundColor = colors.border                              },
     };
 
     defaultConfig.dividerLayout.combine(config.dividerLayout);
@@ -37,10 +37,10 @@ UINodeState verticalDivider(const DividerConfig& config)
     DividerConfig defaultConfig = {
         .dividerLayout =
             {
-                            .width = UISizeSpec::fixed(metrics.borderWidth.thin),
+                            .width = UISizeSpec::fixed(metrics.borderWidth.thin + 1),
                             .height = UISizeSpec::grow(),
                             },
-        .dividerStyle = {                    .backgroundColor = colors.border },
+        .dividerStyle = {                        .backgroundColor = colors.border },
     };
 
     defaultConfig.dividerLayout.combine(config.dividerLayout);

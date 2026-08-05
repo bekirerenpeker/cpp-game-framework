@@ -443,7 +443,14 @@ void UIManager::closeContainer()
 
 IdType UIManager::addTextLeaf(const UILayoutConfig& layout, const UITextConfig& config)
 {
-    UINodeState state = addNode(layout);
+    // A leaf that clips or ellipsises has to be allowed to be narrower than its own
+    // text, or it keeps its full width and there is nothing left to cut. This is the
+    // same rule a container gets from style.overflow -- a leaf has no style to carry
+    // one, so it comes off the text config instead and the caller sets one field.
+    UILayoutConfig leafLayout = layout;
+    if (config.overflow != TextOverflow::Visible) leafLayout.clipX = true;
+
+    UINodeState state = addNode(leafLayout);
     UINode* node = m_nodes.get(state.id);
     if (!node) return state.id;
 

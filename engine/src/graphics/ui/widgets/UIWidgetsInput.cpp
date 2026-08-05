@@ -499,13 +499,7 @@ dropdown(const std::vector<std::string>& items, int& selected, const DropdownCon
                           .onHover = {.borderColor = colors.borderFocus},
                           .onHeld = {.backgroundColor = colors.surfaceHover},
                           },
-        // A zero floor on the label, so a string longer than the button shrinks and gets
-        // cut instead of pushing the arrow out of the box.
-        .labelLayout =
-            {
-                          .width = UISizeSpec::grow(),
-                          .clipX = true,
-                          },
+        .labelLayout = {.width = UISizeSpec::grow()},
         .labelTextConfig = {.style = UITheming::textStyle("body")},
         .arrowLayout =
             {
@@ -552,11 +546,7 @@ dropdown(const std::vector<std::string>& items, int& selected, const DropdownCon
                           .onHeld = {.backgroundColor = colors.accent},
                           },
         .selectedItemStyle = {.backgroundColor = colors.accentMuted},
-        .itemTextLayout =
-            {
-                          .width = UISizeSpec::grow(),
-                          .clipX = true,
-                          },
+        .itemTextLayout = {.width = UISizeSpec::grow()},
         .itemTextConfig = {.style = UITheming::textStyle("body")},
         .selectedItemTextStyle = {.color = colors.foreground},
     };

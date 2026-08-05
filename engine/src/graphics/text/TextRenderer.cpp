@@ -131,12 +131,27 @@ Vec2 TextRenderer::draw(const TextBlock& block, Vec2 origin, Vec2 boxSize)
     if (block.getAlignV() == TextAlignV::Middle) yOffset = slack * 0.5f;
     else if (block.getAlignV() == TextAlignV::Bottom) yOffset = slack;
 
+    // Clip and Ellipsis bound the glyphs identically: ellipsis already fits across, but
+    // a block taller than its box still has to be cut, and Clip has no layout half at
+    // all. Intersected with whatever the caller set rather than replacing it, or a leaf
+    // would escape the container clip it was handed, and restored after so the bound
+    // does not leak into the next block on the same batch.
+    Vec4 outerClip = m_clipRect;
+    if (block.getOverflow() != TextOverflow::Visible && boxSize.x > 0.0f && boxSize.y > 0.0f) {
+        m_clipRect = Vec4(
+            Math::max(m_clipRect.x, origin.x), Math::max(m_clipRect.y, origin.y - boxSize.y),
+            Math::min(m_clipRect.z, origin.x + boxSize.x), Math::min(m_clipRect.w, origin.y)
+        );
+    }
+
     for (const TextRun& run : block.getRuns()) {
         if (run.text.empty()) continue;
 
         Vec2 pen(origin.x + run.offset.x, origin.y - yOffset - run.offset.y);
         drawSpan(*font, run.text, block.styleForRun(run.styleIndex), pen, pen.x);
     }
+
+    m_clipRect = outerClip;
     return block.getBounds();
 }
 

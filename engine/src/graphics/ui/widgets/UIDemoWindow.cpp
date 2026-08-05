@@ -138,7 +138,10 @@ void themeTab()
     closeSection();
 
     if (openSection("Metrics")) {
-        sliderFloat("Scale", g_edit.scale, 0.6f, 2.0f);
+        static float scale = g_edit.scale;
+        const auto& inputState = sliderFloat("Scale", scale, 0.6f, 2.0f);
+        if (inputState.isReleased) g_edit.scale = scale;
+
         sliderFloat("Radius", g_edit.radius, 0.0f, 20.0f, {.decimals = 1});
         sliderFloat("Spacing", g_edit.spacing, 2.0f, 24.0f, {.decimals = 1});
         sliderFloat("Border", g_edit.borderWidth, 0.0f, 5.0f, {.decimals = 1});
@@ -164,6 +167,113 @@ void themeTab()
 }
 
 }   // namespace
+
+// A text leaf takes no input of its own, so anything meant to react to the cursor needs
+// a container around it -- which is all a "hoverable label" is.
+UINodeState hoverLabel(const std::string& label)
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    UINodeState state = openContainer(
+        {.padding = UIEdges(metrics.spacing.sm, metrics.spacing.xs)},
+        {.borderRadius = metrics.radius.sm, .onHover = {.backgroundColor = colors.surfaceHover}}
+    );
+    text(label);
+    closeContainer();
+    return state;
+}
+
+// The leaf grows to fill a box wider than the text, which is what gives alignment any
+// slack to work with -- a shrink-to-fit leaf is its own content and has nowhere to move.
+void alignedBox(const std::string& label, TextAlignH align)
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    openContainer(
+        {.width = UISizeSpec::grow(), .padding = UIEdges(metrics.spacing.sm)},
+        {.backgroundColor = colors.surfaceSunken, .borderRadius = metrics.radius.sm}
+    );
+    text(
+        label, {.textLayout = {.width = UISizeSpec::grow()},
+                .textConfig = {.alignment = {.horizontal = align}}}
+    );
+    closeContainer();
+}
+
+void overflowBox(const std::string& label, TextOverflow overflow)
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    openContainer({.width = UISizeSpec::grow(), .gap = metrics.spacing.xs});
+    text(label, {.textLayout = {.width = UISizeSpec::fixed(60.0f)}});
+
+    openContainer(
+        {.width = UISizeSpec::fixed(170.0f), .padding = UIEdges(metrics.spacing.sm)},
+        {.backgroundColor = colors.surfaceSunken,
+         .borderColor = colors.border,
+         .borderWidth = metrics.borderWidth.thin,
+         .borderRadius = metrics.radius.sm}
+    );
+    text(
+        "A single line far too long for this box",
+        {
+            .textConfig = {.overflow = overflow, .wrapEnabled = false}
+    }
+    );
+    closeContainer();
+    closeContainer();
+}
+
+void displayTab()
+{
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    text("Horizontal alignment");
+    horizontalDivider();
+
+    openContainer({.width = UISizeSpec::grow(), .gap = metrics.spacing.sm});
+    alignedBox("Left", TextAlignH::Left);
+    alignedBox("Center", TextAlignH::Center);
+    alignedBox("Right", TextAlignH::Right);
+    closeContainer();
+
+    text(
+        "Alignment is baked into each run's offset while the width is still final, so it "
+        "applies per line rather than to the block -- which is why a wrapped paragraph "
+        "centres line by line like this one.",
+        {.textLayout = {.width = UISizeSpec::grow()},
+         .textConfig = {.alignment = {.horizontal = TextAlignH::Center}}}
+    );
+
+    horizontalDivider();
+    text("Overflow: Clip cuts at the box, Ellipsis cuts the layout back and marks it");
+
+    overflowBox("Visible", TextOverflow::Visible);
+    overflowBox("Clip", TextOverflow::Clip);
+    overflowBox("Ellipsis", TextOverflow::Ellipsis);
+
+    horizontalDivider();
+    text("Tooltips, on plain labels rather than buttons");
+
+    openContainer({.gap = metrics.spacing.md, .alignCross = UIAlign::Center});
+    tooltip(
+        "A tooltip declared inside the window, escaping its clip",
+        hoverLabel("Follows the cursor").isHovered
+    );
+
+    UINodeState above = hoverLabel("Anchored above");
+    tooltip(
+        "Anchored to the label's top edge and aligned by its own bottom", above.isHovered,
+        {.anchor = above.pos + Vec2(above.size.x * 0.5f, 0.0f),
+         .anchorOffset = Vec2(0.0f, -6.0f),
+         .anchorAlignX = UIAlign::Center,
+         .anchorAlignY = UIAlign::End}
+    );
+    closeContainer();
+}
 
 // Nothing here asks for scrolling: the box is a fixed height with more in it than fits,
 // and overflow = Scroll is the whole of the opt-in. The long rows do not wrap, so their
@@ -220,7 +330,7 @@ void demoWindow()
 
     openWindow("Demo Window");
 
-    toolbarMenu({"Widgets", "Sliders", "Color", "Theme", "Scroll"}, selectedMenu);
+    toolbarMenu({"Widgets", "Display", "Sliders", "Color", "Theme", "Scroll"}, selectedMenu);
 
     switch (selectedMenu) {
     case 0: {
@@ -228,32 +338,6 @@ void demoWindow()
         horizontalDivider();
 
         button("Button");
-
-        openContainer({.gap = 10.0f, .direction = UILayoutDirection::Row});
-        tooltip(
-            "A tooltip declared inside the window, escaping its clip",
-            button("Hover for a tooltip").isHovered
-        );
-
-        UINodeState centered = button("Hover for a centered tooltip");
-        tooltip(
-            "Anchored to the button's centre and aligned by its own middle, so it sits on the "
-            "button instead of following the cursor",
-            centered.isHovered,
-            {.anchor = centered.pos + centered.size * 0.5f,
-             .anchorAlignX = UIAlign::Center,
-             .anchorAlignY = UIAlign::Center}
-        );
-
-        UINodeState above = button("Tooltip above");
-        tooltip(
-            "Anchored to the button's top edge, aligned by its own bottom", above.isHovered,
-            {.anchor = above.pos + Vec2(above.size.x * 0.5f, 0.0f),
-             .anchorOffset = Vec2(0.0f, -6.0f),
-             .anchorAlignX = UIAlign::Center,
-             .anchorAlignY = UIAlign::End}
-        );
-        closeContainer();
 
         horizontalDivider();
 
@@ -276,7 +360,9 @@ void demoWindow()
         break;
     }
 
-    case 1: {
+    case 1: displayTab(); break;
+
+    case 2: {
         text("Sliders");
         horizontalDivider();
 
@@ -297,7 +383,7 @@ void demoWindow()
         break;
     }
 
-    case 2:
+    case 3:
         text("Popup picker");
         colorPickerPopup(popupColor);
 
@@ -307,9 +393,9 @@ void demoWindow()
         colorPicker(pickedColor);
         break;
 
-    case 3: themeTab(); break;
+    case 4: themeTab(); break;
 
-    case 4: scrollTab(); break;
+    case 5: scrollTab(); break;
 
     default: break;
     }

@@ -66,8 +66,8 @@ void TextBlock::setAlignH(TextAlignH alignH)
 // applied at draw time and costs no relayout.
 void TextBlock::setAlignV(TextAlignV alignV) { m_alignV = alignV; }
 
-// Dirties layout even though nothing honours overflow yet, so adding clipping or
-// ellipsis later needs no setter change.
+// Dirties the layout because Ellipsis cuts runs back during the solve; Clip alone would
+// not need it, but the two share a setter and re-solving once is cheaper than the branch.
 void TextBlock::setOverflow(TextOverflow overflow)
 {
     if (m_overflow == overflow) return;
