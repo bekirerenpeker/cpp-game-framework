@@ -467,7 +467,6 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
                           .padding = UIEdges(metrics.spacing.md, metrics.spacing.sm),
                           .gap = metrics.spacing.sm,
                           .alignCross = UIAlign::Center,
-                          .clipX = true,
                           },
         .buttonStyle =
             {
@@ -523,7 +522,6 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
                           .width = UISizeSpec::grow(),
                           .padding = UIEdges(metrics.spacing.sm, metrics.spacing.xs),
                           .alignCross = UIAlign::Center,
-                          .clipX = true,
                           },
         .itemStyle =
             {

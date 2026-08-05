@@ -302,7 +302,9 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
                            .gap = metrics.spacing.sm,
                            .direction = UILayoutDirection::Column,
                            },
-        .bodyStyle = {},
+        // A window is a fixed box the caller fills with as much as it likes, so content
+        // taller than the box is the normal case rather than an error.
+        .bodyStyle = {.overflow = UIOverflow::Scroll},
     };
 
     defaultConfig.windowLayout.combine(config.windowLayout);

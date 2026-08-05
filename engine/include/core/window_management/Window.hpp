@@ -41,6 +41,7 @@ class Window : public IRenderContext, public IHasId
     int m_width = 0, m_height = 0;
     int m_xPos = 0, m_yPos = 0;
     std::string m_title = "";
+    Vec2 m_scrollDelta = VEC2_ZERO;
 
     struct NoInit
     {
@@ -63,6 +64,11 @@ class Window : public IRenderContext, public IHasId
 
     void swapBuffers();
     bool isOpen();
+
+    // Wheel ticks since the last call, x right and y up. Read once per frame: glfw
+    // delivers these as events during pollEvents, so they accumulate rather than being
+    // a state something can poll, and a frame may see several or none.
+    Vec2 consumeScrollDelta();
 
     void fullscreen();
     void maximize();
@@ -102,6 +108,7 @@ class Window : public IRenderContext, public IHasId
   private:
     static void sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height);
     static void positionUpdateCallback(GLFWwindow* glfwHandle, int x, int y);
+    static void scrollCallback(GLFWwindow* glfwHandle, double xOffset, double yOffset);
 };
 
 }   // namespace Engine

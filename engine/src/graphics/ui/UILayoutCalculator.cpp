@@ -1,4 +1,5 @@
 #include "graphics/ui/UILayoutCalculator.hpp"
+#include "graphics/ui/UIStateStore.hpp"
 #include "graphics/ui/UiManager.hpp"
 #include "utils/math/MathFuncs.hpp"
 
@@ -39,6 +40,16 @@ void setIntrinsic(UILayoutNode& node, UILayoutAxis axis, float min, float max)
 // creation, so nothing that reaches the solver carries an unset field.
 bool isFloating(const UILayoutNode& node) { return *node.node->layout.isFloating; }
 
+// An overflow already says the box may be smaller than what is in it, so it carries the
+// zero content floor with it rather than making the caller repeat itself in clipX/clipY.
+// Those stay for a leaf, which has no style to put an overflow on but still has to be
+// shrinkable -- a label that clips instead of pushing its row wider.
+bool isShrinkable(const UILayoutNode& node, UILayoutAxis axis)
+{
+    if (*node.node->style.overflow != UIOverflow::Visible) return true;
+    return axisClipped(node.node->layout, axis);
+}
+
 }   // namespace
 
 const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Vec2 rootTopLeft)
@@ -55,6 +66,10 @@ const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Ve
     computeFinalWidths();
     computeIntrinsicHeights();
     computeFinalHeights();
+    // Between the sizes and the positions is the only point where both the viewport and
+    // the content it holds are final, which is what lets the offset be clamped against
+    // this frame's content rather than last frame's.
+    resolveScroll();
     computePositions();
     applyTransforms();
     computeDrawPositions(rootTopLeft);
@@ -110,6 +125,7 @@ uint UILayoutCalculator::buildSubtree(IdType nodeId, uint parentIndex)
     layoutNode.persistentKey = node->persistentKey;
     layoutNode.ignoresInput = parentIgnoresInput || *node->style.ignoreInput;
     layoutNode.acceptsInput = node->isContainer() && node->isVisible && !layoutNode.ignoresInput;
+    layoutNode.isScrollable = *node->style.overflow == UIOverflow::Scroll;
     layoutNode.paintLayer = parentLayer + (uint)(zIndex > 0 ? zIndex : 0);
     layoutNode.parent = parentIndex;
     m_nodes.push_back(layoutNode);
@@ -182,10 +198,65 @@ void UILayoutCalculator::computeFinalHeights()
     if (m_nodes.empty()) return;
 
     m_nodes[0].size.y = resolveRootSize(UILayoutAxis::Vertical);
-    // Nothing wraps vertically, so there is no height equivalent of the shrink pass:
-    // content that does not fit overflows and is the clip flag's problem.
+    // Shrinking is allowed here even though nothing wraps vertically, and it changes
+    // nothing for most nodes: a child that is not shrinkable already sits on its own
+    // content as a floor, so it is filtered straight out and overflows exactly as
+    // before. What it does buy is the viewport -- a Grow child seeds at max-content, and
+    // without a shrink pass an overflowing scroll container would simply grow past its
+    // parent instead of becoming a window onto its contents.
     for (size_t i = 0; i < m_nodes.size(); i++)
-        distributeChildren((uint)i, UILayoutAxis::Vertical, false);
+        distributeChildren((uint)i, UILayoutAxis::Vertical, true);
+}
+
+// What the children actually occupy, measured from their *solved* sizes rather than
+// aggregated from intrinsics. The difference is the whole reason this is a pass of its
+// own: an intrinsic walk asks a child how wide it would like to be, and a scrollable
+// child answers with its content -- content it then clips and never paints. Reading the
+// solved size instead makes it answer with its viewport, so a scroll container inside a
+// scroll container does not hand its parent a range that reveals nothing.
+Vec2 UILayoutCalculator::contentExtent(uint index) const
+{
+    const UILayoutConfig& layout = m_nodes[index].node->layout;
+    UILayoutAxis mainAxis = mainAxisOf(*layout.direction);
+    UILayoutAxis crossAxis = crossAxisOf(*layout.direction);
+
+    float main = gapTotal(index);
+    float cross = 0.0f;
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) continue;
+
+        const UIEdges& margin = *m_nodes[child].node->layout.margin;
+        main += sizeOf(m_nodes[child], mainAxis) + axisPadding(margin, mainAxis);
+        cross =
+            Math::max(cross, sizeOf(m_nodes[child], crossAxis) + axisPadding(margin, crossAxis));
+    }
+
+    Vec2 extent = VEC2_ZERO;
+    axisSet(extent, mainAxis, main + axisPadding(*layout.padding, mainAxis));
+    axisSet(extent, crossAxis, cross + axisPadding(*layout.padding, crossAxis));
+    return extent;
+}
+
+// The offset is retained state, so it comes from the store rather than from the node --
+// a caller cannot set it, which is the point: overflow = Scroll is the whole interface.
+// Clamped and written straight back, so wheel input that ran past the end, or content
+// that shrank since, is corrected here instead of one frame later.
+void UILayoutCalculator::resolveScroll()
+{
+    UIStateStore& store = UIStateStore::get();
+
+    for (uint i = 0; i < (uint)m_nodes.size(); i++) {
+        UILayoutNode& node = m_nodes[i];
+        if (!node.isScrollable) continue;
+
+        node.contentSize = contentExtent(i);
+
+        Vec2& scroll = store.systemState(node.persistentKey).scroll;
+        scroll.x = Math::clamp(scroll.x, 0.0f, Math::max(node.contentSize.x - node.size.x, 0.0f));
+        scroll.y = Math::clamp(scroll.y, 0.0f, Math::max(node.contentSize.y - node.size.y, 0.0f));
+        node.scroll = scroll;
+    }
 }
 
 void UILayoutCalculator::computePositions()
@@ -298,14 +369,16 @@ void UILayoutCalculator::finalizeIntrinsic(uint index, UILayoutAxis axis)
     float min = intrinsicMin(m_nodes[index], axis);
     float max = intrinsicMax(m_nodes[index], axis);
 
+    // A shrinkable axis stops reporting its content as a floor, which is what lets a
+    // scroll container be shrunk below its content instead of pushing siblings out.
+    // Applied before Fixed rather than after: a fixed size is an instruction, not
+    // content, so nothing about overflow should let a sibling squash it.
+    if (isShrinkable(m_nodes[index], axis)) min = 0.0f;
+
     if (spec.mode == UISizeMode::Fixed) {
         min = spec.value;
         max = spec.value;
     }
-
-    // A clipped axis stops reporting its content as a floor, which is what lets a
-    // scroll container be shrunk below its content instead of pushing siblings out.
-    if (axisClipped(layout, axis)) min = 0.0f;
 
     min = Math::max(min, spec.min);
     min = Math::min(min, spec.max);
@@ -406,7 +479,7 @@ void UILayoutCalculator::positionChildren(uint index)
         used += sizeOf(m_nodes[child], mainAxis);
     }
 
-    Vec2 origin = m_nodes[index].pos + padding.topLeft() - *layout.scrollOffset;
+    Vec2 origin = m_nodes[index].pos + padding.topLeft() - m_nodes[index].scroll;
     float cursor = axisGet(origin, mainAxis) + alignOffset(*layout.alignMain, innerMain - used);
     float crossOrigin = axisGet(origin, crossAxis);
 
@@ -593,9 +666,11 @@ float UILayoutCalculator::clampToSpec(uint index, UILayoutAxis axis, float value
 
 float UILayoutCalculator::contentFloor(uint index, UILayoutAxis axis) const
 {
-    // clipX was already folded into minWidth by finalizeIntrinsic, but the vertical
-    // axis stores a single height, so clipY has to be honoured here instead.
-    if (axis == UILayoutAxis::Vertical && *m_nodes[index].node->layout.clipY) return 0.0f;
+    // The horizontal floor was already folded into minWidth by finalizeIntrinsic, but the
+    // vertical axis stores a single height, so the same rule is re-applied here.
+    if (axis == UILayoutAxis::Vertical && isShrinkable(m_nodes[index], axis) &&
+        axisSpec(m_nodes[index].node->layout, axis).mode != UISizeMode::Fixed)
+        return 0.0f;
     return intrinsicMin(m_nodes[index], axis);
 }
 

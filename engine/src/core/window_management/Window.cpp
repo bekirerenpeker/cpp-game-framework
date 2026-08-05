@@ -35,6 +35,7 @@ Window::Window(const WindowCreationOptions& opts, GLFWmonitor* monitor, GLFWwind
     glfwSetWindowUserPointer(m_glfwHandle, this);
     glfwSetWindowSizeCallback(m_glfwHandle, Window::sizeUpdateCallback);
     glfwSetWindowPosCallback(m_glfwHandle, Window::positionUpdateCallback);
+    glfwSetScrollCallback(m_glfwHandle, Window::scrollCallback);
 
     glfwGetWindowSize(m_glfwHandle, &m_width, &m_height);
     glfwGetWindowPos(m_glfwHandle, &m_xPos, &m_yPos);
@@ -58,6 +59,7 @@ void swap(Window& first, Window& second) noexcept
     swap(first.m_xPos, second.m_xPos);
     swap(first.m_yPos, second.m_yPos);
     swap(first.m_title, second.m_title);
+    swap(first.m_scrollDelta, second.m_scrollDelta);
 
     // Crucial: Update the GLFW User Pointer so callbacks point to the new instance
     if (first.m_glfwHandle) glfwSetWindowUserPointer(first.m_glfwHandle, &first);
@@ -140,6 +142,20 @@ void Window::positionUpdateCallback(GLFWwindow* glfwHandle, int x, int y)
     if (!window) return;
     window->m_xPos = x;
     window->m_yPos = y;
+}
+void Window::scrollCallback(GLFWwindow* glfwHandle, double xOffset, double yOffset)
+{
+    Window* window = static_cast<Window*>(glfwGetWindowUserPointer(glfwHandle));
+    if (!window) return;
+    window->m_scrollDelta.x += (float)xOffset;
+    window->m_scrollDelta.y += (float)yOffset;
+}
+
+Vec2 Window::consumeScrollDelta()
+{
+    Vec2 delta = m_scrollDelta;
+    m_scrollDelta = VEC2_ZERO;
+    return delta;
 }
 
 void Window::bindRenderContext()

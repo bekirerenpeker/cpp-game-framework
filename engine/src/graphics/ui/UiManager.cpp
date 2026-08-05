@@ -14,6 +14,10 @@ namespace Engine {
 
 namespace {
 
+// Pixels per wheel tick, scaled with the UI so a notch travels the same apparent
+// distance whatever the theme scale is.
+constexpr float SCROLL_WHEEL_STEP = 48.0f;
+
 // Distinct seeds so an unnamed node's positional index and a named node's hash never
 // collide into the same key.
 constexpr uint64_t POSITIONAL_KEY_SEED = 1;
@@ -38,14 +42,18 @@ bool paintsAbove(const UILayoutNode& node, const UILayoutNode& other)
     return true;
 }
 
+bool containsClip(const Vec4& clip, Vec2 mouse)
+{
+    return mouse.x >= clip.x && mouse.y >= clip.y && mouse.x <= clip.z && mouse.y <= clip.w;
+}
+
 bool containsMouse(const UILayoutNode& node, Vec2 mouse)
 {
     Vec2 half = node.size * 0.5f;
     Vec2 delta = mouse - node.drawPos;
     if (Math::abs(delta.x) > half.x || Math::abs(delta.y) > half.y) return false;
 
-    const Vec4& clip = node.clipRect;
-    return mouse.x >= clip.x && mouse.y >= clip.y && mouse.x <= clip.z && mouse.y <= clip.w;
+    return containsClip(node.clipRect, mouse);
 }
 
 UINodeState computeState(
@@ -114,7 +122,6 @@ void applyScale(UILayoutConfig& layout, float scale)
     layout.floating->offset = layout.floating->offset * scale;
     *layout.gap *= scale;
     *layout.offset = *layout.offset * scale;
-    *layout.scrollOffset = *layout.scrollOffset * scale;
 }
 
 // The style's own lengths, or a scaled-up UI keeps hairline borders and tight radii on
@@ -184,6 +191,15 @@ void UIManager::resolveInput()
     const std::vector<UILayoutNode>& prev = UILayoutCalculator::get().getPrevFrameNodes();
     Input& input = Input::get();
 
+    // Scrollbars are derived from solved geometry rather than declared as nodes, so they
+    // are not in the array everything below searches and have to be resolved first.
+    // Taking the frame when one is touched is not a shortcut: a bar paints above every
+    // node in its layer, so the content visually underneath it must not answer instead.
+    if (resolveScrollbars(prev, mouse)) {
+        m_activeKey = NO_KEY;
+        return;
+    }
+
     // Capture survives one frame past the button coming up, so the node that was
     // pressed is the one that sees isReleased. Dropping it on button-up would hand
     // the release to whatever the cursor had wandered onto by then.
@@ -227,6 +243,112 @@ void UIManager::resolveInput()
     // reads as the panel flickering off whenever the cursor crosses its contents.
     for (uint i = hit; i != NO_LAYOUT_NODE; i = prev[i].parent)
         m_hoveredKeys.push_back(prev[i].persistentKey);
+
+    routeScrollWheel(prev, hit);
+}
+
+// Outward from the node under the cursor. An axis this node cannot move on is left in
+// the wheel and carries on up, which is what makes a list inside a panel hand the rest
+// of the gesture to the panel once it has reached its own end.
+void UIManager::routeScrollWheel(const std::vector<UILayoutNode>& prev, uint hit)
+{
+    Vec2 wheel = Input::get().getScrollDelta();
+    if (wheel == VEC2_ZERO) return;
+
+    wheel = wheel * (SCROLL_WHEEL_STEP * UIThemeManager::get().getScale());
+    UIStateStore& store = UIStateStore::get();
+
+    for (uint i = hit; i != NO_LAYOUT_NODE; i = prev[i].parent) {
+        if (wheel == VEC2_ZERO) return;
+        if (!prev[i].isScrollable) continue;
+
+        Vec2& scroll = store.systemState(prev[i].persistentKey).scroll;
+        Vec2 range = Vec2(
+            Math::max(prev[i].contentSize.x - prev[i].size.x, 0.0f),
+            Math::max(prev[i].contentSize.y - prev[i].size.y, 0.0f)
+        );
+
+        // y is negated because a wheel reads y-up and a scroll offset is y-down.
+        float x = Math::clamp(scroll.x + wheel.x, 0.0f, range.x);
+        float y = Math::clamp(scroll.y - wheel.y, 0.0f, range.y);
+
+        if (x != scroll.x) {
+            scroll.x = x;
+            wheel.x = 0.0f;
+        }
+        if (y != scroll.y) {
+            scroll.y = y;
+            wheel.y = 0.0f;
+        }
+    }
+}
+
+bool UIManager::resolveScrollbars(const std::vector<UILayoutNode>& prev, Vec2 mouse)
+{
+    Input& input = Input::get();
+    UIStateStore& store = UIStateStore::get();
+    float scale = UIThemeManager::get().getScale();
+
+    m_scrollHoverKey = NO_KEY;
+    if (!input.mouseButtonHeld(MouseButton::Left) && !input.mouseButtonReleased(MouseButton::Left))
+        m_scrollDrag.key = NO_KEY;
+
+    if (m_scrollDrag.key != NO_KEY) {
+        for (const UILayoutNode& node : prev) {
+            if (node.persistentKey != m_scrollDrag.key) continue;
+
+            UIScrollbar bar = scrollbarOf(node, m_scrollDrag.axis, m_scrollbarStyle, scale);
+            if (bar.travel <= 0.0f) break;
+
+            // The pointer is y-up and the offset y-down, so the vertical drag reads the
+            // opposite way round from the horizontal one.
+            float moved = m_scrollDrag.axis == UILayoutAxis::Vertical ?
+                              m_scrollDrag.pointerOrigin - mouse.y :
+                              mouse.x - m_scrollDrag.pointerOrigin;
+
+            float value = m_scrollDrag.scrollOrigin + moved / bar.travel * bar.range;
+            Vec2& scroll = store.systemState(node.persistentKey).scroll;
+            axisSet(scroll, m_scrollDrag.axis, Math::clamp(value, 0.0f, bar.range));
+
+            m_scrollHoverKey = m_scrollDrag.key;
+            m_scrollHoverAxis = m_scrollDrag.axis;
+            break;
+        }
+        return true;
+    }
+
+    // A live node drag outranks a bar: dragging a slider across one must not hand the
+    // gesture over halfway through.
+    if (m_activeKey != NO_KEY) return false;
+
+    const UILayoutNode* found = nullptr;
+    UILayoutAxis foundAxis = UILayoutAxis::Vertical;
+
+    for (const UILayoutNode& node : prev) {
+        if (!node.isScrollable || !containsClip(node.clipRect, mouse)) continue;
+        if (found && !paintsAbove(node, *found)) continue;
+
+        for (UILayoutAxis axis : {UILayoutAxis::Vertical, UILayoutAxis::Horizontal}) {
+            if (!scrollbarThumbContains(scrollbarOf(node, axis, m_scrollbarStyle, scale), mouse))
+                continue;
+            found = &node;
+            foundAxis = axis;
+        }
+    }
+
+    if (!found) return false;
+
+    m_scrollHoverKey = found->persistentKey;
+    m_scrollHoverAxis = foundAxis;
+
+    if (input.mouseButtonPressed(MouseButton::Left)) {
+        m_scrollDrag.key = found->persistentKey;
+        m_scrollDrag.axis = foundAxis;
+        m_scrollDrag.pointerOrigin = foundAxis == UILayoutAxis::Vertical ? mouse.y : mouse.x;
+        m_scrollDrag.scrollOrigin = axisGet(found->scroll, foundAxis);
+    }
+
+    return true;
 }
 
 bool UIManager::isKeyHovered(uint64_t key) const
@@ -433,6 +555,7 @@ void UIManager::draw()
         // glyph above every box no matter where the tree says they belong. Emitting a
         // layer at a time and resolving both batches per layer keeps the tree's order
         // while still costing only two draw calls per layer rather than per node.
+        float scale = UIThemeManager::get().getScale();
         for (uint layer = 0; layer <= maxLayer; layer++) {
             for (const UILayoutNode& layoutNode : solved) {
                 if (layoutNode.paintLayer != layer) continue;
@@ -442,6 +565,27 @@ void UIManager::draw()
             }
             renderer.flush();
             TextRenderer::get().flush();
+
+            // After both flushes rather than with the boxes: a container's children share
+            // its layer, so a bar drawn alongside it would end up beneath the very
+            // content it scrolls -- and glyphs are a separate batch, so "above the text"
+            // is a matter of flush order, not submission order. Clipped by the node's own
+            // rect, not the one it hands down, since a bar is not part of what scrolls.
+            bool anyBar = false;
+            for (const UILayoutNode& layoutNode : solved) {
+                if (layoutNode.paintLayer != layer || !layoutNode.isScrollable) continue;
+
+                bool hovered = layoutNode.persistentKey == m_scrollHoverKey;
+                for (UILayoutAxis axis : {UILayoutAxis::Vertical, UILayoutAxis::Horizontal}) {
+                    UIScrollbar bar = scrollbarOf(layoutNode, axis, m_scrollbarStyle, scale);
+                    drawScrollbar(
+                        bar, m_scrollbarStyle, hovered && m_scrollHoverAxis == axis,
+                        layoutNode.clipRect
+                    );
+                    anyBar = anyBar || bar.isVisible;
+                }
+            }
+            if (anyBar) renderer.flush();
         }
     }
 

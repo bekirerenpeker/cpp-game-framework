@@ -106,7 +106,6 @@ struct UIFloatingConfig
     X(UIEdges, padding, UIEdges {})                                                                \
     X(UIEdges, margin, UIEdges {})                                                                 \
     X(UIFloatingConfig, floating, UIFloatingConfig {})                                             \
-    X(Vec2, scrollOffset, VEC2_ZERO)                                                               \
     X(Vec2, offset, VEC2_ZERO)                                                                     \
     X(Vec2, scale, VEC2_ONE)                                                                       \
     X(float, gap, 0.0f)                                                                            \
@@ -180,6 +179,9 @@ inline float axisTrailing(const UIEdges& edges, UILayoutAxis axis)
     return axis == UILayoutAxis::Horizontal ? edges.right : edges.bottom;
 }
 
+// The explicit half of "this axis may be smaller than what is in it". overflow implies
+// it and is what a container should set; these stay for a leaf, which has no style of
+// its own to put an overflow on and still has to be shrinkable -- a clipped label.
 inline bool axisClipped(const UILayoutConfig& config, UILayoutAxis axis)
 {
     return axis == UILayoutAxis::Horizontal ? *config.clipX : *config.clipY;

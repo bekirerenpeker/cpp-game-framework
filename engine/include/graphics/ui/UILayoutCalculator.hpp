@@ -29,6 +29,7 @@ struct UILayoutNode
     // Sticky down the subtree: an overlay that should not block what it covers has to
     // stop its children blocking too, or its own contents take the hit instead.
     bool ignoresInput = false;
+    bool isScrollable = false;
     // Paint order is the preorder walk, so the tree already says what is above what.
     // This is the escape hatch for when that is not enough: a layer raises a node and
     // its whole subtree above everything in lower layers, whatever the walk says.
@@ -49,6 +50,11 @@ struct UILayoutNode
     Vec2 pos = VEC2_ZERO;
     Vec2 size = VEC2_ZERO;
     Vec2 drawPos = VEC2_ZERO;
+    // What the children asked for before this node's own sizing had its say, and the
+    // offset the solve settled on against it. size is the viewport, contentSize is what
+    // scrolls through it, and a scrollbar is the ratio of the two.
+    Vec2 contentSize = VEC2_ZERO;
+    Vec2 scroll = VEC2_ZERO;
 
     // minX, minY, maxX, maxY in draw space. clipRect is what this node's own drawing
     // is bounded by, childClipRect is what it passes down -- they differ by this
@@ -91,6 +97,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     void computeFinalWidths();
     void computeIntrinsicHeights();
     void computeFinalHeights();
+    void resolveScroll();
     void computePositions();
     void applyTransforms();
     void computeDrawPositions(Vec2 rootTopLeft);
@@ -107,6 +114,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     void levelUp(UILayoutAxis axis, float remaining);
     void levelDown(UILayoutAxis axis, float deficit);
 
+    Vec2 contentExtent(uint index) const;
     float resolveRootSize(UILayoutAxis axis) const;
     float seedChildSize(uint index, UILayoutAxis axis, float available) const;
     float clampToSpec(uint index, UILayoutAxis axis, float value) const;

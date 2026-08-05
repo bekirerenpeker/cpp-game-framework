@@ -1,6 +1,7 @@
 #pragma once
 
 #include "graphics/ui/UINode.hpp"
+#include "graphics/ui/UIScrollbar.hpp"
 #include "graphics/ui/leafs/UIShaderLeafData.hpp"
 #include "graphics/ui/leafs/UITextLeafData.hpp"
 #include "utils/IdIndexedVector.hpp"
@@ -48,6 +49,21 @@ class UIManager : public Singleton<UIManager>
     std::vector<uint64_t> m_hoveredKeys;
     uint64_t m_activeKey = NO_KEY;
 
+    // A bar is not a node, so it cannot ride on m_activeKey: it carries its own capture,
+    // and the origins with it, the same shape one node's drag would have taken.
+    struct ScrollDrag
+    {
+        uint64_t key = NO_KEY;
+        UILayoutAxis axis = UILayoutAxis::Vertical;
+        float pointerOrigin = 0.0f;
+        float scrollOrigin = 0.0f;
+    };
+
+    ScrollDrag m_scrollDrag;
+    uint64_t m_scrollHoverKey = NO_KEY;
+    UILayoutAxis m_scrollHoverAxis = UILayoutAxis::Vertical;
+    UIScrollbarStyle m_scrollbarStyle;
+
     const Font* m_font = nullptr;
 
   public:
@@ -55,6 +71,13 @@ class UIManager : public Singleton<UIManager>
 
     void setFont(const Font* font) { m_font = font; }
     const Font* getFont() const { return m_font; }
+
+    // Pushed in rather than read from the theme, the same way the font is: a bar belongs
+    // to no container, so there is no style spec it could have come from.
+    void setScrollbarStyle(const UIScrollbarStyle& style) { m_scrollbarStyle = style; }
+    const UIScrollbarStyle& getScrollbarStyle() const { return m_scrollbarStyle; }
+
+    bool isMouseOverUi() const { return !m_hoveredKeys.empty(); }
 
     UINodeState openContainer(
         const UILayoutConfig& layout = {}, const UIContainerStyleSpec& style = {},
@@ -81,6 +104,8 @@ class UIManager : public Singleton<UIManager>
     ~UIManager();
 
     void resolveInput();
+    bool resolveScrollbars(const std::vector<UILayoutNode>& prev, Vec2 mouse);
+    void routeScrollWheel(const std::vector<UILayoutNode>& prev, uint hit);
     bool isKeyHovered(uint64_t key) const;
 
     UINodeState addNode(const UILayoutConfig& layout, std::string_view key = {});

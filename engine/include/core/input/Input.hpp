@@ -32,6 +32,7 @@ class Input : public Singleton<Input>
         bool keyCurrState[KEY_COUNT] = {}, keyPrevState[KEY_COUNT] = {};
         bool buttonCurrState[BUTTON_COUNT] = {}, buttonPrevState[BUTTON_COUNT] = {};
         Vec2 mousePos = VEC2_ZERO;
+        Vec2 scrollDelta = VEC2_ZERO;
     };
 
     std::unordered_map<IdType, WindowState> m_windowStates;
@@ -54,6 +55,10 @@ class Input : public Singleton<Input>
     bool mouseButtonHeld(MouseButton button);
 
     Vec2 getMousePos();
+    // x right, y up, in wheel ticks. A trackpad reports both axes itself; a wheel only
+    // reports y, so shift moves it onto x here -- which channel a device's scroll lands
+    // in is settled once, so a reader only ever sees a Vec2.
+    Vec2 getScrollDelta();
 
   private:
     Input() = default;

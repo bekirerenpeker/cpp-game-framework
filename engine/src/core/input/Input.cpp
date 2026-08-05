@@ -39,6 +39,18 @@ void Input::update()
     glfwGetCursorPos(window->getGlfwHandle(), &mouseX, &mouseY);
     state.mousePos.x = mouseX - window->getWidth() / 2.f;
     state.mousePos.y = window->getHeight() / 2.f - mouseY;
+
+    // Read after the keys, so shift is this frame's. A device that already reports x is
+    // left alone: only a wheel, which physically has one axis, gets remapped. Negated
+    // because shift-wheel-up means left everywhere it exists.
+    Vec2 scroll = window->consumeScrollDelta();
+    bool shiftHeld =
+        state.keyCurrState[(int)KeyCode::LeftShift] || state.keyCurrState[(int)KeyCode::RightShift];
+    if (shiftHeld && scroll.x == 0.0f) {
+        scroll.x = -scroll.y;
+        scroll.y = 0.0f;
+    }
+    state.scrollDelta = scroll;
 }
 
 bool Input::keyPressed(KeyCode key)
@@ -77,6 +89,12 @@ Vec2 Input::getMousePos()
 {
     if (!m_currState) return VEC2_ZERO;
     return m_currState->mousePos;
+}
+
+Vec2 Input::getScrollDelta()
+{
+    if (!m_currState) return VEC2_ZERO;
+    return m_currState->scrollDelta;
 }
 
 }   // namespace Engine

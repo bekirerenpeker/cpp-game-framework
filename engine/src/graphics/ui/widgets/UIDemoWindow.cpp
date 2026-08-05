@@ -1,6 +1,7 @@
 #include "graphics/ui/widgets/UIDemoWindow.hpp"
 #include "graphics/ui/widgets/UIWidgets.hpp"
 #include "graphics/ui/theme/UIThemePresets.hpp"
+#include <format>
 #include <string>
 #include <vector>
 
@@ -164,6 +165,44 @@ void themeTab()
 
 }   // namespace
 
+// Nothing here asks for scrolling: the box is a fixed height with more in it than fits,
+// and overflow = Scroll is the whole of the opt-in. The long rows do not wrap, so their
+// min-content is the whole line and the same box overflows sideways too.
+void scrollTab()
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    text("A fixed-height box with more in it than fits, on both axes.");
+    horizontalDivider();
+
+    openContainer(
+        {.width = UISizeSpec::grow(),
+         .height = UISizeSpec::fixed(200.0f),
+         .padding = UIEdges(metrics.spacing.sm),
+         .gap = metrics.spacing.xs,
+         .direction = UILayoutDirection::Column},
+        {.backgroundColor = colors.surfaceSunken,
+         .borderColor = colors.border,
+         .borderWidth = metrics.borderWidth.thin,
+         .borderRadius = metrics.radius.md,
+         .overflow = UIOverflow::Scroll}
+    );
+
+    for (int i = 0; i < 30; i++) {
+        std::string label = std::format("Row {}", i);
+        if (i % 7 == 3)
+            label += "  -- and a deliberately long unwrapped line to push the box sideways";
+
+        text(label, {.textConfig = {.wrapEnabled = false}});
+    }
+
+    closeContainer();
+
+    horizontalDivider();
+    text("Wheel scrolls vertically, shift+wheel horizontally, and either bar drags.");
+}
+
 void demoWindow()
 {
     applyEdits();
@@ -181,7 +220,7 @@ void demoWindow()
 
     openWindow("Demo Window");
 
-    toolbarMenu({"Widgets", "Sliders", "Color", "Theme"}, selectedMenu);
+    toolbarMenu({"Widgets", "Sliders", "Color", "Theme", "Scroll"}, selectedMenu);
 
     switch (selectedMenu) {
     case 0: {
@@ -256,6 +295,8 @@ void demoWindow()
         break;
 
     case 3: themeTab(); break;
+
+    case 4: scrollTab(); break;
 
     default: break;
     }

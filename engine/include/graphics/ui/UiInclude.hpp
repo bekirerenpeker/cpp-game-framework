@@ -8,5 +8,6 @@
 #include "UILayoutCalculator.hpp"
 #include "UINode.hpp"
 #include "UIRenderer.hpp"
+#include "UIScrollbar.hpp"
 #include "UIStateStore.hpp"
 #include "UiManager.hpp"

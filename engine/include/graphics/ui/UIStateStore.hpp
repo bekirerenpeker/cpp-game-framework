@@ -43,12 +43,11 @@ struct UIStateFlag
 };
 
 // What the UI's own systems own, as opposed to the string-keyed values a widget stores:
-// solved geometry that has to survive into the next frame's solve, which is why it is a
-// named field the calculator can reach rather than a hashed one.
+// state the solver reads and writes every frame, which is why it is a named field it can
+// reach rather than a hashed one.
 struct UINodeSystemState
 {
     Vec2 scroll = VEC2_ZERO;
-    Vec2 contentSize = VEC2_ZERO;
 };
 
 class UIStateStore : public Singleton<UIStateStore>
