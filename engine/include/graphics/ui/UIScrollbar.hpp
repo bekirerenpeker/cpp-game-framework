@@ -11,12 +11,19 @@ struct UILayoutNode;
 
 struct UIScrollbarStyle
 {
-    Color trackColor = Color(0.0f, 0.0f, 0.0f, 0.16f);
-    Color thumbColor = Color(1.0f, 1.0f, 1.0f, 0.26f);
-    Color thumbHoverColor = Color(1.0f, 1.0f, 1.0f, 0.50f);
-    float thickness = 8.0f;
-    float minThumbLength = 24.0f;
-    float radius = 4.0f;
+    Color trackColor = Color(0.0f, 0.0f, 0.0f, 0.22f);
+    Color trackBorderColor = Color(1.0f, 1.0f, 1.0f, 0.14f);
+    Color thumbColor = Color(1.0f, 1.0f, 1.0f, 0.34f);
+    Color thumbBorderColor = Color(1.0f, 1.0f, 1.0f, 0.50f);
+    Color thumbHoverColor = Color(1.0f, 1.0f, 1.0f, 0.58f);
+    Color thumbHoverBorderColor = Color(1.0f, 1.0f, 1.0f, 0.90f);
+    float thickness = 12.0f;
+    float minThumbLength = 28.0f;
+    float radius = 6.0f;
+    float borderWidth = 1.0f;
+    // Holds the thumb clear of the track's own outline, so the two rings read as a
+    // handle sitting in a trough instead of one muddy doubled edge.
+    float thumbInset = 2.0f;
 };
 
 // A bar is not a node: it is derived from a solved UILayoutNode every frame, so it needs
@@ -32,6 +39,7 @@ struct UIScrollbar
     Vec2 thumbPos = VEC2_ZERO;
     Vec2 thumbSize = VEC2_ZERO;
     float radius = 0.0f;
+    float borderWidth = 0.0f;
     float travel = 0.0f;
     float range = 0.0f;
 };

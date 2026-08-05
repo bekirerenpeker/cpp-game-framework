@@ -7,12 +7,16 @@ namespace Engine {
 
 namespace {
 
-UIContainerStyle barQuad(Color color, float radius)
+// Capped at half the short side, since a radius wider than the box it rounds leaves the
+// SDF describing something the box cannot be.
+UIContainerStyle barQuad(Color fill, Color border, float borderWidth, float radius, Vec2 size)
 {
     UIContainerStyle style;
     style.fillDefaults();
-    style.backgroundColor = color;
-    style.borderRadius = UICorners(radius);
+    style.backgroundColor = fill;
+    style.borderColor = border;
+    style.borderWidth = borderWidth;
+    style.borderRadius = UICorners(Math::min(radius, Math::min(size.x, size.y) * 0.5f));
     return style;
 }
 
@@ -48,19 +52,21 @@ scrollbarOf(const UILayoutNode& node, UILayoutAxis axis, const UIScrollbarStyle&
 
     bar.travel = trackLength - thumbLength;
     bar.radius = style.radius * scale;
+    bar.borderWidth = style.borderWidth * scale;
 
+    float thumbThickness = Math::max(thickness - 2.0f * style.thumbInset * scale, 1.0f);
     float t = Math::clamp(axisGet(node.scroll, axis) / bar.range, 0.0f, 1.0f);
 
     // Scroll runs y-down while draw space is y-up, so the vertical thumb walks *down*
     // from the top of its track while the horizontal one walks right from the left.
     if (axis == UILayoutAxis::Vertical) {
-        bar.thumbSize = Vec2(thickness, thumbLength);
+        bar.thumbSize = Vec2(thumbThickness, thumbLength);
         bar.thumbPos = Vec2(
             bar.trackPos.x,
             bar.trackPos.y + trackLength * 0.5f - t * bar.travel - thumbLength * 0.5f
         );
     } else {
-        bar.thumbSize = Vec2(thumbLength, thickness);
+        bar.thumbSize = Vec2(thumbLength, thumbThickness);
         bar.thumbPos = Vec2(
             bar.trackPos.x - trackLength * 0.5f + t * bar.travel + thumbLength * 0.5f,
             bar.trackPos.y
@@ -88,11 +94,20 @@ void drawScrollbar(
 
     UIRenderer& renderer = UIRenderer::get();
     renderer.addContainerQuad(
-        bar.trackPos, bar.trackSize, barQuad(style.trackColor, bar.radius), clipRect
+        bar.trackPos, bar.trackSize,
+        barQuad(
+            style.trackColor, style.trackBorderColor, bar.borderWidth, bar.radius, bar.trackSize
+        ),
+        clipRect
     );
     renderer.addContainerQuad(
         bar.thumbPos, bar.thumbSize,
-        barQuad(thumbHovered ? style.thumbHoverColor : style.thumbColor, bar.radius), clipRect
+        barQuad(
+            thumbHovered ? style.thumbHoverColor : style.thumbColor,
+            thumbHovered ? style.thumbHoverBorderColor : style.thumbBorderColor, bar.borderWidth,
+            bar.radius, bar.thumbSize
+        ),
+        clipRect
     );
 }
 
