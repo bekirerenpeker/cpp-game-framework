@@ -1,11 +1,11 @@
 #include "graphics/ui/widgets/UIWidgets.hpp"
 #include "graphics/ui/widgets/UIWidgetsInternal.hpp"
 #include "core/input/Input.hpp"
+#include "graphics/ui/UIStateStore.hpp"
 #include "graphics/ui/UiManager.hpp"
 #include "utils/math/MathFuncs.hpp"
 #include <format>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace Engine {
@@ -25,12 +25,6 @@ float snapValue(float value, float minValue, float maxValue, float step)
     if (step > 0.0f) value = minValue + Math::round((value - minValue) / step) * step;
     return Math::clamp(value, minValue, maxValue);
 }
-
-// Keyed on the caller's own variable, the way colorPickerPopup keys on its colour: a
-// dropdown is rebuilt from nothing every frame, so whether it is open can only live
-// somewhere that outlives the frame, and the bound selection is the one thing the
-// caller guarantees is stable.
-std::unordered_map<const void*, bool> g_dropdownOpen;
 
 }   // namespace
 
@@ -465,8 +459,6 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
     const UIThemeColors& colors = UITheming::colors();
     const UIThemeMetrics& metrics = UITheming::metrics();
 
-    bool& open = g_dropdownOpen[&selected];
-
     DropdownConfig defaultConfig = {
         .wrapperLayout = {},
         .buttonLayout =
@@ -566,7 +558,8 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
     defaultConfig.itemTextConfig.style.combine(config.itemTextConfig.style);
     defaultConfig.selectedItemTextStyle.combine(config.selectedItemTextStyle);
 
-    openContainer(defaultConfig.wrapperLayout, {}, config.key);
+    UINodeState wrapper = openContainer(defaultConfig.wrapperLayout, {}, config.key);
+    UIStateFlag open = UIStateStore::get().flag(wrapper.persistentKey, "dropdownOpen");
 
     UINodeState button = openContainer(defaultConfig.buttonLayout, defaultConfig.buttonStyle);
 

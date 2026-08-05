@@ -2,10 +2,10 @@
 #include "graphics/ui/widgets/UIWidgetsInternal.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "graphics/ui/UIRenderer.hpp"
+#include "graphics/ui/UIStateStore.hpp"
 #include "graphics/ui/UiManager.hpp"
 #include "utils/math/MathFuncs.hpp"
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace Engine {
@@ -15,36 +15,19 @@ namespace UIWidgets {
 namespace {
 
 const Vec2 WINDOW_MIN(200.0f, 120.0f);
+const Vec2 WINDOW_DEFAULT_POS(60.0f, 60.0f);
+const Vec2 WINDOW_DEFAULT_SIZE(700.0f, 500.0f);
 const Vec2 POS_UNBOUNDED(-UI_UNBOUNDED, -UI_UNBOUNDED);
 
-struct UIDragState
-{
-    bool isActive = false;
-    Vec2 pointerOrigin = VEC2_ZERO;
-    Vec2 valueOrigin = VEC2_ZERO;
-};
-
-struct UIWindowState
-{
-    Vec2 pos = Vec2(60.0f, 60.0f);
-    Vec2 size = Vec2(700.0f, 500.0f);
-    bool isCollapsed = false;
-
-    UIDragState moveDrag;
-    UIDragState resizeDrag;
-};
-
-// The body's id has to survive to closeWindow, which is where a collapsed window throws
-// away whatever the caller declared into it.
+// The state key rather than a pointer, since closeWindow has to reach the same entries
+// openWindow read and the store is addressed by key throughout. The body's id has to
+// survive with it: that is where a collapsed window throws away what the caller declared.
 struct UIOpenWindow
 {
-    UIWindowState* state = nullptr;
+    uint64_t stateKey = 0;
     IdType bodyId = INVALID_ID;
 };
 
-// Keyed rather than positional, and never erased, because the tree is rebuilt every
-// frame and this is the only thing about a window that outlives it.
-std::unordered_map<std::string, UIWindowState> g_windowStates;
 std::vector<UIOpenWindow> g_openWindows;
 
 struct UIOpenSection
@@ -53,13 +36,17 @@ struct UIOpenSection
     bool isOpen = false;
 };
 
-std::unordered_map<std::string, bool> g_sectionOpen;
 std::vector<UIOpenSection> g_openSections;
 
-void dragVec2(const UINodeState& handle, UIDragState& drag, Vec2& value, Vec2 minValue)
+// The origins hang off the handle's own node rather than off whatever is being dragged,
+// so a widget no longer has to own a drag struct to be draggable.
+void dragVec2(const UINodeState& handle, Vec2& value, Vec2 minValue)
 {
+    UIStateStore& store = UIStateStore::get();
+    UIStateFlag isDragging = store.flag(handle.persistentKey, "dragActive");
+
     if (!handle.isActive) {
-        drag.isActive = false;
+        isDragging = false;
         return;
     }
 
@@ -67,18 +54,17 @@ void dragVec2(const UINodeState& handle, UIDragState& drag, Vec2& value, Vec2 mi
     // every config field is written in -- the layout scale is applied to them again as
     // the window is declared, and a scaled UI would otherwise drag at the wrong rate.
     Vec2 mouse = unscale(UIRenderer::get().getMouseUiPos());
-    if (!drag.isActive) {
-        drag.isActive = true;
-        drag.pointerOrigin = mouse;
-        drag.valueOrigin = value;
+    if (!isDragging) {
+        isDragging = true;
+        store.setVec2(handle.persistentKey, "dragPointerOrigin", mouse);
+        store.setVec2(handle.persistentKey, "dragValueOrigin", value);
     }
 
     // The mouse is y-up while both the position and the size are y-down.
-    Vec2 delta = mouse - drag.pointerOrigin;
-    value = Vec2(
-        Math::max(drag.valueOrigin.x + delta.x, minValue.x),
-        Math::max(drag.valueOrigin.y - delta.y, minValue.y)
-    );
+    Vec2 delta = mouse - store.getVec2(handle.persistentKey, "dragPointerOrigin");
+    Vec2 origin = store.getVec2(handle.persistentKey, "dragValueOrigin");
+    value =
+        Vec2(Math::max(origin.x + delta.x, minValue.x), Math::max(origin.y - delta.y, minValue.y));
 }
 
 }   // namespace
@@ -127,8 +113,6 @@ bool openSection(const std::string& label, const SectionConfig& config)
     const UIThemeMetrics& metrics = UITheming::metrics();
 
     std::string_view sectionKey = config.key.empty() ? std::string_view(label) : config.key;
-    auto found = g_sectionOpen.try_emplace(std::string(sectionKey), config.openByDefault);
-    bool& isOpen = found.first->second;
 
     SectionConfig defaultConfig = {
         .sectionLayout =
@@ -186,7 +170,12 @@ bool openSection(const std::string& label, const SectionConfig& config)
     defaultConfig.bodyLayout.combine(config.bodyLayout);
     defaultConfig.bodyStyle.combine(config.bodyStyle);
 
-    openContainer(defaultConfig.sectionLayout, defaultConfig.sectionStyle, sectionKey);
+    // Opened before the state is read, because the section's own node is what the state
+    // hangs off: a name alone would collide with the same name under another parent.
+    UINodeState section =
+        openContainer(defaultConfig.sectionLayout, defaultConfig.sectionStyle, sectionKey);
+    UIStateFlag isOpen =
+        UIStateStore::get().flag(section.persistentKey, "sectionOpen", config.openByDefault);
 
     UINodeState header = openContainer(defaultConfig.headerLayout, defaultConfig.headerStyle);
     // Applied before anything reads it, so the arrow and the body agree within the frame
@@ -245,8 +234,19 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
     const UIThemeMetrics& metrics = UITheming::metrics();
 
     std::string_view windowKey = config.key.empty() ? std::string_view(name) : config.key;
-    UIWindowState& state = g_windowStates[std::string(windowKey)];
-    bool collapsed = state.isCollapsed;
+
+    // A root's own position is forced to zero and floating is applied by the parent, so a
+    // top-level window needs this invisible wrapper to have something to float in.
+    // Floating too, so a nested window books no slot in the list around it. Opened first
+    // of all because its key is what the stored geometry hangs off, and that geometry is
+    // an input to the window's own layout.
+    UINodeState wrapper = openContainer({.isFloating = true}, {}, windowKey);
+
+    UIStateStore& store = UIStateStore::get();
+    uint64_t stateKey = wrapper.persistentKey;
+    Vec2 pos = store.getVec2(stateKey, "windowPos", WINDOW_DEFAULT_POS);
+    Vec2 size = store.getVec2(stateKey, "windowSize", WINDOW_DEFAULT_SIZE);
+    UIStateFlag collapsed = store.flag(stateKey, "windowCollapsed");
 
     // Grown to whatever the title style needs rather than pinned to controlHeight: the
     // bar is a Fixed height (the collapsed window is exactly it, so it cannot be a Fit),
@@ -258,9 +258,9 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
     WindowConfig defaultConfig = {
         .windowLayout =
             {
-                           .width = UISizeSpec::fixed(state.size.x),
-                           .height = UISizeSpec::fixed(collapsed ? titleHeight : state.size.y),
-                           .floating = UIFloatingConfig {.offset = state.pos},
+                           .width = UISizeSpec::fixed(size.x),
+                           .height = UISizeSpec::fixed(collapsed ? titleHeight : size.y),
+                           .floating = UIFloatingConfig {.offset = pos},
                            .direction = UILayoutDirection::Column,
                            .isFloating = true,
                            },
@@ -313,11 +313,6 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
     defaultConfig.bodyLayout.combine(config.bodyLayout);
     defaultConfig.bodyStyle.combine(config.bodyStyle);
 
-    // A root's own position is forced to zero and floating is applied by the parent, so
-    // a top-level window needs this invisible wrapper to have something to float in.
-    // Floating too, so a nested window books no slot in the list around it.
-    openContainer({.isFloating = true}, {}, windowKey);
-
     UINodeState window =
         openContainer(defaultConfig.windowLayout, defaultConfig.windowStyle, windowKey);
 
@@ -341,15 +336,16 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
          .onHover = {.backgroundColor = colors.foreground}}
     );
     closeContainer();
-    if (collapseButton.isPressed) state.isCollapsed = !collapsed;
+    if (collapseButton.isPressed) collapsed = !collapsed;
 
     closeContainer();
 
-    dragVec2(titleBar, state.moveDrag, state.pos, POS_UNBOUNDED);
+    dragVec2(titleBar, pos, POS_UNBOUNDED);
+    store.setVec2(stateKey, "windowPos", pos);
 
     IdType bodyId = openContainer(defaultConfig.bodyLayout, defaultConfig.bodyStyle).id;
 
-    g_openWindows.push_back({&state, bodyId});
+    g_openWindows.push_back({stateKey, bodyId});
     return window;
 }
 
@@ -361,7 +357,6 @@ void closeWindow()
     }
 
     UIOpenWindow open = g_openWindows.back();
-    UIWindowState& state = *open.state;
     g_openWindows.pop_back();
 
     closeContainer();
@@ -369,11 +364,14 @@ void closeWindow()
     // Immediate mode gives the window no way to stop the caller declaring content, so a
     // collapsed one discards it here instead -- which also keeps it out of the solve
     // rather than merely hiding it. No grip either: there is nothing to resize.
-    if (state.isCollapsed) {
+    UIStateStore& store = UIStateStore::get();
+    if (store.flag(open.stateKey, "windowCollapsed")) {
         removeChildren(open.bodyId);
     } else {
         UINodeState grip = dragHandle();
-        dragVec2(grip, state.resizeDrag, state.size, WINDOW_MIN);
+        Vec2 size = store.getVec2(open.stateKey, "windowSize", WINDOW_DEFAULT_SIZE);
+        dragVec2(grip, size, WINDOW_MIN);
+        store.setVec2(open.stateKey, "windowSize", size);
     }
 
     closeContainer();

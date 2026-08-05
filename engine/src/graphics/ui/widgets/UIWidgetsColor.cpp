@@ -3,11 +3,11 @@
 #include "core/input/Input.hpp"
 #include "core/logging/LoggerMacros.hpp"
 #include "graphics/gl_wrappers/GlShader.hpp"
+#include "graphics/ui/UIStateStore.hpp"
 #include "graphics/ui/UiManager.hpp"
 #include "utils/math/MathFuncs.hpp"
 #include <format>
 #include <string>
-#include <unordered_map>
 
 namespace Engine {
 
@@ -33,11 +33,6 @@ GlShader* colorPickerShader()
     shader = new GlShader(path);
     return shader;
 }
-
-// Hue and saturation have no meaning in a black or greyscale RGB value, so they are
-// kept here per picker instead of being re-derived every frame and lost.
-std::unordered_map<const Color*, Vec3> g_pickerHsv;
-std::unordered_map<const Color*, bool> g_pickerOpen;
 
 }   // namespace
 
@@ -153,18 +148,27 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
     defaultConfig.valuesLayout.combine(config.valuesLayout);
     defaultConfig.valuesTextConfig.style.combine(config.valuesTextConfig.style);
 
-    Vec3& hsv = g_pickerHsv.try_emplace(&color, color.toHsv()).first->second;
+    float squareHeight = config.squareHeight > 0.0f ? config.squareHeight : 120.0f;
+
+    UINodeState picker =
+        openContainer(defaultConfig.pickerLayout, defaultConfig.pickerStyle, config.key);
+
+    // Hue and saturation have no meaning in a black or greyscale RGB value, so they are
+    // kept per picker instead of being re-derived from the colour every frame and lost.
+    UIStateStore& store = UIStateStore::get();
+    Vec3 fromColor = color.toHsv();
+    float& storedHue = store.value(picker.persistentKey, "pickerHue", fromColor.x);
+    float& storedSaturation = store.value(picker.persistentKey, "pickerSaturation", fromColor.y);
+    float& storedValue = store.value(picker.persistentKey, "pickerValue", fromColor.z);
+
     // The caller may have written the colour itself since last frame; only then is the
     // stored hue thrown away, so dragging to black does not lose it.
+    Vec3 hsv(storedHue, storedSaturation, storedValue);
     Color fromState = Color::fromHsv(hsv, color.a);
     if (Math::abs(fromState.r - color.r) > 0.001f || Math::abs(fromState.g - color.g) > 0.001f ||
         Math::abs(fromState.b - color.b) > 0.001f) {
-        hsv = color.toHsv();
+        hsv = fromColor;
     }
-
-    float squareHeight = config.squareHeight > 0.0f ? config.squareHeight : 120.0f;
-
-    openContainer(defaultConfig.pickerLayout, defaultConfig.pickerStyle, config.key);
 
     openContainer({
         .width = UISizeSpec::grow(),
@@ -250,6 +254,10 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
 
     color = Color::fromHsv(hsv, alpha);
 
+    storedHue = hsv.x;
+    storedSaturation = hsv.y;
+    storedValue = hsv.z;
+
     UIContainerStyleSpec previewStyle = defaultConfig.previewStyle;
     previewStyle.backgroundColor = color;
     openContainer(defaultConfig.previewLayout, previewStyle);
@@ -321,9 +329,8 @@ void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config)
     defaultConfig.panelLayout.combine(config.panelLayout);
     defaultConfig.panelStyle.combine(config.panelStyle);
 
-    bool& open = g_pickerOpen[&color];
-
-    openContainer(defaultConfig.wrapperLayout, {}, config.key);
+    UINodeState wrapper = openContainer(defaultConfig.wrapperLayout, {}, config.key);
+    UIStateFlag open = UIStateStore::get().flag(wrapper.persistentKey, "pickerOpen");
 
     UIContainerStyleSpec swatchStyle = defaultConfig.swatchStyle;
     swatchStyle.backgroundColor = color;

@@ -4,6 +4,7 @@
 #include "graphics/text/TextRenderer.hpp"
 #include "graphics/ui/UILayoutCalculator.hpp"
 #include "graphics/ui/UIRenderer.hpp"
+#include "graphics/ui/UIStateStore.hpp"
 #include "graphics/ui/theme/UIThemeManager.hpp"
 #include "utils/math/MathFuncs.hpp"
 #include <algorithm>
@@ -13,11 +14,6 @@ namespace Engine {
 
 namespace {
 
-uint64_t hashCombine(uint64_t seed, uint64_t value)
-{
-    return seed ^ (value + 0x9e3779b97f4a7c15ULL + (seed << 6) + (seed >> 2));
-}
-
 // Distinct seeds so an unnamed node's positional index and a named node's hash never
 // collide into the same key.
 constexpr uint64_t POSITIONAL_KEY_SEED = 1;
@@ -25,8 +21,8 @@ constexpr uint64_t NAMED_KEY_SEED = 2;
 
 uint64_t localKeyOf(std::string_view key, uint64_t positionalIndex)
 {
-    return key.empty() ? hashCombine(POSITIONAL_KEY_SEED, positionalIndex) :
-                         hashCombine(NAMED_KEY_SEED, std::hash<std::string_view> {}(key));
+    return key.empty() ? uiHashCombine(POSITIONAL_KEY_SEED, positionalIndex) :
+                         uiHashCombine(NAMED_KEY_SEED, std::hash<std::string_view> {}(key));
 }
 
 // A node is hittable only where it is actually visible, so the accumulated clip has to
@@ -52,10 +48,12 @@ bool containsMouse(const UILayoutNode& node, Vec2 mouse)
     return mouse.x >= clip.x && mouse.y >= clip.y && mouse.x <= clip.z && mouse.y <= clip.w;
 }
 
-UINodeState
-computeState(IdType id, const UILayoutNode* prev, bool hovered, bool hoveredDirectly, bool active)
+UINodeState computeState(
+    IdType id, uint64_t key, const UILayoutNode* prev, bool hovered, bool hoveredDirectly,
+    bool active
+)
 {
-    if (!prev) return {id};
+    if (!prev) return {.id = id, .persistentKey = key};
 
     Vec2 half = prev->size * 0.5f;
     // Both sides come from the same space -- the mouse through UIRenderer, drawPos
@@ -80,7 +78,8 @@ computeState(IdType id, const UILayoutNode* prev, bool hovered, bool hoveredDire
         relative,
         local,
         prev->pos,
-        prev->size
+        prev->size,
+        key
     };
 }
 
@@ -165,6 +164,8 @@ void UIManager::clear()
     m_nodes.clear();
     m_openStack.clear();
     m_roots.clear();
+
+    UIStateStore::get().beginFrame();
 
     // Resolved here rather than at the end of draw() because this is the last moment
     // before the tree is rebuilt, so it pairs this frame's mouse with last frame's
@@ -259,19 +260,19 @@ UINodeState UIManager::addNode(const UILayoutConfig& layout, std::string_view ke
 
     if (m_openStack.empty()) {
         node->parent = INVALID_ID;
-        node->persistentKey = hashCombine(0, localKeyOf(key, (uint64_t)m_roots.size()));
+        node->persistentKey = uiHashCombine(0, localKeyOf(key, (uint64_t)m_roots.size()));
         m_roots.push_back(id);
-        return {id, false, false, false, false};
+        return {.id = id, .persistentKey = node->persistentKey};
     }
 
     IdType parent = m_openStack.back();
     node->parent = parent;
 
     UINode* parentNode = m_nodes.get(parent);
-    if (!parentNode) return {id, false, false, false, false};
+    if (!parentNode) return {.id = id};
 
     node->persistentKey =
-        hashCombine(parentNode->persistentKey, localKeyOf(key, (uint64_t)parentNode->childCount));
+        uiHashCombine(parentNode->persistentKey, localKeyOf(key, (uint64_t)parentNode->childCount));
 
     if (parentNode->lastChild == INVALID_ID) parentNode->firstChild = id;
     else m_nodes.get(parentNode->lastChild)->nextSibling = id;
@@ -279,7 +280,7 @@ UINodeState UIManager::addNode(const UILayoutConfig& layout, std::string_view ke
     parentNode->lastChild = id;
     parentNode->childCount++;
 
-    return {id, false, false, false, false};
+    return {.id = id, .persistentKey = node->persistentKey};
 }
 
 UINodeState UIManager::openContainer(
@@ -293,7 +294,9 @@ UINodeState UIManager::openContainer(
         bool hovered = isKeyHovered(node->persistentKey);
         bool direct = !m_hoveredKeys.empty() && m_hoveredKeys.front() == node->persistentKey;
         bool active = m_activeKey != NO_KEY && node->persistentKey == m_activeKey;
-        state = computeState(state.id, node->prevFrameLayout, hovered, direct, active);
+        state = computeState(
+            state.id, node->persistentKey, node->prevFrameLayout, hovered, direct, active
+        );
 
         // Flattened here rather than stored, so the node still carries one final style
         // and nothing downstream has to know a state ever existed. The caller can still

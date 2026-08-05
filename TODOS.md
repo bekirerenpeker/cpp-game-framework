@@ -15,72 +15,71 @@ schedule, just the sequence that avoids rework.
   takes. `Ellipsis` needs `calculate` to backtrack the last run glyph-by-glyph
   until the ellipsis fits, plus a `maxLines`. Small and self-contained.
 
-- [ ] **2. One retained-state store** — three ad-hoc maps exist already (window
-  geometry by name, dropdown open by `&selected`, picker HSV by `&color`) and a
-  fourth is due with every popup widget. Replace with one `key -> state` map on
-  `UIManager` with **frame-age eviction** (immediate mode has no destroy event).
-  Unblocks scroll, focus, and any widget with no bound value to key on.
-
-- [ ] **3. `UINodeState` drag outputs** — `dragDelta`, `pressOrigin` (mouse *and*
+- [ ] **2. `UINodeState` drag outputs** — `dragDelta`, `pressOrigin` (mouse *and*
   node rect at press, so a drag computes from the grab point instead of
   accumulating error), `grabOffset`, `scrollDelta`, `isDoubleClicked`. Each is a
   few lines in `resolveInput`; together they stop every widget re-deriving the
   same drag math — the window and the sliders each hand-roll it today.
 
-- [ ] **4. Richer input return values** — a widget hands back only the new value, so a
+- [ ] **3. Richer input return values** — a widget hands back only the new value, so a
   caller cannot tell a live drag from a finished one and has to redo expensive work
   every frame. Return the current value plus `isEditing`/`isReleased`, so an
   expensive update can wait for release.
 
-- [ ] **5. Scroll** — `UILayoutConfig::scrollOffset` is honoured by the solver but
-  nothing drives it. Needs `scrollDelta` (3), the offset kept per container (2),
-  then wheel handling, drag-to-scroll and a scrollbar widget.
+- [ ] **4. Scroll** — `UILayoutConfig::scrollOffset` is honoured by the solver but
+  nothing drives it, and `UINodeSystemState` has the fields waiting. Needs wheel
+  events in `Input` (per window, an accumulator not a poll), `contentSize` captured
+  in `finalizeIntrinsic` before a clipped axis zeroes it, wheel routing down the
+  hover chain, a `wantsMouse` flag so the world does not zoom under a panel, then
+  `beginScroll`/`endScroll` (two containers: the clipper owns the bar, the inner
+  one carries the offset) and a scrollbar widget. Note `scrollOffset` must come out
+  of `applyScale` — it is clamped against solved pixels.
 
-- [ ] **6. Event consumption** — press bubbles with hover, so clicking a child
+- [ ] **5. Event consumption** — press bubbles with hover, so clicking a child
   also fires every container above it. Fine while ancestors are inert panels,
   wrong the first time a button sits in a clickable row. Needs the hit node to be
   able to stop propagation — split "the node that owns the click" from "the nodes
   containing the cursor". `ignoreInput` (the cheap half) already landed.
 
-- [ ] **7. Keyboard focus + text input** — the biggest one, and the gate on
+- [ ] **6. Keyboard focus + text input** — the biggest one, and the gate on
   `textField`, numeric entry and editable colour values. Needs a focused key in
-  the state store (2), consumption (6), `Input` character events, then a caret,
+  the state store, consumption (5), `Input` character events, then a caret,
   selection, and clipboard. Do it as one widget first, generalise after.
 
-- [ ] **8. `contextMenu` and a menu bar** — the overlay machinery is done and
-  `dropdown` proves it; both are compositions on top. Blocked only on (2), since
-  neither has a bound value whose address can key its open state.
+- [ ] **7. `contextMenu` and a menu bar** — the overlay machinery is done and
+  `dropdown` proves it; both are compositions on top, and the state store now
+  gives them somewhere to keep their open flag.
 
-- [ ] **9. A screen-space root that fills the window** — `resolveRootSize` sizes a
+- [ ] **8. A screen-space root that fills the window** — `resolveRootSize` sizes a
   root from its own spec with nothing passed in, so `Grow`/`Percent` fall back to
   max-content. A HUD wants a root that *is* the window, which needs an available
   size threaded into the root solve — and collides with the invariant that a root
   is deliberately not clamped to its content floor. A design call, not a patch.
 
-- [ ] **10. `cursor` and `transition`** — both declared on `UIContainerStyle` and
+- [ ] **9. `cursor` and `transition`** — both declared on `UIContainerStyle` and
   both dead. `cursor` is a glfw cursor set from the hovered node, once per frame.
-  `transition` needs a per-key animated value in the state store (2), which is
-  why it waits.
+  `transition` is a per-key animated value in the state store plus a rule for what
+  a style field interpolates as.
 
-- [ ] **11. Grid** — a track list where each track carries a `UISizeSpec`, run
+- [ ] **10. Grid** — a track list where each track carries a `UISizeSpec`, run
   through the solver's existing distribution routine, then row-major placement
   with an optional span. ~80% of grid's value; skip auto-fit/minmax/dense.
 
-- [ ] **12. More widgets** — cheap compositions now theming has landed: `image`,
+- [ ] **11. More widgets** — cheap compositions now theming has landed: `image`,
   `progressBar`, `tabs` (`toolbarMenu` is most of it), `treeView`, `groupBox`,
   `dragFloat` (slider without a track). Each is a config struct plus a subtree.
 
-- [ ] **13. Rename `UIWidgets` to `UI`** — the namespace already forwards the bare
+- [ ] **12. Rename `UIWidgets` to `UI`** — the namespace already forwards the bare
   primitives alongside the widgets, which was the point; the name still says
   "widgets". A rename, nothing more, but do it before call sites multiply.
 
-- [ ] **14. One batch for UI rects and UI glyphs** — a panel and its label cost
+- [ ] **13. One batch for UI rects and UI glyphs** — a panel and its label cost
   two draw calls, since the rect shader is a rounded-box SDF and the glyph shader
   is a field sampler. Merging means one shader branching on a per-vertex mode and
   one vertex format wide enough for both. Only worth it when a real UI shows the
   draw calls matter.
 
-- [ ] **15. Text perf** — three separate small ones: pack `TextVertex` (7
+- [ ] **14. Text perf** — three separate small ones: pack `TextVertex` (7
   attributes, 68 bytes, two full `Color`s → RGBA8); a cross-block layout cache
   keyed on `hash(text, style, maxWidth)` so N identical labels cost one walk; and
   named style tags (`/b`, `/i`, `/color=red`) through `TextTags::isTagAt`, the
@@ -116,6 +115,17 @@ schedule, just the sequence that avoids rework.
 
 ### UI
 
+- [x] **Retained state store** — `UIStateStore`, keyed by `UINode::persistentKey`
+  (now also on `UINodeState`, so a widget can address its own entry). A slim
+  `UINodeSystemState` for what the UI's systems own — `scroll`, `contentSize`,
+  unwired until scroll lands — plus a flat `string -> float` bag for widgets,
+  hashed to one slot per `(node, field)`. Frame-age eviction, swept in
+  `beginFrame` so no `float&` can be live when an erase happens; the window is
+  deliberately long, since a hidden tab's node is untouched but its scroll
+  position still matters. The five ad-hoc maps folded in, which also killed their
+  keying bugs: two same-named windows shared geometry, and a dropdown keyed on
+  `&selected` broke on a reallocating vector or a stack local.
+
 - [x] **Theming** — `UIThemeManager` (its own Singleton, outside `styling/`) holds
   21 colour roles, a metric ramp and string-keyed text styles. Colours are a spec
   of optionals: set `background`/`accent`/`foreground` and `resolve()` derives the other
@@ -144,9 +154,9 @@ schedule, just the sequence that avoids rework.
   switches between seven built-in presets.
 
 - [x] **Window widget** — movable, resizable from an image drag handle, and
-  collapsible. Geometry lives in an engine-side map keyed by name, not on the
-  caller. Collapse works by `UIManager::removeChildren` at `closeWindow`, since
-  immediate mode gives a widget no way to stop its caller declaring content.
+  collapsible. Geometry lives in the state store, not on the caller. Collapse
+  works by `UIManager::removeChildren` at `closeWindow`, since immediate mode
+  gives a widget no way to stop its caller declaring content.
 
 - [x] **Overlay machinery + the widgets on it** — `ignoreClip` escapes every
   clipping ancestor for a whole subtree, `ignoreInput` makes a subtree transparent

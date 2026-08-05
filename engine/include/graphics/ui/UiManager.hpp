@@ -27,6 +27,9 @@ struct UINodeState
     Vec2 localMousePos = VEC2_ZERO;
     Vec2 pos = VEC2_ZERO;
     Vec2 size = VEC2_ZERO;
+    // The node's identity across frames, which the frame-local id is not: this is what
+    // addresses its entry in UIStateStore.
+    uint64_t persistentKey = 0;
 };
 
 class UIManager : public Singleton<UIManager>
