@@ -104,9 +104,9 @@ UINodeState dragHandle(const DragHandleConfig& config)
                            },
         // The image is white, so backgroundColor is what tints it.
         .handleStyle = {
-                           .backgroundColor = colors.textSubtle,
+                           .backgroundColor = colors.foregroundSubtle,
                            .backgroundImage = dragHandleTexture(),
-                           .onHover = {.backgroundColor = colors.text},
+                           .onHover = {.backgroundColor = colors.foreground},
                            .onHeld = {.backgroundColor = colors.accent},
                            },
     };
@@ -159,7 +159,7 @@ bool openSection(const std::string& label, const SectionConfig& config)
                             },
         .arrowStyle =
             {
-                            .backgroundColor = colors.textMuted,
+                            .backgroundColor = colors.foregroundMuted,
                             .backgroundImage = dropdownTexture(),
                             },
         .headerTextConfig = {.style = UITheming::textStyle("h3")},
@@ -205,6 +205,19 @@ bool openSection(const std::string& label, const SectionConfig& config)
 
     closeContainer();
 
+    // A collapsed section still needs the body container -- the caller's content has to be
+    // adopted by something before closeSection can throw it away -- but it has to cost
+    // nothing. Emptying it is not enough on its own: a Fit box still measures its own
+    // padding, and a child in flow still books the one gap between it and the header.
+    // Floating drops it from both the height sum and the gap fence-post, the zero padding
+    // collapses what is left to nothing, and ignoreInput stops the invisible leftover
+    // from sitting over the header and stealing its hover.
+    if (!isOpen) {
+        defaultConfig.bodyLayout.isFloating = true;
+        defaultConfig.bodyLayout.padding = UIEdges(0.0f);
+        defaultConfig.bodyStyle.ignoreInput = true;
+    }
+
     IdType bodyId = openContainer(defaultConfig.bodyLayout, defaultConfig.bodyStyle).id;
     g_openSections.push_back({bodyId, isOpen});
 
@@ -235,7 +248,11 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
     UIWindowState& state = g_windowStates[std::string(windowKey)];
     bool collapsed = state.isCollapsed;
 
-    float titleHeight = metrics.controlHeight;
+    // Grown to whatever the title style needs rather than pinned to controlHeight: the
+    // bar is a Fixed height (the collapsed window is exactly it, so it cannot be a Fit),
+    // and a theme with a large heading would otherwise have its own title clipped.
+    const UITextStyle& titleStyle = UITheming::textStyle("h1");
+    float titleHeight = Math::max(metrics.controlHeight, *titleStyle.size * 1.5f);
     float radius = metrics.radius.lg;
 
     WindowConfig defaultConfig = {
@@ -276,7 +293,7 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
                            .onHover = {.backgroundColor = colors.surfaceHover},
                            .onHeld = {.backgroundColor = colors.accent},
                            },
-        .titleTextConfig = {.style = UITheming::textStyle("title")},
+        .titleTextConfig = {.style = titleStyle},
         .bodyLayout =
             {
                            .width = UISizeSpec::grow(),
@@ -318,10 +335,10 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
     UINodeState collapseButton = openContainer(
         {.width = UISizeSpec::fixed(metrics.controlHeightSmall),
          .height = UISizeSpec::fixed(metrics.controlHeightSmall)},
-        {.backgroundColor = colors.textMuted,
+        {.backgroundColor = colors.foregroundMuted,
          .backgroundImage = dropdownTexture(),
          .imageRotation = collapsed ? (float)PI * 0.5f : 0.0f,
-         .onHover = {.backgroundColor = colors.text}}
+         .onHover = {.backgroundColor = colors.foreground}}
     );
     closeContainer();
     if (collapseButton.isPressed) state.isCollapsed = !collapsed;

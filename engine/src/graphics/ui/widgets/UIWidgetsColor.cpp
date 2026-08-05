@@ -78,7 +78,7 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .markerStyle =
             {
-                           .borderColor = colors.text,
+                           .borderColor = colors.foreground,
                            .borderWidth = metrics.borderWidth.thick,
                            .borderRadius = 6.0f,
                            .shadowColor = colors.shadow,
@@ -93,7 +93,7 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .hueMarkerStyle =
             {
-                           .backgroundColor = colors.text,
+                           .backgroundColor = colors.foreground,
                            .borderColor = colors.shadow,
                            .borderWidth = metrics.borderWidth.thin,
                            .borderRadius = 2.0f,
@@ -112,7 +112,7 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .alphaMarkerStyle =
             {
-                           .backgroundColor = colors.text,
+                           .backgroundColor = colors.foreground,
                            .borderColor = colors.shadow,
                            .borderWidth = metrics.borderWidth.thin,
                            .borderRadius = 2.0f,

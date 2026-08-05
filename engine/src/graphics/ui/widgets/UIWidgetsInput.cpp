@@ -55,7 +55,7 @@ UINodeState button(const std::string text, const ButtonConfig& config)
                            .onHover =
                     {
                         .backgroundColor = colors.accentHover,
-                        .borderColor = colors.text,
+                        .borderColor = colors.foreground,
                         .shadowColor = colors.accent,
                         .shadowBlurRadius = metrics.spacing.lg,
                     }, .onHeld =
@@ -125,8 +125,8 @@ void toolbarMenu(
                          },
         .itemTextLayout = {},
         .itemTextConfig = {.style = UITheming::textStyle("label")},
-        .hoveredItemTextStyle = {.color = colors.text},
-        .selectedItemTextStyle = {.color = colors.text},
+        .hoveredItemTextStyle = {.color = colors.foreground},
+        .selectedItemTextStyle = {.color = colors.foreground},
     };
 
     defaultConfig.menuLayout.combine(config.menuLayout);
@@ -221,7 +221,7 @@ void sliderFloat(
                            },
         .handleStyle =
             {
-                           .backgroundColor = colors.text,
+                           .backgroundColor = colors.foreground,
                            .borderColor = colors.accent,
                            .borderWidth = metrics.borderWidth.thick,
                            .borderRadius = metrics.iconSize * 0.5f,
@@ -417,7 +417,7 @@ void radioGroup(
                           },
         .labelLayout = {},
         .labelTextConfig = {.style = UITheming::textStyle("label")},
-        .selectedLabelTextStyle = {.color = colors.text},
+        .selectedLabelTextStyle = {.color = colors.foreground},
     };
 
     defaultConfig.groupLayout.combine(config.groupLayout);
@@ -502,7 +502,7 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
                           },
         .arrowStyle =
             {
-                          .backgroundColor = colors.textMuted,
+                          .backgroundColor = colors.foregroundMuted,
                           .backgroundImage = dropdownTexture(),
                           },
         .panelLayout =
@@ -547,7 +547,7 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
                           .clipX = true,
                           },
         .itemTextConfig = {.style = UITheming::textStyle("body")},
-        .selectedItemTextStyle = {.color = colors.text},
+        .selectedItemTextStyle = {.color = colors.foreground},
     };
 
     defaultConfig.wrapperLayout.combine(config.wrapperLayout);

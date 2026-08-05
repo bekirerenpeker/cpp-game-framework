@@ -6,7 +6,7 @@ namespace {
 
 const Color SEED_BACKGROUND(0.16f, 0.17f, 0.22f);
 const Color SEED_ACCENT(0.30f, 0.62f, 0.95f);
-const Color SEED_TEXT(0.90f, 0.92f, 0.96f);
+const Color SEED_FOREGROUND(0.90f, 0.92f, 0.96f);
 
 Color mix(const Color& from, const Color& to, float t)
 {
@@ -35,11 +35,11 @@ UIThemeColors UIThemeColors::resolve(const UIThemeColorsSpec& spec)
 
     colors.background = spec.background.value_or(SEED_BACKGROUND);
     colors.accent = spec.accent.value_or(SEED_ACCENT);
-    colors.text = spec.text.value_or(SEED_TEXT);
+    colors.foreground = spec.foreground.value_or(SEED_FOREGROUND);
 
     const Color& bg = colors.background;
     const Color& accent = colors.accent;
-    const Color& text = colors.text;
+    const Color& fg = colors.foreground;
 
     // Every surface derives *away* from the background, so the direction flips on a light
     // theme -- lightening a near-white panel to raise it produces no contrast at all.
@@ -62,12 +62,12 @@ UIThemeColors UIThemeColors::resolve(const UIThemeColorsSpec& spec)
     colors.onAccent =
         spec.onAccent.value_or(luminance(accent) > 0.6f ? darken(bg, 0.3f) : COLOR_WHITE);
 
-    colors.border = spec.border.value_or(mix(bg, text, 0.16f));
-    colors.borderStrong = spec.borderStrong.value_or(mix(bg, text, 0.30f));
+    colors.border = spec.border.value_or(mix(bg, fg, 0.16f));
+    colors.borderStrong = spec.borderStrong.value_or(mix(bg, fg, 0.30f));
     colors.borderFocus = spec.borderFocus.value_or(accent);
 
-    colors.textMuted = spec.textMuted.value_or(mix(text, bg, 0.28f));
-    colors.textSubtle = spec.textSubtle.value_or(mix(text, bg, 0.42f));
+    colors.foregroundMuted = spec.foregroundMuted.value_or(mix(fg, bg, 0.28f));
+    colors.foregroundSubtle = spec.foregroundSubtle.value_or(mix(fg, bg, 0.42f));
 
     // Fixed rather than derived: status colours carry meaning, and deriving a "red" from
     // a red accent would make danger invisible against it.

@@ -26,9 +26,9 @@ namespace Engine {
     X(border)                                                                                      \
     X(borderStrong)                                                                                \
     X(borderFocus)                                                                                 \
-    X(text)                                                                                        \
-    X(textMuted)                                                                                   \
-    X(textSubtle)                                                                                  \
+    X(foreground)                                                                                        \
+    X(foregroundMuted)                                                                                   \
+    X(foregroundSubtle)                                                                                  \
     X(success)                                                                                     \
     X(warning)                                                                                     \
     X(danger)                                                                                      \

@@ -25,7 +25,7 @@ struct DemoThemeEdit
 {
     Color background;
     Color accent;
-    Color text;
+    Color foreground;
     float scale = 1.0f;
     float radius = 6.0f;
     float spacing = 10.0f;
@@ -48,7 +48,7 @@ void readBackFromTheme()
 
     g_edit.background = colors.background;
     g_edit.accent = colors.accent;
-    g_edit.text = colors.text;
+    g_edit.foreground = colors.foreground;
     g_edit.scale = metrics.scale;
     g_edit.radius = metrics.radius.md;
     g_edit.spacing = metrics.spacing.md;
@@ -86,7 +86,7 @@ void applyEdits()
     UITheme theme = g_baseTheme;
     theme.colors.background = g_edit.background;
     theme.colors.accent = g_edit.accent;
-    theme.colors.text = g_edit.text;
+    theme.colors.foreground = g_edit.foreground;
 
     theme.metrics.scale = g_edit.scale;
     theme.metrics.radius.md = g_edit.radius;
@@ -130,8 +130,8 @@ void themeTab()
         closeContainer();
 
         openContainer({.gap = UITheming::metrics().spacing.md, .alignCross = UIAlign::Center});
-        text("Text");
-        colorPickerPopup(g_edit.text);
+        text("Foreground");
+        colorPickerPopup(g_edit.foreground);
         closeContainer();
     }
     closeSection();

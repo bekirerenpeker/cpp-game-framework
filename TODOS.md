@@ -118,7 +118,7 @@ schedule, just the sequence that avoids rework.
 
 - [x] **Theming** — `UIThemeManager` (its own Singleton, outside `styling/`) holds
   21 colour roles, a metric ramp and string-keyed text styles. Colours are a spec
-  of optionals: set `background`/`accent`/`text` and `resolve()` derives the other
+  of optionals: set `background`/`accent`/`foreground` and `resolve()` derives the other
   18 by lighten/darken/mix, so a retheme is three lines; `onAccent` picks white or
   near-black off the accent's Rec. 709 luminance. Widgets read roles inline
   (`UITheming::colors().accent`) — the theme holds no per-widget presets, and

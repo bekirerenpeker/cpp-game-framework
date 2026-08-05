@@ -21,14 +21,13 @@ void UIThemeManager::resetTextStyles()
 {
     const UIThemeColors& c = m_colors;
 
-    m_textStyles["h1"] = {.color = c.text, .size = 20.0f};
-    m_textStyles["h2"] = {.color = c.text, .size = 17.0f};
-    m_textStyles["h3"] = {.color = c.text, .size = 15.0f};
-    m_textStyles["body"] = {.color = c.text, .size = 14.0f};
-    m_textStyles["label"] = {.color = c.textMuted, .size = 13.0f};
-    m_textStyles["caption"] = {.color = c.textSubtle, .size = 11.0f};
+    m_textStyles["h1"] = {.color = c.foreground, .size = 20.0f};
+    m_textStyles["h2"] = {.color = c.foreground, .size = 17.0f};
+    m_textStyles["h3"] = {.color = c.foreground, .size = 15.0f};
+    m_textStyles["body"] = {.color = c.foreground, .size = 14.0f};
+    m_textStyles["label"] = {.color = c.foregroundMuted, .size = 13.0f};
+    m_textStyles["caption"] = {.color = c.foregroundSubtle, .size = 11.0f};
     m_textStyles["button"] = {.color = c.onAccent, .size = 15.0f};
-    m_textStyles["title"] = {.color = c.text, .size = 14.0f};
 }
 
 void UIThemeManager::setTheme(const UITheme& theme)

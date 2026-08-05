@@ -13,7 +13,7 @@ std::vector<UIThemePreset> buildPresets()
          {.colors = {
               .background = Color(0.16f, 0.17f, 0.22f),
               .accent = Color(0.30f, 0.62f, 0.95f),
-              .text = Color(0.90f, 0.92f, 0.96f),
+              .foreground = Color(0.90f, 0.92f, 0.96f),
           }}}
     );
 
@@ -22,7 +22,7 @@ std::vector<UIThemePreset> buildPresets()
     UITheme amber;
     amber.colors.background = Color(0.06f, 0.05f, 0.04f);
     amber.colors.accent = Color(0.98f, 0.68f, 0.15f);
-    amber.colors.text = Color(0.96f, 0.80f, 0.45f);
+    amber.colors.foreground = Color(0.96f, 0.80f, 0.45f);
     amber.colors.border = Color(0.42f, 0.28f, 0.08f);
     amber.metrics.radius = {1.0f, 1.0f, 2.0f, 2.0f};
     presets.push_back({"Amber CRT", amber});
@@ -32,7 +32,7 @@ std::vector<UIThemePreset> buildPresets()
          {.colors = {
               .background = Color(0.05f, 0.12f, 0.16f),
               .accent = Color(0.16f, 0.84f, 0.78f),
-              .text = Color(0.84f, 0.95f, 0.96f),
+              .foreground = Color(0.84f, 0.95f, 0.96f),
           }}}
     );
 
@@ -41,7 +41,7 @@ std::vector<UIThemePreset> buildPresets()
          {.colors = {
               .background = Color(0.10f, 0.14f, 0.10f),
               .accent = Color(0.56f, 0.80f, 0.34f),
-              .text = Color(0.90f, 0.94f, 0.85f),
+              .foreground = Color(0.90f, 0.94f, 0.85f),
           }}}
     );
 
@@ -49,7 +49,7 @@ std::vector<UIThemePreset> buildPresets()
     UITheme vapor;
     vapor.colors.background = Color(0.13f, 0.07f, 0.20f);
     vapor.colors.accent = Color(0.96f, 0.36f, 0.76f);
-    vapor.colors.text = Color(0.93f, 0.88f, 0.99f);
+    vapor.colors.foreground = Color(0.93f, 0.88f, 0.99f);
     vapor.colors.custom["secondary"] = Color(0.35f, 0.90f, 0.95f);
     vapor.metrics.radius = {8.0f, 12.0f, 16.0f, 9999.0f};
     presets.push_back({"Vaporwave", vapor});
@@ -61,7 +61,7 @@ std::vector<UIThemePreset> buildPresets()
          {.colors = {
               .background = Color(0.95f, 0.93f, 0.92f),
               .accent = Color(0.78f, 0.28f, 0.42f),
-              .text = Color(0.16f, 0.13f, 0.15f),
+              .foreground = Color(0.16f, 0.13f, 0.15f),
           }}}
     );
 
@@ -70,7 +70,7 @@ std::vector<UIThemePreset> buildPresets()
     UITheme brutal;
     brutal.colors.background = Color(0.08f, 0.08f, 0.08f);
     brutal.colors.accent = Color(1.0f, 0.26f, 0.10f);
-    brutal.colors.text = Color(0.98f, 0.98f, 0.98f);
+    brutal.colors.foreground = Color(0.98f, 0.98f, 0.98f);
     brutal.colors.border = Color(0.98f, 0.98f, 0.98f);
     brutal.colors.borderStrong = Color(0.98f, 0.98f, 0.98f);
     brutal.metrics.radius = {0.0f, 0.0f, 0.0f, 0.0f};
