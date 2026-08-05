@@ -35,6 +35,10 @@ GlTexture* dropdownTexture()
     return texture;
 }
 
+float uiScale() { return UIThemeManager::get().getScale(); }
+float unscale(float value) { return value / uiScale(); }
+Vec2 unscale(Vec2 value) { return value / uiScale(); }
+
 void clear() { UIManager::get().clear(); }
 UINode* getNode(IdType id) { return UIManager::get().getNode(id); }
 

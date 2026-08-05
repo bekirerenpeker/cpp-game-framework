@@ -30,7 +30,7 @@ class UITextLeafData : public IUILeafData
     TextBlock m_block;
 
   public:
-    UITextLeafData(const UITextConfig& config);
+    UITextLeafData(const UITextConfig& config, float scale = 1.0f);
     ~UITextLeafData() = default;
 
     TextBlock& getBlock() { return m_block; }

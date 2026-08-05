@@ -43,11 +43,14 @@ std::unordered_map<const Color*, bool> g_pickerOpen;
 
 void colorPicker(Color& color, const ColorPickerConfig& config)
 {
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     ColorPickerConfig defaultConfig = {
         .pickerLayout =
             {
                            .width = UISizeSpec::grow(),
-                           .gap = 8.0f,
+                           .gap = metrics.spacing.sm,
                            .direction = UILayoutDirection::Column,
                            },
         .pickerStyle = {},
@@ -75,10 +78,10 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .markerStyle =
             {
-                           .borderColor = COLOR_WHITE,
-                           .borderWidth = 2.0f,
+                           .borderColor = colors.text,
+                           .borderWidth = metrics.borderWidth.thick,
                            .borderRadius = 6.0f,
-                           .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.8f),
+                           .shadowColor = colors.shadow,
                            .shadowBlurRadius = 3.0f,
                            },
         .hueMarkerLayout =
@@ -90,9 +93,9 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .hueMarkerStyle =
             {
-                           .backgroundColor = COLOR_WHITE,
-                           .borderColor = Color(0.0f, 0.0f, 0.0f, 0.6f),
-                           .borderWidth = 1.0f,
+                           .backgroundColor = colors.text,
+                           .borderColor = colors.shadow,
+                           .borderWidth = metrics.borderWidth.thin,
                            .borderRadius = 2.0f,
                            },
         .alphaLayout =
@@ -109,9 +112,9 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .alphaMarkerStyle =
             {
-                           .backgroundColor = COLOR_WHITE,
-                           .borderColor = Color(0.0f, 0.0f, 0.0f, 0.6f),
-                           .borderWidth = 1.0f,
+                           .backgroundColor = colors.text,
+                           .borderColor = colors.shadow,
+                           .borderWidth = metrics.borderWidth.thin,
                            .borderRadius = 2.0f,
                            },
         .previewLayout =
@@ -121,9 +124,9 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .previewStyle =
             {
-                           .borderColor = Color(0.38f, 0.42f, 0.52f),
-                           .borderWidth = 1.0f,
-                           .borderRadius = 4.0f,
+                           .borderColor = colors.borderStrong,
+                           .borderWidth = metrics.borderWidth.thin,
+                           .borderRadius = metrics.radius.sm,
                            },
         .valuesLayout =
             {
@@ -131,7 +134,7 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
                            .gap = 2.0f,
                            .direction = UILayoutDirection::Column,
                            },
-        .valuesTextConfig = {.style = {.color = Color(0.66f, 0.70f, 0.78f), .size = 11.0f}},
+        .valuesTextConfig = {.style = UITheming::textStyle("caption")},
     };
 
     defaultConfig.pickerLayout.combine(config.pickerLayout);
@@ -166,7 +169,7 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
     openContainer({
         .width = UISizeSpec::grow(),
         .height = UISizeSpec::fixed(squareHeight),
-        .gap = 8.0f,
+        .gap = metrics.spacing.sm,
     });
 
     // Neither marker can be placed in pixels, since the square's size is only known once
@@ -276,34 +279,37 @@ void colorPicker(Color& color, const ColorPickerConfig& config)
 
 void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config)
 {
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     ColorPickerPopupConfig defaultConfig = {
         .wrapperLayout = {},
         .swatchLayout =
             {
                           .width = UISizeSpec::fixed(46.0f),
-                          .height = UISizeSpec::fixed(22.0f),
+                          .height = UISizeSpec::fixed(metrics.controlHeightSmall + 2.0f),
                           },
         .swatchStyle =
             {
-                          .borderColor = Color(0.38f, 0.42f, 0.52f),
-                          .borderWidth = 1.0f,
-                          .borderRadius = 4.0f,
-                          .onHover = {.borderColor = COLOR_WHITE},
+                          .borderColor = colors.borderStrong,
+                          .borderWidth = metrics.borderWidth.thin,
+                          .borderRadius = metrics.radius.sm,
+                          .onHover = {.borderColor = colors.borderFocus},
                           },
         .panelLayout =
             {
                           .width = UISizeSpec::fixed(220.0f),
-                          .padding = UIEdges(10.0f),
+                          .padding = UIEdges(metrics.spacing.md),
                           .isFloating = true,
                           },
         .panelStyle = {
-                          .backgroundColor = Color(0.14f, 0.15f, 0.20f),
-                          .borderColor = Color(0.34f, 0.38f, 0.48f),
-                          .borderWidth = 1.0f,
-                          .borderRadius = 8.0f,
-                          .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.7f),
-                          .shadowOffset = Vec2(0.0f, 6.0f),
-                          .shadowBlurRadius = 20.0f,
+                          .backgroundColor = colors.surfaceOverlay,
+                          .borderColor = colors.borderStrong,
+                          .borderWidth = metrics.borderWidth.thin,
+                          .borderRadius = metrics.radius.lg,
+                          .shadowColor = colors.shadow,
+                          .shadowOffset = Vec2(0.0f, metrics.spacing.sm),
+                          .shadowBlurRadius = metrics.spacing.xl,
                           .ignoreClip = true,
                           .zIndex = 32,
                           },
@@ -328,9 +334,10 @@ void colorPickerPopup(Color& color, const ColorPickerPopupConfig& config)
 
     if (open) {
         // Anchored off the swatch's own solved height rather than the configured one, so
-        // a caller-resized swatch still drops the panel flush under it.
+        // a caller-resized swatch still drops the panel flush under it. Unscaled, since
+        // that height is in real pixels while a floating offset is in design units.
         defaultConfig.panelLayout.floating =
-            UIFloatingConfig {.offset = Vec2(0.0f, swatch.size.y) + config.panelOffset};
+            UIFloatingConfig {.offset = Vec2(0.0f, unscale(swatch.size.y)) + config.panelOffset};
 
         UINodeState panel = openContainer(defaultConfig.panelLayout, defaultConfig.panelStyle);
         colorPicker(color, config.pickerConfig);

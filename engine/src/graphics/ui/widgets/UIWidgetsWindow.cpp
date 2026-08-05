@@ -14,9 +14,6 @@ namespace UIWidgets {
 
 namespace {
 
-constexpr float TITLE_BAR_HEIGHT = 30.0f;
-constexpr float GRIP_SIZE = 28.0f;
-constexpr float COLLAPSE_BUTTON_SIZE = 20.0f;
 const Vec2 WINDOW_MIN(200.0f, 120.0f);
 const Vec2 POS_UNBOUNDED(-UI_UNBOUNDED, -UI_UNBOUNDED);
 
@@ -50,6 +47,15 @@ struct UIOpenWindow
 std::unordered_map<std::string, UIWindowState> g_windowStates;
 std::vector<UIOpenWindow> g_openWindows;
 
+struct UIOpenSection
+{
+    IdType bodyId = INVALID_ID;
+    bool isOpen = false;
+};
+
+std::unordered_map<std::string, bool> g_sectionOpen;
+std::vector<UIOpenSection> g_openSections;
+
 void dragVec2(const UINodeState& handle, UIDragState& drag, Vec2& value, Vec2 minValue)
 {
     if (!handle.isActive) {
@@ -57,7 +63,10 @@ void dragVec2(const UINodeState& handle, UIDragState& drag, Vec2& value, Vec2 mi
         return;
     }
 
-    Vec2 mouse = UIRenderer::get().getMouseUiPos();
+    // Unscaled on the way in, so the stored position and size stay in the design units
+    // every config field is written in -- the layout scale is applied to them again as
+    // the window is declared, and a scaled UI would otherwise drag at the wrong rate.
+    Vec2 mouse = unscale(UIRenderer::get().getMouseUiPos());
     if (!drag.isActive) {
         drag.isActive = true;
         drag.pointerOrigin = mouse;
@@ -76,26 +85,29 @@ void dragVec2(const UINodeState& handle, UIDragState& drag, Vec2& value, Vec2 mi
 
 UINodeState dragHandle(const DragHandleConfig& config)
 {
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     DragHandleConfig defaultConfig = {
         .handleLayout =
             {
-                           .width = UISizeSpec::fixed(GRIP_SIZE),
-                           .height = UISizeSpec::fixed(GRIP_SIZE),
+                           .width = UISizeSpec::fixed(metrics.controlHeight),
+                           .height = UISizeSpec::fixed(metrics.controlHeight),
                            .floating =
-                    UIFloatingConfig {
-                        .offset = Vec2(-4.0f, -4.0f),
-                        .anchorX = UIAlign::End,
-                        .anchorY = UIAlign::End,
-                        .selfX = UIAlign::End,
-                        .selfY = UIAlign::End
-                    }, .isFloating = true,
+                           UIFloatingConfig {
+                           .offset = Vec2(-metrics.spacing.xs, -metrics.spacing.xs),
+                           .anchorX = UIAlign::End,
+                           .anchorY = UIAlign::End,
+                           .selfX = UIAlign::End,
+                           .selfY = UIAlign::End
+                           },.isFloating = true,
                            },
         // The image is white, so backgroundColor is what tints it.
         .handleStyle = {
-                           .backgroundColor = Color(0.45f, 0.49f, 0.60f),
+                           .backgroundColor = colors.textSubtle,
                            .backgroundImage = dragHandleTexture(),
-                           .onHover = {.backgroundColor = COLOR_WHITE},
-                           .onHeld = {.backgroundColor = Color(0.30f, 0.62f, 0.95f)},
+                           .onHover = {.backgroundColor = colors.text},
+                           .onHeld = {.backgroundColor = colors.accent},
                            },
     };
 
@@ -109,56 +121,168 @@ UINodeState dragHandle(const DragHandleConfig& config)
     return state;
 }
 
+bool openSection(const std::string& label, const SectionConfig& config)
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    std::string_view sectionKey = config.key.empty() ? std::string_view(label) : config.key;
+    auto found = g_sectionOpen.try_emplace(std::string(sectionKey), config.openByDefault);
+    bool& isOpen = found.first->second;
+
+    SectionConfig defaultConfig = {
+        .sectionLayout =
+            {
+                            .width = UISizeSpec::grow(),
+                            .gap = metrics.spacing.xs,
+                            .direction = UILayoutDirection::Column,
+                            },
+        .sectionStyle = {},
+        .headerLayout =
+            {
+                            .width = UISizeSpec::grow(),
+                            .padding = UIEdges(metrics.spacing.sm, metrics.spacing.xs),
+                            .gap = metrics.spacing.sm,
+                            .alignCross = UIAlign::Center,
+                            },
+        .headerStyle =
+            {
+                            .backgroundColor = colors.surfaceRaised,
+                            .borderRadius = metrics.radius.sm,
+                            .onHover = {.backgroundColor = colors.surfaceHover},
+                            .onHeld = {.backgroundColor = colors.accentMuted},
+                            },
+        .arrowLayout =
+            {
+                            .width = UISizeSpec::fixed(metrics.spacing.md),
+                            .height = UISizeSpec::fixed(metrics.spacing.md),
+                            },
+        .arrowStyle =
+            {
+                            .backgroundColor = colors.textMuted,
+                            .backgroundImage = dropdownTexture(),
+                            },
+        .headerTextConfig = {.style = UITheming::textStyle("h3")},
+        // Indented rather than boxed, so nesting a section inside a section reads as
+        // depth without stacking a border per level.
+        .bodyLayout =
+            {
+                            .width = UISizeSpec::grow(),
+                            .padding =
+                    UIEdges(metrics.spacing.md, 0.0f, metrics.spacing.xs, metrics.spacing.sm),
+                            .gap = metrics.spacing.sm,
+                            .direction = UILayoutDirection::Column,
+                            },
+        .bodyStyle = {},
+    };
+
+    defaultConfig.sectionLayout.combine(config.sectionLayout);
+    defaultConfig.sectionStyle.combine(config.sectionStyle);
+    defaultConfig.headerLayout.combine(config.headerLayout);
+    defaultConfig.headerStyle.combine(config.headerStyle);
+    defaultConfig.arrowLayout.combine(config.arrowLayout);
+    defaultConfig.arrowStyle.combine(config.arrowStyle);
+    defaultConfig.headerTextConfig.style.combine(config.headerTextConfig.style);
+    defaultConfig.bodyLayout.combine(config.bodyLayout);
+    defaultConfig.bodyStyle.combine(config.bodyStyle);
+
+    openContainer(defaultConfig.sectionLayout, defaultConfig.sectionStyle, sectionKey);
+
+    UINodeState header = openContainer(defaultConfig.headerLayout, defaultConfig.headerStyle);
+    // Applied before anything reads it, so the arrow and the body agree within the frame
+    // rather than the content lagging the header by one.
+    if (header.isPressed) isOpen = !isOpen;
+
+    UIContainerStyleSpec arrowStyle = defaultConfig.arrowStyle;
+    arrowStyle.imageRotation = isOpen ? 0.0f : (float)PI * 0.5f;
+    openContainer(defaultConfig.arrowLayout, arrowStyle);
+    closeContainer();
+
+    UITextConfig headerText = config.headerTextConfig;
+    headerText.text = label;
+    headerText.style = defaultConfig.headerTextConfig.style;
+    addTextLeaf({}, headerText);
+
+    closeContainer();
+
+    IdType bodyId = openContainer(defaultConfig.bodyLayout, defaultConfig.bodyStyle).id;
+    g_openSections.push_back({bodyId, isOpen});
+
+    return isOpen;
+}
+
+void closeSection()
+{
+    if (g_openSections.empty()) {
+        LOG_ERROR("closeSection called with no section open; the open/close pairs are unbalanced");
+        return;
+    }
+
+    UIOpenSection open = g_openSections.back();
+    g_openSections.pop_back();
+
+    closeContainer();
+    if (!open.isOpen) removeChildren(open.bodyId);
+    closeContainer();
+}
+
 UINodeState openWindow(const std::string& name, const WindowConfig& config)
 {
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     std::string_view windowKey = config.key.empty() ? std::string_view(name) : config.key;
     UIWindowState& state = g_windowStates[std::string(windowKey)];
     bool collapsed = state.isCollapsed;
+
+    float titleHeight = metrics.controlHeight;
+    float radius = metrics.radius.lg;
 
     WindowConfig defaultConfig = {
         .windowLayout =
             {
                            .width = UISizeSpec::fixed(state.size.x),
-                           .height = UISizeSpec::fixed(collapsed ? TITLE_BAR_HEIGHT : state.size.y),
+                           .height = UISizeSpec::fixed(collapsed ? titleHeight : state.size.y),
                            .floating = UIFloatingConfig {.offset = state.pos},
                            .direction = UILayoutDirection::Column,
                            .isFloating = true,
                            },
         .windowStyle =
             {
-                           .backgroundColor = Color(0.16f, 0.17f, 0.22f),
-                           .borderColor = Color(0.28f, 0.31f, 0.40f),
-                           .borderWidth = 1.0f,
-                           .borderRadius = 10.0f,
-                           .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.75f),
-                           .shadowOffset = Vec2(0.0f, 10.0f),
-                           .shadowBlurRadius = 26.0f,
+                           .backgroundColor = colors.background,
+                           .borderColor = colors.border,
+                           .borderWidth = metrics.borderWidth.thin,
+                           .borderRadius = radius,
+                           .shadowColor = colors.shadow,
+                           .shadowOffset = Vec2(0.0f, metrics.spacing.md),
+                           .shadowBlurRadius = metrics.spacing.xl,
                            .overflow = UIOverflow::Hidden,
                            },
         .titleLayout =
             {
                            .width = UISizeSpec::grow(),
-                           .height = UISizeSpec::fixed(TITLE_BAR_HEIGHT),
-                           .padding = UIEdges(12.0f, 0.0f),
+                           .height = UISizeSpec::fixed(titleHeight),
+                           .padding = UIEdges(metrics.spacing.md, 0.0f),
                            .alignCross = UIAlign::Center,
                            },
         .titleStyle =
             {
-                           .backgroundColor = Color(0.24f, 0.26f, 0.34f),
+                           .backgroundColor = colors.surfaceRaised,
                            // Rounded into the window's own top corners, square where it
                 // meets the body -- and rounded all round once collapsed,
                 // since the bar is then the whole window.
-                .borderRadius = collapsed ? UICorners(9.0f) : UICorners(9.0f, 9.0f, 0.0f, 0.0f),
-                           .onHover = {.backgroundColor = Color(0.30f, 0.33f, 0.42f)},
-                           .onHeld = {.backgroundColor = Color(0.30f, 0.62f, 0.95f)},
+                .borderRadius =
+                    collapsed ? UICorners(radius) : UICorners(radius, radius, 0.0f, 0.0f),
+                           .onHover = {.backgroundColor = colors.surfaceHover},
+                           .onHeld = {.backgroundColor = colors.accent},
                            },
-        .titleTextConfig = {.style = {.color = Color(0.90f, 0.92f, 0.96f), .size = 14.0f}},
+        .titleTextConfig = {.style = UITheming::textStyle("title")},
         .bodyLayout =
             {
                            .width = UISizeSpec::grow(),
                            .height = UISizeSpec::grow(),
-                           .padding = UIEdges(12.0f),
-                           .gap = 8.0f,
+                           .padding = UIEdges(metrics.spacing.md),
+                           .gap = metrics.spacing.sm,
                            .direction = UILayoutDirection::Column,
                            },
         .bodyStyle = {},
@@ -192,12 +316,12 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
     // dragging stay separate gestures. The icon points down while open and is turned a
     // quarter to point along the collapsed bar.
     UINodeState collapseButton = openContainer(
-        {.width = UISizeSpec::fixed(COLLAPSE_BUTTON_SIZE),
-         .height = UISizeSpec::fixed(COLLAPSE_BUTTON_SIZE)},
-        {.backgroundColor = Color(0.72f, 0.76f, 0.84f),
+        {.width = UISizeSpec::fixed(metrics.controlHeightSmall),
+         .height = UISizeSpec::fixed(metrics.controlHeightSmall)},
+        {.backgroundColor = colors.textMuted,
          .backgroundImage = dropdownTexture(),
          .imageRotation = collapsed ? (float)PI * 0.5f : 0.0f,
-         .onHover = {.backgroundColor = COLOR_WHITE}}
+         .onHover = {.backgroundColor = colors.text}}
     );
     closeContainer();
     if (collapseButton.isPressed) state.isCollapsed = !collapsed;

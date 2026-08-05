@@ -5,22 +5,18 @@ namespace Engine {
 
 namespace UIWidgets {
 
-namespace {
-
-constexpr float DIVIDER_THICKNESS = 1.0f;
-const Color DIVIDER_COLOR(0.28f, 0.31f, 0.40f);
-
-}   // namespace
-
 UINodeState horizontalDivider(const DividerConfig& config)
 {
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     DividerConfig defaultConfig = {
         .dividerLayout =
             {
                             .width = UISizeSpec::grow(),
-                            .height = UISizeSpec::fixed(DIVIDER_THICKNESS),
+                            .height = UISizeSpec::fixed(metrics.borderWidth.thin),
                             },
-        .dividerStyle = {.backgroundColor = DIVIDER_COLOR                   },
+        .dividerStyle = {.backgroundColor = colors.border                          },
     };
 
     defaultConfig.dividerLayout.combine(config.dividerLayout);
@@ -35,13 +31,16 @@ UINodeState horizontalDivider(const DividerConfig& config)
 
 UINodeState verticalDivider(const DividerConfig& config)
 {
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     DividerConfig defaultConfig = {
         .dividerLayout =
             {
-                            .width = UISizeSpec::fixed(DIVIDER_THICKNESS),
+                            .width = UISizeSpec::fixed(metrics.borderWidth.thin),
                             .height = UISizeSpec::grow(),
                             },
-        .dividerStyle = {             .backgroundColor = DIVIDER_COLOR },
+        .dividerStyle = {                    .backgroundColor = colors.border },
     };
 
     defaultConfig.dividerLayout.combine(config.dividerLayout);
@@ -53,11 +52,12 @@ UINodeState verticalDivider(const DividerConfig& config)
 
     return state;
 }
+
 IdType text(const std::string label, const TextConfig& config)
 {
     TextConfig defaultConfig = {
         .textLayout = {},
-        .textConfig = {.style = {.color = Color(0.82f, 0.85f, 0.91f), .size = 14.0f}},
+        .textConfig = {.style = UITheming::textStyle("body")},
     };
 
     defaultConfig.textLayout.combine(config.textLayout);
@@ -84,26 +84,29 @@ void tooltip(const std::string label, bool visible, const TooltipConfig& config)
         return;
     }
 
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     TooltipConfig defaultConfig = {
         .tooltipLayout =
             {
-                            .padding = UIEdges(8.0f, 5.0f),
+                            .padding = UIEdges(metrics.spacing.sm, metrics.spacing.xs),
                             .isFloating = true,
                             },
         .tooltipStyle =
             {
-                            .backgroundColor = Color(0.10f, 0.11f, 0.15f, 0.96f),
-                            .borderColor = Color(0.34f, 0.38f, 0.48f),
-                            .borderWidth = 1.0f,
-                            .borderRadius = 5.0f,
-                            .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.6f),
-                            .shadowOffset = Vec2(0.0f, 4.0f),
-                            .shadowBlurRadius = 12.0f,
+                            .backgroundColor = colors.surfaceOverlay,
+                            .borderColor = colors.borderStrong,
+                            .borderWidth = metrics.borderWidth.thin,
+                            .borderRadius = metrics.radius.sm,
+                            .shadowColor = colors.shadow,
+                            .shadowOffset = Vec2(0.0f, metrics.spacing.xs),
+                            .shadowBlurRadius = metrics.spacing.md,
                             .ignoreClip = true,
                             .zIndex = 64,
                             },
         .labelLayout = {},
-        .labelTextConfig = {.style = {.color = Color(0.90f, 0.92f, 0.96f), .size = 12.0f}},
+        .labelTextConfig = {.style = UITheming::textStyle("label")},
     };
 
     defaultConfig.tooltipLayout.combine(config.tooltipLayout);
@@ -113,18 +116,19 @@ void tooltip(const std::string label, bool visible, const TooltipConfig& config)
 
     // A floating offset is relative to the parent. localMousePos already is; an explicit
     // anchor is measured from the root, so it needs the anchor node's own position taken
-    // off it -- both end up in the same top-left y-down space. The self alignment is
-    // what centres the tooltip on the point rather than hanging it off the corner; the
-    // caller cannot do that itself, since it would need the tooltip's solved size.
+    // off it -- both end up in the same top-left y-down space. Both are solved geometry,
+    // so both come back through unscale into the design units a config field carries. The
+    // self alignment is what centres the tooltip on the point rather than hanging it off
+    // the corner; the caller cannot do that itself, since it would need the solved size.
     if (config.anchor) {
         defaultConfig.tooltipLayout.floating = UIFloatingConfig {
-            .offset = *config.anchor - anchor.pos + config.anchorOffset,
+            .offset = unscale(*config.anchor - anchor.pos) + config.anchorOffset,
             .selfX = config.anchorAlignX,
             .selfY = config.anchorAlignY,
         };
     } else {
         defaultConfig.tooltipLayout.floating =
-            UIFloatingConfig {.offset = anchor.localMousePos + config.cursorOffset};
+            UIFloatingConfig {.offset = unscale(anchor.localMousePos) + config.cursorOffset};
     }
 
     openContainer(defaultConfig.tooltipLayout, defaultConfig.tooltipStyle);

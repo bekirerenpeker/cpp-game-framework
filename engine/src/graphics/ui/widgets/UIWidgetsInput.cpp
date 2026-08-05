@@ -14,9 +14,9 @@ namespace UIWidgets {
 
 namespace {
 
-constexpr float MENU_HEIGHT = 28.0f;
+// Widget-specific proportions with no theme role of their own -- a track is not a
+// control height and a dropdown is not a spacing step.
 constexpr float TRACK_HEIGHT = 10.0f;
-constexpr float HANDLE_SIZE = 16.0f;
 constexpr float DROPDOWN_WIDTH = 170.0f;
 constexpr float DROPDOWN_ARROW_SIZE = 12.0f;
 
@@ -36,35 +36,38 @@ std::unordered_map<const void*, bool> g_dropdownOpen;
 
 UINodeState button(const std::string text, const ButtonConfig& config)
 {
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     ButtonConfig defaultConfig = {
         .buttonLayout =
             {
-                           .padding = UIEdges(18.0f, 10.0f),
+                           .padding = UIEdges(metrics.spacing.lg, metrics.spacing.sm),
                            .alignMain = UIAlign::Center,
                            .alignCross = UIAlign::Center,
                            },
         .buttonStyle =
             {
-                           .backgroundColor = Color(0.24f, 0.52f, 0.92f),
-                           .borderColor = Color(0.44f, 0.67f, 0.98f),
-                           .borderWidth = 1.0f,
-                           .borderRadius = 7.0f,
+                           .backgroundColor = colors.accent,
+                           .borderColor = colors.accentHover,
+                           .borderWidth = metrics.borderWidth.thin,
+                           .borderRadius = metrics.radius.md,
                            .onHover =
                     {
-                        .backgroundColor = Color(0.33f, 0.61f, 0.98f),
-                        .borderColor = COLOR_WHITE,
-                        .shadowColor = Color(0.24f, 0.52f, 0.92f, 0.55f),
-                        .shadowBlurRadius = 16.0f,
+                        .backgroundColor = colors.accentHover,
+                        .borderColor = colors.text,
+                        .shadowColor = colors.accent,
+                        .shadowBlurRadius = metrics.spacing.lg,
                     }, .onHeld =
                     {
-                        .backgroundColor = Color(0.16f, 0.38f, 0.72f),
-                        .borderColor = Color(0.62f, 0.78f, 1.0f),
-                        .borderWidth = 2.0f,
-                        .shadowBlurRadius = 6.0f,
-                    }, .onPressed = {.backgroundColor = COLOR_WHITE},
+                        .backgroundColor = colors.accentActive,
+                        .borderColor = colors.accentHover,
+                        .borderWidth = metrics.borderWidth.thick,
+                        .shadowBlurRadius = metrics.spacing.sm,
+                    }, .onPressed = {.backgroundColor = colors.onAccent},
                            },
         .textLayout = {},
-        .textConfig = {.style = {.color = COLOR_WHITE, .size = 15.0f}},
+        .textConfig = {.style = UITheming::textStyle("button")},
     };
 
     defaultConfig.buttonLayout.combine(config.buttonLayout);
@@ -83,6 +86,7 @@ UINodeState button(const std::string text, const ButtonConfig& config)
 
     return state;
 }
+
 void toolbarMenu(
     const std::vector<std::string>& items, int& selected, const ToolbarMenuConfig& config
 )
@@ -90,6 +94,9 @@ void toolbarMenu(
     int count = (int)items.size();
     if (count == 0) return;
     if (selected < 0 || selected >= count) selected = 0;
+
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
 
     ToolbarMenuConfig defaultConfig = {
         .menuLayout =
@@ -102,24 +109,24 @@ void toolbarMenu(
             {
                          .width = UISizeSpec::grow(),
                          .height = UISizeSpec::grow(),
-                         .padding = UIEdges(10.0f, 5.0f),
+                         .padding = UIEdges(metrics.spacing.md, metrics.spacing.xs),
                          .alignMain = UIAlign::Center,
                          .alignCross = UIAlign::Center,
                          },
         .itemStyle =
             {
-                         .onHover = {.backgroundColor = Color(0.26f, 0.29f, 0.37f)},
-                         .onHeld = {.backgroundColor = Color(0.30f, 0.62f, 0.95f)},
+                         .onHover = {.backgroundColor = colors.surfaceHover},
+                         .onHeld = {.backgroundColor = colors.accent},
                          },
         .selectedItemStyle =
             {
-                         .backgroundColor = Color(0.24f, 0.38f, 0.58f),
-                         .onHover = {.backgroundColor = Color(0.28f, 0.45f, 0.68f)},
+                         .backgroundColor = colors.accentMuted,
+                         .onHover = {.backgroundColor = colors.accent},
                          },
         .itemTextLayout = {},
-        .itemTextConfig = {.style = {.color = Color(0.72f, 0.75f, 0.82f), .size = 13.0f}},
-        .hoveredItemTextStyle = {.color = Color(0.92f, 0.94f, 0.98f)},
-        .selectedItemTextStyle = {.color = COLOR_WHITE},
+        .itemTextConfig = {.style = UITheming::textStyle("label")},
+        .hoveredItemTextStyle = {.color = colors.text},
+        .selectedItemTextStyle = {.color = colors.text},
     };
 
     defaultConfig.menuLayout.combine(config.menuLayout);
@@ -163,16 +170,20 @@ void toolbarMenu(
     horizontalDivider();
     closeContainer();
 }
+
 void sliderFloat(
     const std::string label, float& value, float minValue, float maxValue,
     const SliderConfig& config
 )
 {
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     SliderConfig defaultConfig = {
         .sliderLayout =
             {
                            .width = UISizeSpec::grow(),
-                           .gap = 16.0f,
+                           .gap = metrics.spacing.lg,
                            .direction = UILayoutDirection::Row,
                            .alignCross = UIAlign::Center,
                            },
@@ -185,21 +196,21 @@ void sliderFloat(
                            },
         .trackStyle =
             {
-                           .backgroundColor = Color(0.20f, 0.22f, 0.28f),
-                           .borderColor = Color(0.28f, 0.31f, 0.40f),
-                           .borderWidth = 1.0f,
+                           .backgroundColor = colors.surfaceSunken,
+                           .borderColor = colors.border,
+                           .borderWidth = metrics.borderWidth.thin,
                            .borderRadius = TRACK_HEIGHT * 0.5f,
-                           .onHover = {.borderColor = Color(0.30f, 0.62f, 0.95f)},
+                           .onHover = {.borderColor = colors.borderFocus},
                            },
         .fillStyle =
             {
-                           .backgroundColor = Color(0.30f, 0.62f, 0.95f),
+                           .backgroundColor = colors.accent,
                            .borderRadius = TRACK_HEIGHT * 0.5f,
                            },
         .handleLayout =
             {
-                           .width = UISizeSpec::fixed(HANDLE_SIZE),
-                           .height = UISizeSpec::fixed(HANDLE_SIZE),
+                           .width = UISizeSpec::fixed(metrics.iconSize),
+                           .height = UISizeSpec::fixed(metrics.iconSize),
                            .floating =
                     UIFloatingConfig {
                         .anchorX = UIAlign::End,
@@ -210,15 +221,15 @@ void sliderFloat(
                            },
         .handleStyle =
             {
-                           .backgroundColor = COLOR_WHITE,
-                           .borderColor = Color(0.30f, 0.62f, 0.95f),
-                           .borderWidth = 2.0f,
-                           .borderRadius = HANDLE_SIZE * 0.5f,
-                           .onHover = {.borderWidth = 3.0f},
-                           .onHeld = {.shadowColor = Color(0.30f, 0.62f, 0.95f), .shadowBlurRadius = 14.0f},
+                           .backgroundColor = colors.text,
+                           .borderColor = colors.accent,
+                           .borderWidth = metrics.borderWidth.thick,
+                           .borderRadius = metrics.iconSize * 0.5f,
+                           .onHover = {.borderWidth = metrics.borderWidth.thick + 1.0f},
+                           .onHeld = {.shadowColor = colors.accent, .shadowBlurRadius = metrics.spacing.lg},
                            },
         .labelLayout = {},
-        .labelTextConfig = {.style = {.color = Color(0.72f, 0.75f, 0.82f), .size = 12.0f}},
+        .labelTextConfig = {.style = UITheming::textStyle("label")},
     };
 
     defaultConfig.sliderLayout.combine(config.sliderLayout);
@@ -287,41 +298,44 @@ void sliderInt(
 
 UINodeState checkBox(const std::string label, bool& checked, const CheckBoxConfig& config)
 {
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     CheckBoxConfig defaultConfig = {
         .rowLayout =
             {
-                        .gap = 8.0f,
+                        .gap = metrics.spacing.sm,
                         .alignCross = UIAlign::Center,
                         },
         .rowStyle = {},
         .boxLayout =
             {
-                        .width = UISizeSpec::fixed(18.0f),
-                        .height = UISizeSpec::fixed(18.0f),
+                        .width = UISizeSpec::fixed(metrics.controlHeightSmall - 2.0f),
+                        .height = UISizeSpec::fixed(metrics.controlHeightSmall - 2.0f),
                         .alignMain = UIAlign::Center,
                         .alignCross = UIAlign::Center,
                         },
         .boxStyle =
             {
-                        .backgroundColor = Color(0.20f, 0.22f, 0.28f),
-                        .borderColor = Color(0.38f, 0.42f, 0.52f),
-                        .borderWidth = 1.0f,
-                        .borderRadius = 4.0f,
-                        .onHover = {.borderColor = Color(0.30f, 0.62f, 0.95f)},
+                        .backgroundColor = colors.surfaceSunken,
+                        .borderColor = colors.borderStrong,
+                        .borderWidth = metrics.borderWidth.thin,
+                        .borderRadius = metrics.radius.sm,
+                        .onHover = {.borderColor = colors.borderFocus},
                         },
         .checkedBoxStyle =
             {
-                        .backgroundColor = Color(0.30f, 0.62f, 0.95f),
-                        .borderColor = Color(0.62f, 0.80f, 1.0f),
+                        .backgroundColor = colors.accent,
+                        .borderColor = colors.accentHover,
                         },
         .markLayout =
             {
-                        .width = UISizeSpec::fixed(8.0f),
-                        .height = UISizeSpec::fixed(8.0f),
+                        .width = UISizeSpec::fixed(metrics.spacing.sm + 2.0f),
+                        .height = UISizeSpec::fixed(metrics.spacing.sm + 2.0f),
                         },
-        .markStyle = {.backgroundColor = COLOR_WHITE, .borderRadius = 2.0f},
+        .markStyle = {.backgroundColor = colors.onAccent, .borderRadius = 2.0f},
         .labelLayout = {},
-        .labelTextConfig = {.style = {.color = Color(0.82f, 0.85f, 0.91f), .size = 13.0f}},
+        .labelTextConfig = {.style = UITheming::textStyle("body")},
     };
 
     defaultConfig.rowLayout.combine(config.rowLayout);
@@ -366,41 +380,44 @@ void radioGroup(
     if (count == 0) return;
     if (selected < 0 || selected >= count) selected = 0;
 
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     RadioGroupConfig defaultConfig = {
         .groupLayout =
             {
-                          .gap = 6.0f,
+                          .gap = metrics.spacing.sm,
                           .direction = UILayoutDirection::Column,
                           },
         .groupStyle = {},
         .rowLayout =
             {
-                          .gap = 8.0f,
+                          .gap = metrics.spacing.sm,
                           .alignCross = UIAlign::Center,
                           },
         .rowStyle = {},
         .dotLayout =
             {
-                          .width = UISizeSpec::fixed(16.0f),
-                          .height = UISizeSpec::fixed(16.0f),
+                          .width = UISizeSpec::fixed(metrics.iconSize),
+                          .height = UISizeSpec::fixed(metrics.iconSize),
                           },
         .dotStyle =
             {
-                          .backgroundColor = Color(0.20f, 0.22f, 0.28f),
-                          .borderColor = Color(0.38f, 0.42f, 0.52f),
-                          .borderWidth = 1.0f,
-                          .borderRadius = 8.0f,
-                          .onHover = {.borderColor = Color(0.30f, 0.62f, 0.95f)},
+                          .backgroundColor = colors.surfaceSunken,
+                          .borderColor = colors.borderStrong,
+                          .borderWidth = metrics.borderWidth.thin,
+                          .borderRadius = metrics.iconSize * 0.5f,
+                          .onHover = {.borderColor = colors.borderFocus},
                           },
         .selectedDotStyle =
             {
-                          .backgroundColor = Color(0.30f, 0.62f, 0.95f),
-                          .borderColor = COLOR_WHITE,
-                          .borderWidth = 4.0f,
+                          .backgroundColor = colors.accent,
+                          .borderColor = colors.onAccent,
+                          .borderWidth = metrics.borderWidth.thick * 2.0f,
                           },
         .labelLayout = {},
-        .labelTextConfig = {.style = {.color = Color(0.72f, 0.75f, 0.82f), .size = 13.0f}},
-        .selectedLabelTextStyle = {.color = COLOR_WHITE},
+        .labelTextConfig = {.style = UITheming::textStyle("label")},
+        .selectedLabelTextStyle = {.color = colors.text},
     };
 
     defaultConfig.groupLayout.combine(config.groupLayout);
@@ -445,6 +462,9 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
     if (count == 0) return 0;
     if (selected < 0 || selected >= count) selected = 0;
 
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
     bool& open = g_dropdownOpen[&selected];
 
     DropdownConfig defaultConfig = {
@@ -452,20 +472,20 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
         .buttonLayout =
             {
                           .width = UISizeSpec::fixed(DROPDOWN_WIDTH),
-                          .padding = UIEdges(10.0f, 6.0f),
-                          .gap = 8.0f,
+                          .padding = UIEdges(metrics.spacing.md, metrics.spacing.sm),
+                          .gap = metrics.spacing.sm,
                           .alignCross = UIAlign::Center,
                           .clipX = true,
                           },
         .buttonStyle =
             {
-                          .backgroundColor = Color(0.20f, 0.22f, 0.28f),
-                          .borderColor = Color(0.38f, 0.42f, 0.52f),
-                          .borderWidth = 1.0f,
-                          .borderRadius = 5.0f,
+                          .backgroundColor = colors.surfaceSunken,
+                          .borderColor = colors.borderStrong,
+                          .borderWidth = metrics.borderWidth.thin,
+                          .borderRadius = metrics.radius.sm,
                           .overflow = UIOverflow::Hidden,
-                          .onHover = {.borderColor = Color(0.30f, 0.62f, 0.95f)},
-                          .onHeld = {.backgroundColor = Color(0.26f, 0.29f, 0.37f)},
+                          .onHover = {.borderColor = colors.borderFocus},
+                          .onHeld = {.backgroundColor = colors.surfaceHover},
                           },
         // A zero floor on the label, so a string longer than the button shrinks and gets
         // cut instead of pushing the arrow out of the box.
@@ -474,7 +494,7 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
                           .width = UISizeSpec::grow(),
                           .clipX = true,
                           },
-        .labelTextConfig = {.style = {.color = Color(0.86f, 0.89f, 0.94f), .size = 13.0f}},
+        .labelTextConfig = {.style = UITheming::textStyle("body")},
         .arrowLayout =
             {
                           .width = UISizeSpec::fixed(DROPDOWN_ARROW_SIZE),
@@ -482,7 +502,7 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
                           },
         .arrowStyle =
             {
-                          .backgroundColor = Color(0.72f, 0.76f, 0.84f),
+                          .backgroundColor = colors.textMuted,
                           .backgroundImage = dropdownTexture(),
                           },
         .panelLayout =
@@ -495,13 +515,13 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
                           },
         .panelStyle =
             {
-                          .backgroundColor = Color(0.14f, 0.15f, 0.20f),
-                          .borderColor = Color(0.34f, 0.38f, 0.48f),
-                          .borderWidth = 1.0f,
-                          .borderRadius = 6.0f,
-                          .shadowColor = Color(0.0f, 0.0f, 0.0f, 0.7f),
-                          .shadowOffset = Vec2(0.0f, 6.0f),
-                          .shadowBlurRadius = 18.0f,
+                          .backgroundColor = colors.surfaceOverlay,
+                          .borderColor = colors.borderStrong,
+                          .borderWidth = metrics.borderWidth.thin,
+                          .borderRadius = metrics.radius.md,
+                          .shadowColor = colors.shadow,
+                          .shadowOffset = Vec2(0.0f, metrics.spacing.sm),
+                          .shadowBlurRadius = metrics.spacing.lg,
                           .overflow = UIOverflow::Hidden,
                           .ignoreClip = true,
                           .zIndex = 40,
@@ -509,25 +529,25 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
         .itemLayout =
             {
                           .width = UISizeSpec::grow(),
-                          .padding = UIEdges(7.0f, 5.0f),
+                          .padding = UIEdges(metrics.spacing.sm, metrics.spacing.xs),
                           .alignCross = UIAlign::Center,
                           .clipX = true,
                           },
         .itemStyle =
             {
-                          .borderRadius = 4.0f,
+                          .borderRadius = metrics.radius.sm,
                           .overflow = UIOverflow::Hidden,
-                          .onHover = {.backgroundColor = Color(0.26f, 0.29f, 0.37f)},
-                          .onHeld = {.backgroundColor = Color(0.30f, 0.62f, 0.95f)},
+                          .onHover = {.backgroundColor = colors.surfaceHover},
+                          .onHeld = {.backgroundColor = colors.accent},
                           },
-        .selectedItemStyle = {.backgroundColor = Color(0.24f, 0.38f, 0.58f)},
+        .selectedItemStyle = {.backgroundColor = colors.accentMuted},
         .itemTextLayout =
             {
                           .width = UISizeSpec::grow(),
                           .clipX = true,
                           },
-        .itemTextConfig = {.style = {.color = Color(0.78f, 0.81f, 0.88f), .size = 13.0f}},
-        .selectedItemTextStyle = {.color = COLOR_WHITE},
+        .itemTextConfig = {.style = UITheming::textStyle("body")},
+        .selectedItemTextStyle = {.color = colors.text},
     };
 
     defaultConfig.wrapperLayout.combine(config.wrapperLayout);
@@ -572,9 +592,10 @@ int dropdown(const std::vector<std::string>& items, int& selected, const Dropdow
 
     if (open) {
         // Off the button's solved height rather than the configured one, so a resized
-        // button still drops the list flush under itself.
+        // button still drops the list flush under itself -- unscaled, since that height
+        // is in real pixels while a floating offset is in design units.
         defaultConfig.panelLayout.floating =
-            UIFloatingConfig {.offset = Vec2(0.0f, button.size.y) + config.panelOffset};
+            UIFloatingConfig {.offset = Vec2(0.0f, unscale(button.size.y)) + config.panelOffset};
 
         UINodeState panel = openContainer(defaultConfig.panelLayout, defaultConfig.panelStyle);
 

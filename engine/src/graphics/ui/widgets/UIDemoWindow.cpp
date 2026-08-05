@@ -1,12 +1,173 @@
 #include "graphics/ui/widgets/UIDemoWindow.hpp"
 #include "graphics/ui/widgets/UIWidgets.hpp"
+#include "graphics/ui/theme/UIThemePresets.hpp"
+#include <string>
+#include <vector>
 
 namespace Engine {
 
 namespace UIWidgets {
 
+namespace {
+
+// One editable text style. Only the two fields worth a slider and a swatch -- the point
+// is that a theme's text styles are editable at all, not that every field is exposed.
+struct DemoTextStyleEdit
+{
+    std::string name;
+    float size = 14.0f;
+    Color color = COLOR_WHITE;
+};
+
+// The seeds and ramp steps the editor exposes, held concrete because a slider needs a
+// float& and a picker a Color&, while the theme's own colour fields are optional.
+struct DemoThemeEdit
+{
+    Color background;
+    Color accent;
+    Color text;
+    float scale = 1.0f;
+    float radius = 6.0f;
+    float spacing = 10.0f;
+    float borderWidth = 1.0f;
+    std::vector<DemoTextStyleEdit> textStyles;
+};
+
+// The preset is kept whole and the edits are laid over a copy of it, so a preset that
+// names more than the three seeds -- Brutalist's square corners, Amber CRT's tinted
+// border -- keeps them while the seeds stay editable.
+UITheme g_baseTheme;
+DemoThemeEdit g_edit;
+int g_presetIndex = 0;
+bool g_initialized = false;
+
+void readBackFromTheme()
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    g_edit.background = colors.background;
+    g_edit.accent = colors.accent;
+    g_edit.text = colors.text;
+    g_edit.scale = metrics.scale;
+    g_edit.radius = metrics.radius.md;
+    g_edit.spacing = metrics.spacing.md;
+    g_edit.borderWidth = metrics.borderWidth.thin;
+
+    g_edit.textStyles.clear();
+    for (const char* name : {"h1", "h3", "body", "label"}) {
+        const UITextStyle& style = UITheming::textStyle(name);
+        g_edit.textStyles.push_back({name, *style.size, *style.color});
+    }
+}
+
+void loadPreset(int index)
+{
+    const std::vector<UIThemePreset>& presets = getThemePresets();
+    if (index < 0 || index >= (int)presets.size()) return;
+
+    g_baseTheme = presets[index].theme;
+    UIThemeManager::get().setTheme(g_baseTheme);
+    readBackFromTheme();
+}
+
+// Applied at the top of the frame rather than where the sliders are, so the whole tree is
+// built against one theme -- changing it mid-build would style half the window with the
+// old values and half with the new.
+void applyEdits()
+{
+    // The first pass has to load a preset before it can push one, or the edit state's
+    // default-constructed (black) colours would be applied as a theme for one frame.
+    if (!g_initialized) {
+        g_initialized = true;
+        loadPreset(g_presetIndex);
+    }
+
+    UITheme theme = g_baseTheme;
+    theme.colors.background = g_edit.background;
+    theme.colors.accent = g_edit.accent;
+    theme.colors.text = g_edit.text;
+
+    theme.metrics.scale = g_edit.scale;
+    theme.metrics.radius.md = g_edit.radius;
+    theme.metrics.radius.sm = g_edit.radius * 0.66f;
+    theme.metrics.radius.lg = g_edit.radius * 1.5f;
+    theme.metrics.spacing.md = g_edit.spacing;
+    theme.metrics.spacing.sm = g_edit.spacing * 0.6f;
+    theme.metrics.spacing.lg = g_edit.spacing * 1.6f;
+    theme.metrics.borderWidth.thin = g_edit.borderWidth;
+    theme.metrics.borderWidth.thick = g_edit.borderWidth * 2.0f;
+
+    for (const DemoTextStyleEdit& style : g_edit.textStyles)
+        theme.textStyles[style.name] = {.color = style.color, .size = style.size};
+
+    UIThemeManager::get().setTheme(theme);
+}
+
+void themeTab()
+{
+    text("Preset");
+    int chosen = g_presetIndex;
+    dropdown(getThemePresetNames(), chosen);
+    if (chosen != g_presetIndex) {
+        g_presetIndex = chosen;
+        loadPreset(g_presetIndex);
+    }
+
+    horizontalDivider();
+
+    if (openSection("Colours", {.openByDefault = true})) {
+        // Only the three seeds: everything else on screen is derived from them, which is
+        // the whole point worth demonstrating.
+        openContainer({.gap = UITheming::metrics().spacing.md, .alignCross = UIAlign::Center});
+        text("Background");
+        colorPickerPopup(g_edit.background);
+        closeContainer();
+
+        openContainer({.gap = UITheming::metrics().spacing.md, .alignCross = UIAlign::Center});
+        text("Accent");
+        colorPickerPopup(g_edit.accent);
+        closeContainer();
+
+        openContainer({.gap = UITheming::metrics().spacing.md, .alignCross = UIAlign::Center});
+        text("Text");
+        colorPickerPopup(g_edit.text);
+        closeContainer();
+    }
+    closeSection();
+
+    if (openSection("Metrics")) {
+        sliderFloat("Scale", g_edit.scale, 0.6f, 2.0f);
+        sliderFloat("Radius", g_edit.radius, 0.0f, 20.0f, {.decimals = 1});
+        sliderFloat("Spacing", g_edit.spacing, 2.0f, 24.0f, {.decimals = 1});
+        sliderFloat("Border", g_edit.borderWidth, 0.0f, 5.0f, {.decimals = 1});
+    }
+    closeSection();
+
+    if (openSection("Text styles")) {
+        for (DemoTextStyleEdit& style : g_edit.textStyles) {
+            if (openSection(style.name)) {
+                sliderFloat("Size", style.size, 8.0f, 42.0f, {.decimals = 1});
+
+                openContainer(
+                    {.gap = UITheming::metrics().spacing.md, .alignCross = UIAlign::Center}
+                );
+                text("Colour");
+                colorPickerPopup(style.color);
+                closeContainer();
+            }
+            closeSection();
+        }
+    }
+    closeSection();
+}
+
+}   // namespace
+
 void demoWindow()
 {
+    applyEdits();
+
     static int selectedMenu = 0;
     static float sliderValue = 0.5f;
     static int stepCount = 3;
@@ -20,7 +181,7 @@ void demoWindow()
 
     openWindow("Demo Window");
 
-    toolbarMenu({"Widgets", "Sliders", "Color"}, selectedMenu);
+    toolbarMenu({"Widgets", "Sliders", "Color", "Theme"}, selectedMenu);
 
     switch (selectedMenu) {
     case 0: {
@@ -93,6 +254,8 @@ void demoWindow()
         text("Inline picker");
         colorPicker(pickedColor);
         break;
+
+    case 3: themeTab(); break;
 
     default: break;
     }

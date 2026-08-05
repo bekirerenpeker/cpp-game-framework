@@ -4,6 +4,7 @@
 #include "graphics/text/TextRenderer.hpp"
 #include "graphics/ui/UILayoutCalculator.hpp"
 #include "graphics/ui/UIRenderer.hpp"
+#include "graphics/ui/theme/UIThemeManager.hpp"
 #include "utils/math/MathFuncs.hpp"
 #include <algorithm>
 #include <functional>
@@ -83,10 +84,61 @@ computeState(IdType id, const UILayoutNode* prev, bool hovered, bool hoveredDire
     };
 }
 
+void scaleSize(UISizeSpec& spec, float scale)
+{
+    if (spec.mode == UISizeMode::Fixed) spec.value *= scale;
+    spec.min *= scale;
+    // UI_UNBOUNDED is a sentinel, not a length; scaling it would still read as unbounded
+    // but stops comparing equal to the constant every other site tests against.
+    if (spec.max < UI_UNBOUNDED) spec.max *= scale;
+}
+
+void scaleEdges(UIEdges& edges, float scale)
+{
+    edges.left *= scale;
+    edges.right *= scale;
+    edges.top *= scale;
+    edges.bottom *= scale;
+}
+
+// Every pixel-valued layout field, multiplied once as the node is created. Applying the
+// scale to the *inputs* rather than to the projection is what keeps the solve's output in
+// real window pixels, so hit testing, clip rects and the mouse all keep working untouched.
+// Percent and Grow are ratios and are deliberately left alone.
+void applyScale(UILayoutConfig& layout, float scale)
+{
+    scaleSize(*layout.width, scale);
+    scaleSize(*layout.height, scale);
+    scaleEdges(*layout.padding, scale);
+    scaleEdges(*layout.margin, scale);
+
+    layout.floating->offset = layout.floating->offset * scale;
+    *layout.gap *= scale;
+    *layout.offset = *layout.offset * scale;
+    *layout.scrollOffset = *layout.scrollOffset * scale;
+}
+
+// The style's own lengths, or a scaled-up UI keeps hairline borders and tight radii on
+// boxes twice the size. None of these feeds hit testing, so scaling them here is safe.
+void applyScale(UIContainerStyle& style, float scale)
+{
+    *style.borderWidth *= scale;
+
+    UICorners& radius = *style.borderRadius;
+    radius.topLeft *= scale;
+    radius.topRight *= scale;
+    radius.bottomRight *= scale;
+    radius.bottomLeft *= scale;
+
+    *style.shadowOffset = *style.shadowOffset * scale;
+    *style.shadowBlurRadius *= scale;
+}
+
 // Lowest priority first, so a pressed button keeps the rest of its hover look instead
 // of falling back to the base. onHeld reads isActive rather than isHeld so a grip
 // dragged off itself stays lit until release, since isHeld dies the moment hover does.
-UIContainerStyle resolveStyle(const UIContainerStyleSpec& spec, const UINodeState& state)
+UIContainerStyle
+resolveStyle(const UIContainerStyleSpec& spec, const UINodeState& state, float scale)
 {
     UIContainerStyle style = spec.base();
     if (state.isHovered) style.combine(spec.onHover);
@@ -98,6 +150,7 @@ UIContainerStyle resolveStyle(const UIContainerStyleSpec& spec, const UINodeStat
     // node is stored -- the renderer then reads plain values instead of re-deciding a
     // default per field, and the defaults themselves live only in UIContainerStyle.
     style.fillDefaults();
+    if (scale != 1.0f) applyScale(style, scale);
     return style;
 }
 
@@ -196,6 +249,14 @@ UINodeState UIManager::addNode(const UILayoutConfig& layout, std::string_view ke
     node->layout.fillDefaults();
     node->style.fillDefaults();
 
+    // A container's real style is resolved and scaled in openContainer; this one only
+    // ever survives on a leaf, whose zIndex and overflow the solver still reads.
+    float scale = UIThemeManager::get().getScale();
+    if (scale != 1.0f) {
+        applyScale(node->layout, scale);
+        applyScale(node->style, scale);
+    }
+
     if (m_openStack.empty()) {
         node->parent = INVALID_ID;
         node->persistentKey = hashCombine(0, localKeyOf(key, (uint64_t)m_roots.size()));
@@ -237,7 +298,7 @@ UINodeState UIManager::openContainer(
         // Flattened here rather than stored, so the node still carries one final style
         // and nothing downstream has to know a state ever existed. The caller can still
         // rewrite node->style afterwards for anything a constant cannot express.
-        node->style = resolveStyle(style, state);
+        node->style = resolveStyle(style, state, UIThemeManager::get().getScale());
     }
 
     m_openStack.push_back(state.id);
@@ -261,7 +322,7 @@ IdType UIManager::addTextLeaf(const UILayoutConfig& layout, const UITextConfig& 
     UINode* node = m_nodes.get(state.id);
     if (!node) return state.id;
 
-    UITextLeafData* leaf = new UITextLeafData(config);
+    UITextLeafData* leaf = new UITextLeafData(config, UIThemeManager::get().getScale());
     // Set on the block rather than on a copy of the config, which owns a spanStyles
     // vector this would have to copy once per text leaf per frame. Still null if the UI
     // was never given a font, and that is fine: the text path resolves null to

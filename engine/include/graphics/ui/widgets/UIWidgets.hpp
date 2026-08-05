@@ -1,6 +1,7 @@
 #pragma once
 
 #include "graphics/ui/UiManager.hpp"
+#include "graphics/ui/theme/UIThemeManager.hpp"
 #include <string>
 #include <vector>
 
@@ -12,6 +13,15 @@ namespace UIWidgets {
 void clear();
 UINode* getNode(IdType id);
 void removeChildren(IdType id);
+
+// A config field is in design units and gets multiplied by the theme scale on the way
+// into the node; UINodeState hands back last frame's *solved* geometry, which is already
+// in real pixels. Anything feeding solved geometry back into a config -- a popup offset
+// off the anchor's height, a drag delta -- has to come back through here, or it scales
+// twice.
+float uiScale();
+float unscale(float value);
+Vec2 unscale(Vec2 value);
 
 UINodeState openContainer(
     const UILayoutConfig& layout = {}, const UIContainerStyleSpec& style = {},
@@ -44,6 +54,27 @@ struct WindowConfig
 };
 UINodeState openWindow(const std::string& name, const WindowConfig& config = {});
 void closeWindow();
+
+// Open/close like a window, and for the same reason: immediate mode gives a widget no
+// way to stop its caller declaring content, so a collapsed section discards it in
+// closeSection instead. The return value lets a caller skip building expensive content
+// in the first place, but ignoring it stays correct.
+struct SectionConfig
+{
+    UILayoutConfig sectionLayout;
+    UIContainerStyleSpec sectionStyle;
+    UILayoutConfig headerLayout;
+    UIContainerStyleSpec headerStyle;
+    UILayoutConfig arrowLayout;
+    UIContainerStyleSpec arrowStyle;
+    UITextConfig headerTextConfig;
+    UILayoutConfig bodyLayout;
+    UIContainerStyleSpec bodyStyle;
+    bool openByDefault = false;
+    std::string_view key;
+};
+bool openSection(const std::string& label, const SectionConfig& config = {});
+void closeSection();
 
 struct ButtonConfig
 {

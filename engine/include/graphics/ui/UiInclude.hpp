@@ -2,6 +2,7 @@
 
 #include "leafs/LeafsInclude.hpp"
 #include "styling/StylingInclude.hpp"
+#include "theme/ThemeInclude.hpp"
 #include "widgets/UIWidgetsInclude.hpp"
 
 #include "UILayoutCalculator.hpp"

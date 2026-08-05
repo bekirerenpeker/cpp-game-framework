@@ -9,33 +9,31 @@ they happened; the reasoning lives in CLAUDE.md, not here.
 Roughly in order: each item is mostly unblocked by the ones above it. Not a
 schedule, just the sequence that avoids rework.
 
-- [ ] **1. Theming** — a palette + named roles (`surface`, `accent`, `h1`) that a
-  style resolves against, so a call site names a role instead of a literal
-  `Color`. The plumbing is done (optional fields, `combine`, `fillDefaults`);
-  what is left is the theme struct, a `ThemeManager`, and a resolve step between
-  combine and fill. **First**, because every widget currently bakes in literal
-  colours and each new one adds more to rewrite.
-
-- [ ] **2. `TextOverflow` clip + ellipsis** — declared and threaded through
+- [ ] **1. `TextOverflow` clip + ellipsis** — declared and threaded through
   `TextBlock`, honoured nowhere; `dropdown` already asks for it. `Clip` is a
   filter in `TextRenderer::draw`'s run loop against the `boxSize` it already
   takes. `Ellipsis` needs `calculate` to backtrack the last run glyph-by-glyph
   until the ellipsis fits, plus a `maxLines`. Small and self-contained.
 
-- [ ] **3. One retained-state store** — three ad-hoc maps exist already (window
+- [ ] **2. One retained-state store** — three ad-hoc maps exist already (window
   geometry by name, dropdown open by `&selected`, picker HSV by `&color`) and a
   fourth is due with every popup widget. Replace with one `key -> state` map on
   `UIManager` with **frame-age eviction** (immediate mode has no destroy event).
   Unblocks scroll, focus, and any widget with no bound value to key on.
 
-- [ ] **4. `UINodeState` drag outputs** — `dragDelta`, `pressOrigin` (mouse *and*
+- [ ] **3. `UINodeState` drag outputs** — `dragDelta`, `pressOrigin` (mouse *and*
   node rect at press, so a drag computes from the grab point instead of
   accumulating error), `grabOffset`, `scrollDelta`, `isDoubleClicked`. Each is a
   few lines in `resolveInput`; together they stop every widget re-deriving the
   same drag math — the window and the sliders each hand-roll it today.
 
+- [ ] **4. Richer input return values** — a widget hands back only the new value, so a
+  caller cannot tell a live drag from a finished one and has to redo expensive work
+  every frame. Return the current value plus `isEditing`/`isReleased`, so an
+  expensive update can wait for release.
+
 - [ ] **5. Scroll** — `UILayoutConfig::scrollOffset` is honoured by the solver but
-  nothing drives it. Needs `scrollDelta` (4), the offset kept per container (3),
+  nothing drives it. Needs `scrollDelta` (3), the offset kept per container (2),
   then wheel handling, drag-to-scroll and a scrollbar widget.
 
 - [ ] **6. Event consumption** — press bubbles with hover, so clicking a child
@@ -46,11 +44,11 @@ schedule, just the sequence that avoids rework.
 
 - [ ] **7. Keyboard focus + text input** — the biggest one, and the gate on
   `textField`, numeric entry and editable colour values. Needs a focused key in
-  the state store (3), consumption (6), `Input` character events, then a caret,
+  the state store (2), consumption (6), `Input` character events, then a caret,
   selection, and clipboard. Do it as one widget first, generalise after.
 
 - [ ] **8. `contextMenu` and a menu bar** — the overlay machinery is done and
-  `dropdown` proves it; both are compositions on top. Blocked only on (3), since
+  `dropdown` proves it; both are compositions on top. Blocked only on (2), since
   neither has a bound value whose address can key its open state.
 
 - [ ] **9. A screen-space root that fills the window** — `resolveRootSize` sizes a
@@ -59,34 +57,30 @@ schedule, just the sequence that avoids rework.
   size threaded into the root solve — and collides with the invariant that a root
   is deliberately not clamped to its content floor. A design call, not a patch.
 
-- [ ] **10. UI scale / DPI** — screen space is hard-wired to one unit per window
-  pixel. A `pixelsPerUiUnit` on `UIRenderer` folds into the ortho and into
-  `getMouseUiPos` with no other call site touched.
-
-- [ ] **11. `cursor` and `transition`** — both declared on `UIContainerStyle` and
+- [ ] **10. `cursor` and `transition`** — both declared on `UIContainerStyle` and
   both dead. `cursor` is a glfw cursor set from the hovered node, once per frame.
-  `transition` needs a per-key animated value in the state store (3), which is
+  `transition` needs a per-key animated value in the state store (2), which is
   why it waits.
 
-- [ ] **12. Grid** — a track list where each track carries a `UISizeSpec`, run
+- [ ] **11. Grid** — a track list where each track carries a `UISizeSpec`, run
   through the solver's existing distribution routine, then row-major placement
   with an optional span. ~80% of grid's value; skip auto-fit/minmax/dense.
 
-- [ ] **13. More widgets** — cheap compositions once theming lands: `image`,
+- [ ] **12. More widgets** — cheap compositions now theming has landed: `image`,
   `progressBar`, `tabs` (`toolbarMenu` is most of it), `treeView`, `groupBox`,
   `dragFloat` (slider without a track). Each is a config struct plus a subtree.
 
-- [ ] **14. Rename `UIWidgets` to `UI`** — the namespace already forwards the bare
+- [ ] **13. Rename `UIWidgets` to `UI`** — the namespace already forwards the bare
   primitives alongside the widgets, which was the point; the name still says
   "widgets". A rename, nothing more, but do it before call sites multiply.
 
-- [ ] **15. One batch for UI rects and UI glyphs** — a panel and its label cost
+- [ ] **14. One batch for UI rects and UI glyphs** — a panel and its label cost
   two draw calls, since the rect shader is a rounded-box SDF and the glyph shader
   is a field sampler. Merging means one shader branching on a per-vertex mode and
   one vertex format wide enough for both. Only worth it when a real UI shows the
   draw calls matter.
 
-- [ ] **16. Text perf** — three separate small ones: pack `TextVertex` (7
+- [ ] **15. Text perf** — three separate small ones: pack `TextVertex` (7
   attributes, 68 bytes, two full `Color`s → RGBA8); a cross-block layout cache
   keyed on `hash(text, style, maxWidth)` so N identical labels cost one walk; and
   named style tags (`/b`, `/i`, `/color=red`) through `TextTags::isTagAt`, the
@@ -122,12 +116,32 @@ schedule, just the sequence that avoids rework.
 
 ### UI
 
+- [x] **Theming** — `UIThemeManager` (its own Singleton, outside `styling/`) holds
+  21 colour roles, a metric ramp and string-keyed text styles. Colours are a spec
+  of optionals: set `background`/`accent`/`text` and `resolve()` derives the other
+  18 by lighten/darken/mix, so a retheme is three lines; `onAccent` picks white or
+  near-black off the accent's Rec. 709 luminance. Widgets read roles inline
+  (`UITheming::colors().accent`) — the theme holds no per-widget presets, and
+  nothing in `UIManager`, the solver or the renderer reads it except the scale.
+  Extra roles go in a `custom` string map; extra text styles just take a new name.
+
+- [x] **UI scale (and DPI with it)** — `UIThemeMetrics::scale` multiplies every
+  pixel-valued layout and style field once, in `UIManager::addNode`. Scaling the
+  *inputs* rather than the projection is what keeps the solve's output in real
+  window pixels, so hit testing, clip rects and `getMouseUiPos` need no changes.
+  Percent/Grow are ratios and text `size` scales while its em-based effects do
+  not. The one trap: `UINodeState` hands back solved geometry in real pixels, so
+  anything feeding it back into a config goes through `UIWidgets::unscale` — the
+  window drag, the tooltip anchor and both popup offsets do.
+
 - [x] **Widget layer over the primitives** — `UIWidgets` is the single public face:
   thin forwarders for the primitives plus every widget as a free function with one
   config struct each. `UIManager` stays the tree owner and no widget touches its
   privates. Shipped: `button`, `text`, `dividers`, `toolbarMenu`, `sliderFloat`/
   `sliderInt`, `checkBox`, `radioGroup`, `tooltip`, `colorPicker`,
-  `colorPickerPopup`, `dropdown`, `dragHandle`, `openWindow`/`closeWindow`.
+  `colorPickerPopup`, `dropdown`, `dragHandle`, `openSection`/`closeSection`,
+  `openWindow`/`closeWindow`. The demo window's Theme tab edits a live theme and
+  switches between seven built-in presets.
 
 - [x] **Window widget** — movable, resizable from an image drag handle, and
   collapsible. Geometry lives in an engine-side map keyed by name, not on the

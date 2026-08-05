@@ -60,14 +60,16 @@ struct UITextStyle
 
     // The one crossing back into the concrete TextStyle the text path actually draws
     // with. Fills first, so every field is engaged and the reads below cannot be
-    // anything but a plain dereference.
-    TextStyle resolve() const
+    // anything but a plain dereference. Only size takes the UI scale: every other
+    // measurement here is in em and so scales itself with the glyphs.
+    TextStyle resolve(float scale = 1.0f) const
     {
         UITextStyle filled = *this;
         filled.fillDefaults();
 
         TextStyle result;
         UI_TEXT_STYLE_FIELDS(UI_TEXT_STYLE_ASSIGN_FIELD)
+        result.size *= scale;
         return result;
     }
 };
