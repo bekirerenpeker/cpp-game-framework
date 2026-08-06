@@ -1,6 +1,10 @@
 #include "ui/UiManager.hpp"
+#include "context/GlfwContext.hpp"
+#include "core/Time.hpp"
 #include "core/input/Input.hpp"
 #include "core/logging/LoggerMacros.hpp"
+#include "core/window_management/ViewContext.hpp"
+#include "core/window_management/Window.hpp"
 #include "graphics/text/TextRenderer.hpp"
 #include "ui/UILayoutCalculator.hpp"
 #include "ui/UIRenderer.hpp"
@@ -17,6 +21,8 @@ namespace {
 // Pixels per wheel tick, scaled with the UI so a notch travels the same apparent
 // distance whatever the theme scale is.
 constexpr float SCROLL_WHEEL_STEP = 48.0f;
+
+constexpr float DOUBLE_CLICK_SECONDS = 0.4f;
 
 // Distinct seeds so an unnamed node's positional index and a named node's hash never
 // collide into the same key.
@@ -56,39 +62,20 @@ bool containsMouse(const UILayoutNode& node, Vec2 mouse)
     return containsClip(node.clipRect, mouse);
 }
 
-UINodeState computeState(
-    IdType id, uint64_t key, const UILayoutNode* prev, bool hovered, bool hoveredDirectly,
-    bool active
-)
+CursorShape cursorShapeOf(UICursor cursor)
 {
-    if (!prev) return {.id = id, .persistentKey = key};
-
-    Vec2 half = prev->size * 0.5f;
-    // Both sides come from the same space -- the mouse through UIRenderer, drawPos
-    // baked by the solver -- so screen and world hit test through one path. drawPos is
-    // centre-anchored and Y-up; flip into the box's own top-left/Y-down space so
-    // local/relative match the rest of the UI instead of the render convention.
-    Vec2 centerDelta = UIRenderer::get().getMouseUiPos() - prev->drawPos;
-    Vec2 local = Vec2(centerDelta.x + half.x, half.y - centerDelta.y);
-    Vec2 relative = prev->size.x > 0.0f && prev->size.y > 0.0f ? local / prev->size : VEC2_ZERO;
-
-    // The button states ride on the bubbled hover, so a click inside a child still
-    // reaches the containers around it. Two *overlapping* containers still cannot both
-    // react, since only the topmost one's ancestors are in the chain at all.
-    return {
-        id,
-        hovered,
-        hoveredDirectly,
-        active,
-        hovered && Input::get().mouseButtonPressed(MouseButton::Left),
-        hovered && Input::get().mouseButtonReleased(MouseButton::Left),
-        hovered && Input::get().mouseButtonHeld(MouseButton::Left),
-        relative,
-        local,
-        prev->pos,
-        prev->size,
-        key
-    };
+    switch (cursor) {
+    case UICursor::Pointer   : return CursorShape::Hand;
+    case UICursor::Text      : return CursorShape::IBeam;
+    case UICursor::Move      : return CursorShape::ResizeAll;
+    case UICursor::Crosshair : return CursorShape::Crosshair;
+    case UICursor::NotAllowed: return CursorShape::NotAllowed;
+    case UICursor::ResizeEW  : return CursorShape::ResizeEW;
+    case UICursor::ResizeNS  : return CursorShape::ResizeNS;
+    case UICursor::ResizeNWSE: return CursorShape::ResizeNWSE;
+    case UICursor::ResizeNESW: return CursorShape::ResizeNESW;
+    default                  : return CursorShape::Arrow;
+    }
 }
 
 void scaleSize(UISizeSpec& spec, float scale)
@@ -186,6 +173,8 @@ void UIManager::clear()
 void UIManager::resolveInput()
 {
     m_hoveredKeys.clear();
+    m_pressKeyCount = 0;
+    m_isDoubleClick = false;
 
     Vec2 mouse = UIRenderer::get().getMouseUiPos();
     const std::vector<UILayoutNode>& prev = UILayoutCalculator::get().getPrevFrameNodes();
@@ -197,6 +186,7 @@ void UIManager::resolveInput()
     // node in its layer, so the content visually underneath it must not answer instead.
     if (resolveScrollbars(prev, mouse)) {
         m_activeKey = NO_KEY;
+        applyCursor(prev, NO_LAYOUT_NODE);
         return;
     }
 
@@ -232,19 +222,70 @@ void UIManager::resolveInput()
             if (hit != NO_LAYOUT_NODE && !paintsAbove(prev[i], prev[hit])) continue;
             hit = i;
         }
-        if (hit != NO_LAYOUT_NODE && input.mouseButtonPressed(MouseButton::Left))
+        if (hit != NO_LAYOUT_NODE && input.mouseButtonPressed(MouseButton::Left)) {
             m_activeKey = prev[hit].persistentKey;
+            capturePress(prev[hit], mouse);
+        }
     }
 
-    if (hit == NO_LAYOUT_NODE) return;
+    if (hit == NO_LAYOUT_NODE) {
+        applyCursor(prev, hit);
+        return;
+    }
 
     // The hit node first, then every ancestor. Walking up is what keeps a panel lit
     // while the cursor is on one of its own children; stopping at the hit node alone
     // reads as the panel flickering off whenever the cursor crosses its contents.
-    for (uint i = hit; i != NO_LAYOUT_NODE; i = prev[i].parent)
+    // The press chain is the same walk cut short at the first node that claims the
+    // click, so hover reaches the whole panel while the press stops at the button.
+    for (uint i = hit; i != NO_LAYOUT_NODE; i = prev[i].parent) {
         m_hoveredKeys.push_back(prev[i].persistentKey);
+        if (m_pressKeyCount == 0 && prev[i].blocksInput) m_pressKeyCount = m_hoveredKeys.size();
+    }
+    if (m_pressKeyCount == 0) m_pressKeyCount = m_hoveredKeys.size();
 
+    applyCursor(prev, hit);
     routeScrollWheel(prev, hit);
+}
+
+// The mouse and the node's rect frozen at the moment of the press, so every drag after
+// it measures from one fixed point instead of summing per-frame deltas -- which drifts,
+// and drifts worst on the node being dragged, since it moves under its own answer.
+void UIManager::capturePress(const UILayoutNode& node, Vec2 mouse)
+{
+    Vec2 half = node.size * 0.5f;
+    Vec2 centerDelta = mouse - node.drawPos;
+
+    m_pressOrigin.mousePos = mouse;
+    m_pressOrigin.pos = node.pos;
+    m_pressOrigin.size = node.size;
+    // Y-down and top-left anchored, matching localMousePos rather than the renderer's
+    // centre-anchored Y-up draw space.
+    m_pressGrabOffset = Vec2(centerDelta.x + half.x, half.y - centerDelta.y);
+
+    float now = Time::get().currTime();
+    m_isDoubleClick =
+        node.persistentKey == m_lastClickKey && now - m_lastClickTime <= DOUBLE_CLICK_SECONDS;
+
+    m_lastClickKey = node.persistentKey;
+    // Reset rather than kept, or the third click of a triple reads as a second double.
+    m_lastClickTime = m_isDoubleClick ? 0.0f : now;
+}
+
+// Walks outward from the node under the cursor and takes the first node that names a
+// cursor, so UICursor::Default reads as "no opinion" and inherits from an ancestor --
+// otherwise every container in the tree would fight over the shape every frame.
+void UIManager::applyCursor(const std::vector<UILayoutNode>& prev, uint hit) const
+{
+    UICursor cursor = UICursor::Default;
+    for (uint i = hit; i != NO_LAYOUT_NODE; i = prev[i].parent) {
+        if (prev[i].cursor == UICursor::Default) continue;
+        cursor = prev[i].cursor;
+        break;
+    }
+
+    Window* window = ViewContext::get().getActiveWindow();
+    if (window) window->setCursor(cursorShapeOf(cursor));
 }
 
 // Outward from the node under the cursor. An axis this node cannot move on is left in
@@ -358,6 +399,60 @@ bool UIManager::isKeyHovered(uint64_t key) const
     return false;
 }
 
+bool UIManager::isKeyPressable(uint64_t key) const
+{
+    for (size_t i = 0; i < m_pressKeyCount; i++)
+        if (m_hoveredKeys[i] == key) return true;
+    return false;
+}
+
+UINodeState UIManager::computeState(IdType id, uint64_t key, const UILayoutNode* prev) const
+{
+    UINodeState state;
+    state.id = id;
+    state.persistentKey = key;
+    state.isHovered = isKeyHovered(key);
+    state.isHoveredDirectly = !m_hoveredKeys.empty() && m_hoveredKeys.front() == key;
+    state.isActive = m_activeKey != NO_KEY && key == m_activeKey;
+    state.mousePos = UIRenderer::get().getMouseUiPos();
+
+    // Bounded by the press chain rather than by hover, so a click inside a child reaches
+    // the containers around it only up to the first one that claims it. Two *overlapping*
+    // containers still cannot both react, since only the topmost one's ancestors are in
+    // the chain at all.
+    Input& input = Input::get();
+    bool pressable = isKeyPressable(key);
+    state.isPressed = pressable && input.mouseButtonPressed(MouseButton::Left);
+    state.isReleased = pressable && input.mouseButtonReleased(MouseButton::Left);
+    state.isHeld = pressable && input.mouseButtonHeld(MouseButton::Left);
+    state.isDoubleClicked = state.isPressed && m_isDoubleClick && key == m_lastClickKey;
+
+    // The whole wheel, not what routeScrollWheel left of it: a widget reading this is
+    // not a scroll container and has no offset of its own for the routing to consume.
+    if (state.isHovered) state.scrollDelta = input.getScrollDelta();
+
+    if (state.isActive) {
+        state.pressOrigin = m_pressOrigin;
+        state.grabOffset = m_pressGrabOffset;
+        state.dragDelta = state.mousePos - m_pressOrigin.mousePos;
+    }
+
+    if (!prev) return state;
+
+    Vec2 half = prev->size * 0.5f;
+    // Both sides come from the same space -- the mouse through UIRenderer, drawPos
+    // baked by the solver -- so screen and world hit test through one path. drawPos is
+    // centre-anchored and Y-up; flip into the box's own top-left/Y-down space so
+    // local/relative match the rest of the UI instead of the render convention.
+    Vec2 centerDelta = state.mousePos - prev->drawPos;
+    state.localMousePos = Vec2(centerDelta.x + half.x, half.y - centerDelta.y);
+    state.relativeMousePos =
+        prev->size.x > 0.0f && prev->size.y > 0.0f ? state.localMousePos / prev->size : VEC2_ZERO;
+    state.pos = prev->pos;
+    state.size = prev->size;
+    return state;
+}
+
 UINodeState UIManager::addNode(const UILayoutConfig& layout, std::string_view key)
 {
     IdType id = m_nodes.add();
@@ -413,12 +508,7 @@ UINodeState UIManager::openContainer(
     UINode* node = m_nodes.get(state.id);
     if (node) {
         node->prevFrameLayout = UILayoutCalculator::get().getPrevFrameLayout(node->persistentKey);
-        bool hovered = isKeyHovered(node->persistentKey);
-        bool direct = !m_hoveredKeys.empty() && m_hoveredKeys.front() == node->persistentKey;
-        bool active = m_activeKey != NO_KEY && node->persistentKey == m_activeKey;
-        state = computeState(
-            state.id, node->persistentKey, node->prevFrameLayout, hovered, direct, active
-        );
+        state = computeState(state.id, node->persistentKey, node->prevFrameLayout);
 
         // Flattened here rather than stored, so the node still carries one final style
         // and nothing downstream has to know a state ever existed. The caller can still
@@ -549,9 +639,12 @@ void UIManager::draw()
     UILayoutCalculator::get().beginFrame();
 
     Vec2 rootTopLeft = renderer.getRootOrigin();
+    // What a Grow or Percent root measures itself against, which is the window in screen
+    // space and nothing at all in world space. Fit and Fixed roots never read it.
+    Vec2 rootAvailable = renderer.getRootSize();
     for (IdType rootId : m_roots) {
         const std::vector<UILayoutNode>& solved =
-            UILayoutCalculator::get().calculate(rootId, rootTopLeft);
+            UILayoutCalculator::get().calculate(rootId, rootTopLeft, rootAvailable);
 
         uint maxLayer = 0;
         for (const UILayoutNode& layoutNode : solved)

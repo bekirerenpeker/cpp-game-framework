@@ -4,99 +4,88 @@ Working backlog. Claude Code agents may add, edit, reorder, check off or remove
 items — keep it current. Done items get **one or two lines**, just enough to know
 they happened; the reasoning lives in CLAUDE.md, not here.
 
+## Implement Now
+
+- [ ] **Keyboard focus + text input** — gate on `textField`. Needs focused key, character events, caret, selection, clipboard. One widget first, then generalise.
+
 ## UI & text — next up
 
-Roughly in order: each item is mostly unblocked by the ones above it. Not a
-schedule, just the sequence that avoids rework. Deliberately unnumbered — items
-land out of order often enough that renumbering the rest was pure churn, so
-cross-references go by name.
+- [ ] **`contextMenu` and menu bar** — compositions on top of overlay machinery.
 
-- [ ] **`UINodeState` drag outputs** — `dragDelta`, `pressOrigin` (mouse *and*
-  node rect at press, so a drag computes from the grab point instead of
-  accumulating error), `grabOffset`, `scrollDelta`, `isDoubleClicked`. Each is a
-  few lines in `resolveInput`; together they stop every widget re-deriving the
-  same drag math — the window and the sliders each hand-roll it today.
+- [ ] **`transition`** — animate style fields per key in the state store; needs a rule for what each field interpolates as. `cursor`, its other half, has landed.
 
-- [ ] **Event consumption** — press bubbles with hover, so clicking a child
-  also fires every container above it. Fine while ancestors are inert panels,
-  wrong the first time a button sits in a clickable row. Needs the hit node to be
-  able to stop propagation — split "the node that owns the click" from "the nodes
-  containing the cursor". `ignoreInput` (the cheap half) already landed.
+- [ ] **Grid** — track list with `UISizeSpec`, distribution, row-major placement with span. Skip auto-fit/minmax/dense (~80% of value).
 
-- [ ] **Keyboard focus + text input** — the biggest one, and the gate on
-  `textField`, numeric entry and editable colour values. Needs a focused key in
-  the state store, event consumption, `Input` character events, then a caret,
-  selection, and clipboard. Do it as one widget first, generalise after.
+- [ ] **More widgets** — `image`, `progressBar`, `tabs`, `treeView`, `groupBox`, `dragFloat`.
 
-- [ ] **`contextMenu` and a menu bar** — the overlay machinery is done and
-  `dropdown` proves it; both are compositions on top, and the state store now
-  gives them somewhere to keep their open flag.
+- [ ] **One batch for UI rects and glyphs** — merge shaders to cut draw calls.
 
-- [ ] **A screen-space root that fills the window** — `resolveRootSize` sizes a
-  root from its own spec with nothing passed in, so `Grow`/`Percent` fall back to
-  max-content. A HUD wants a root that *is* the window, which needs an available
-  size threaded into the root solve — and collides with the invariant that a root
-  is deliberately not clamped to its content floor. A design call, not a patch.
+- [ ] **Text perf** — pack `TextVertex` to RGBA8, layout cache, named style tags.
 
-- [ ] **`cursor` and `transition`** — both declared on `UIContainerStyle` and
-  both dead. `cursor` is a glfw cursor set from the hovered node, once per frame.
-  `transition` is a per-key animated value in the state store plus a rule for what
-  a style field interpolates as.
-
-- [ ] **Grid** — a track list where each track carries a `UISizeSpec`, run
-  through the solver's existing distribution routine, then row-major placement
-  with an optional span. ~80% of grid's value; skip auto-fit/minmax/dense.
-
-- [ ] **More widgets** — cheap compositions now theming has landed: `image`,
-  `progressBar`, `tabs` (`toolbarMenu` is most of it), `treeView`, `groupBox`,
-  `dragFloat` (slider without a track). Each is a config struct plus a subtree.
-
-- [ ] **Rename `UIWidgets` to `UI`** — the namespace already forwards the bare
-  primitives alongside the widgets, which was the point; the name still says
-  "widgets". A rename, nothing more, but do it before call sites multiply.
-
-- [ ] **One batch for UI rects and UI glyphs** — a panel and its label cost
-  two draw calls, since the rect shader is a rounded-box SDF and the glyph shader
-  is a field sampler. Merging means one shader branching on a per-vertex mode and
-  one vertex format wide enough for both. Only worth it when a real UI shows the
-  draw calls matter.
-
-- [ ] **Text perf** — three separate small ones: pack `TextVertex` (7
-  attributes, 68 bytes, two full `Color`s → RGBA8); a cross-block layout cache
-  keyed on `hash(text, style, maxWidth)` so N identical labels cost one walk; and
-  named style tags (`/b`, `/i`, `/color=red`) through `TextTags::isTagAt`, the
-  single extension point.
-
-- [ ] **Known warts, documented not fixed** — hit testing reads last frame's rect,
-  so a widget that moves *because* of a drag trails a frame (Dear ImGui does the
-  same). Dashed borders use the mean of the four corner radii for the arc-length
-  walk, exact only when the corners match. There is no `minHeight`/`maxHeight`,
-  which the single-number height pass depends on. Both scrollbars span their whole
-  edge, so with two up they cross in the corner. A floating child of a scroll
-  container does not scroll with it — right for a popup, arguable otherwise.
+- [ ] **Known warts** — hit test lags a frame; dashed borders use mean radius; no `minHeight`/`maxHeight`; scrollbars cross in corner; floating children don't scroll; clip rects are AABBs, so square children still poke into a rounded corner's arc.
 
 ## Other systems
 
-- [ ] **Terrain-type tilemap rework** — `Tileset::tilesConnect` is `a != 0 && a == b`,
-  so a rule tile only autotiles against itself. Add a `terrainType` on `TileData`
-  decoupled from the visual tile id, compare that, and support transition tiles
-  keyed by a `(terrainA, terrainB)` pair. A data-model change — do it before
-  building real tilemap content.
+- [ ] **Terrain-type tilemap rework** — decouple terrain type from visual tile id; support `(terrainA, terrainB)` transition tiles. Data-model change, do before real tilemap content.
 
-- [ ] **Tilemap vertex/perf pass** — pack `TileVertex`'s `Color` to RGBA8, shrink
-  `texIndex`, and rebuild chunks partially instead of a full `CHUNK_SIZE^2`
-  rebake. Do it alongside the terrain rework; both touch `TileVertex`.
+- [ ] **Tilemap vertex/perf pass** — pack `TileVertex::Color` to RGBA8, shrink `texIndex`, rebuild chunks partially. Do alongside terrain rework.
 
-- [ ] **Per-sprite material uniforms** — `SpriteComponent::shader` picks a shader
-  but cannot feed it uniforms. Needs a material concept: a shared uniform set
-  stored once and referenced by sprites, applied on the shader switch.
+- [ ] **Per-sprite material uniforms** — shared uniform set referenced by sprites, applied on shader switch.
 
-- [ ] **Docs pass** — CLAUDE.md is the only source of truth and is getting long.
-  Once the UI stabilises, split into `docs/` per subsystem.
+- [ ] **Docs pass** — split CLAUDE.md into `docs/` per subsystem once UI stabilises.
+
+- [ ] **Rework namespace names** — `UIWidgets` → `UI`, standardise across the project.
 
 ## Done
 
 ### UI
+
+- [x] **`UINodeState` drag outputs** — `mousePos`, `dragDelta`, `pressOrigin` (mouse *and*
+  node rect at press), `grabOffset`, `scrollDelta`, `isDoubleClicked`. `dragDelta` is
+  measured **from the press, never accumulated frame to frame**, which is the whole point:
+  summing per-frame deltas drifts, and drifts worst on the node being dragged since it
+  moves under its own answer. The press data lives as plain members on `UIManager` next to
+  `m_activeKey` rather than in `UIStateStore` — only one node is ever captured, so a table
+  keyed per node would be waste. `dragVec2` lost `"dragActive"` and `"dragPointerOrigin"`
+  and now keeps only the caller's value baseline, which the engine cannot know. Sliders and
+  the colour picker deliberately stay on `relativeMousePos`: they are absolute positional
+  drags with no grab offset by design, so a `grabOffset` would change how they feel.
+
+- [x] **Event consumption** — `style.blockInput` bounds press/held/released to the hover
+  chain up to and including the first node that sets it; **hover itself keeps bubbling all
+  the way**, matching CSS `:hover`, so a panel stays lit while the cursor is on its
+  children. Stored as `m_pressKeyCount` — the same walk that builds `m_hoveredKeys`, cut
+  short — so the default costs nothing and `false` is bit-identical to the old behaviour.
+  Copied onto `UILayoutNode` (the snapshot nulls `.node`) and, unlike `ignoresInput`,
+  deliberately **not** sticky down the subtree: it says this node owns a click that landed
+  in it, not that its descendants cannot be hit. The built-in widgets set it on themselves,
+  so a button in a clickable row no longer fires the row too. Falls out for free: a panel
+  with an `onPressed` style stops flashing when something inside it is clicked.
+
+- [x] **Root sizes against the window** — `resolveRootSize` gained `Grow → available` and
+  `Percent → available * value`, threaded in as a third `calculate` argument from
+  `UIRenderer::getRootSize()` (the window in screen space, zero in world space, where there
+  is no box for a ratio to be a ratio of). **`Fit` and `Fixed` never read it**, which is
+  what makes every root that predates this bit-identical — including `openWindow`'s
+  wrapper, which is `Fit`. A full-screen menu is now `grow`/`grow` plus centre aligns on a
+  root; `ui_test` toggles one with F1.
+
+- [x] **`cursor`** — the dead style field is wired: `Window::setCursor(CursorShape)` over a
+  `GLFWcursor*` cache owned by `GlfwContext`, which is what owns the `glfwTerminate`
+  lifetime they must die before. `UICursor::Default` means **"no opinion"**, not "arrow" —
+  the shape is the first node naming one, walking outward from the pointer, so a container
+  only affects the cursor when it actually sets one and ancestors inherit down. Resolved
+  once per frame at the end of `resolveInput`. Per-state cursors (`onHover`, `onPressed`)
+  came free from the existing style flattening. Enum gained the four resize shapes.
+
+- [x] **Clipping honours the parent's border** — `childClipRect` is inset by the border
+  width, so a child of an `overflow: Hidden` container no longer paints over the ring its
+  parent drew inside the same rect. `clipRect` is deliberately **not** inset — the node
+  still has to reach its own ring and shadow. The inset is the width the renderer *actually*
+  paints (`UILayoutNode::borderInset`), replicating `UIRenderer`'s own rule: a transparent
+  border draws nothing however wide it is set, and the shader clamps to half the short side,
+  so anything else would carve pixels out of a ring that was never there. `scrollbarOf`
+  insets by the same value. Still an AABB, so rounded corners leak — logged as a wart.
 
 - [x] **`TextOverflow` clip + ellipsis** — `Ellipsis` is a post-pass in
   `TextLayoutCalculator`, run before alignment (cutting a line changes the slack it

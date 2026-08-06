@@ -1,7 +1,6 @@
 #include "ui/widgets/UIWidgets.hpp"
 #include "ui/widgets/UIWidgetsInternal.hpp"
 #include "core/logging/LoggerMacros.hpp"
-#include "ui/UIRenderer.hpp"
 #include "ui/UIStateStore.hpp"
 #include "ui/UiManager.hpp"
 #include "utils/math/MathFuncs.hpp"
@@ -38,30 +37,21 @@ struct UIOpenSection
 
 std::vector<UIOpenSection> g_openSections;
 
-// The origins hang off the handle's own node rather than off whatever is being dragged,
-// so a widget no longer has to own a drag struct to be draggable.
+// Only the caller's own value baseline has to be stored: the pointer origin and the
+// was-live latch both come off UINodeState now, and dragDelta is already measured from
+// the press rather than accumulated, so nothing here can drift.
 void dragVec2(const UINodeState& handle, Vec2& value, Vec2 minValue)
 {
-    UIStateStore& store = UIStateStore::get();
-    UIStateFlag isDragging = store.flag(handle.persistentKey, "dragActive");
+    if (!handle.isActive) return;
 
-    if (!handle.isActive) {
-        isDragging = false;
-        return;
-    }
+    UIStateStore& store = UIStateStore::get();
+    if (handle.isPressed) store.setVec2(handle.persistentKey, "dragValueOrigin", value);
 
     // Unscaled on the way in, so the stored position and size stay in the design units
     // every config field is written in -- the layout scale is applied to them again as
     // the window is declared, and a scaled UI would otherwise drag at the wrong rate.
-    Vec2 mouse = unscale(UIRenderer::get().getMouseUiPos());
-    if (!isDragging) {
-        isDragging = true;
-        store.setVec2(handle.persistentKey, "dragPointerOrigin", mouse);
-        store.setVec2(handle.persistentKey, "dragValueOrigin", value);
-    }
-
     // The mouse is y-up while both the position and the size are y-down.
-    Vec2 delta = mouse - store.getVec2(handle.persistentKey, "dragPointerOrigin");
+    Vec2 delta = unscale(handle.dragDelta);
     Vec2 origin = store.getVec2(handle.persistentKey, "dragValueOrigin");
     value =
         Vec2(Math::max(origin.x + delta.x, minValue.x), Math::max(origin.y - delta.y, minValue.y));
@@ -80,18 +70,20 @@ UINodeState dragHandle(const DragHandleConfig& config)
                            .width = UISizeSpec::fixed(metrics.controlHeight),
                            .height = UISizeSpec::fixed(metrics.controlHeight),
                            .floating =
-                           UIFloatingConfig {
-                           .offset = Vec2(-metrics.spacing.xs, -metrics.spacing.xs),
-                           .anchorX = UIAlign::End,
-                           .anchorY = UIAlign::End,
-                           .selfX = UIAlign::End,
-                           .selfY = UIAlign::End
-                           },.isFloating = true,
+                    UIFloatingConfig {
+                        .offset = Vec2(-metrics.spacing.xs, -metrics.spacing.xs),
+                        .anchorX = UIAlign::End,
+                        .anchorY = UIAlign::End,
+                        .selfX = UIAlign::End,
+                        .selfY = UIAlign::End
+                    }, .isFloating = true,
                            },
         // The image is white, so backgroundColor is what tints it.
         .handleStyle = {
                            .backgroundColor = colors.foregroundSubtle,
                            .backgroundImage = dragHandleTexture(),
+                           .blockInput = true,
+                           .cursor = UICursor::ResizeNWSE,
                            .onHover = {.backgroundColor = colors.foreground},
                            .onHeld = {.backgroundColor = colors.accent},
                            },
@@ -133,6 +125,8 @@ bool openSection(const std::string& label, const SectionConfig& config)
             {
                             .backgroundColor = colors.surfaceRaised,
                             .borderRadius = metrics.radius.sm,
+                            .blockInput = true,
+                            .cursor = UICursor::Pointer,
                             .onHover = {.backgroundColor = colors.surfaceHover},
                             .onHeld = {.backgroundColor = colors.accentMuted},
                             },
@@ -290,6 +284,8 @@ UINodeState openWindow(const std::string& name, const WindowConfig& config)
                 // since the bar is then the whole window.
                 .borderRadius =
                     collapsed ? UICorners(radius) : UICorners(radius, radius, 0.0f, 0.0f),
+                           .blockInput = true,
+                           .cursor = UICursor::Move,
                            .onHover = {.backgroundColor = colors.surfaceHover},
                            .onHeld = {.backgroundColor = colors.accent},
                            },

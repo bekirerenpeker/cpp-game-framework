@@ -33,16 +33,20 @@ scrollbarOf(const UILayoutNode& node, UILayoutAxis axis, const UIScrollbarStyle&
     if (bar.range <= 0.0f || view <= 0.0f) return bar;
 
     float thickness = style.thickness * scale;
-    Vec2 half = node.size * 0.5f;
+    // Inset by the border for the same reason the child clip is: the ring is painted
+    // inside this rect, so a bar sitting on the raw edge covers it. drawPos is the
+    // centre, which a symmetric inset leaves where it was.
+    Vec2 half = node.size * 0.5f - Vec2(node.borderInset);
+    Vec2 inner = node.size - Vec2(node.borderInset * 2.0f);
 
     // Each track spans its whole edge, so with both bars up they cross in the corner --
     // cheaper to live with than making either axis's length depend on whether the other
     // one happens to be showing this frame.
     if (axis == UILayoutAxis::Vertical) {
-        bar.trackSize = Vec2(thickness, node.size.y);
+        bar.trackSize = Vec2(thickness, inner.y);
         bar.trackPos = Vec2(node.drawPos.x + half.x - thickness * 0.5f, node.drawPos.y);
     } else {
-        bar.trackSize = Vec2(node.size.x, thickness);
+        bar.trackSize = Vec2(inner.x, thickness);
         bar.trackPos = Vec2(node.drawPos.x, node.drawPos.y - half.y + thickness * 0.5f);
     }
 

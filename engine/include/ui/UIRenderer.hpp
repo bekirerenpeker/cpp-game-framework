@@ -71,6 +71,7 @@ class UIRenderer : public Singleton<UIRenderer>
 
     Mat4 getViewProjMat() const;
     Vec2 getRootOrigin() const;
+    Vec2 getRootSize() const;
     Vec2 getMouseUiPos() const;
 
     void addContainerQuad(Vec2 drawPos, Vec2 size, const UIContainerStyle& style, Vec4 clipRect);

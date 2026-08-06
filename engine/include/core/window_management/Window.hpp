@@ -2,6 +2,7 @@
 
 #include "utils/math/Vec2.hpp"
 #include "utils/IdIndexedVector.hpp"
+#include "context/GlfwContext.hpp"
 #include "graphics/IRenderContext.hpp"
 #include <GLFW/glfw3.h>
 #include <cstdint>
@@ -86,6 +87,7 @@ class Window : public IRenderContext, public IHasId
     void setTitle(const std::string& title);
     void setSize(int width, int height);
     void setPos(int x, int y);
+    void setCursor(CursorShape shape);
 
     const GLFWwindow* getGlfwHandle() const { return m_glfwHandle; }
     GLFWwindow* getGlfwHandle() { return m_glfwHandle; }

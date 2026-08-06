@@ -50,12 +50,26 @@ bool isShrinkable(const UILayoutNode& node, UILayoutAxis axis)
     return axisClipped(node.node->layout, axis);
 }
 
+// Not the style field: a transparent border paints no ring however wide it is set, and
+// the shader clamps to half the short side. Anything else here would carve pixels out
+// of a ring that was never drawn, so this has to mirror UIRenderer's own rule exactly.
+float paintedBorderWidth(const UILayoutNode& node)
+{
+    const UIContainerStyle& style = node.node->style;
+    if (style.borderColor->a <= 0.0f) return 0.0f;
+
+    float halfMin = Math::min(node.size.x, node.size.y) * 0.5f;
+    return Math::clamp(*style.borderWidth, 0.0f, halfMin);
+}
+
 }   // namespace
 
-const std::vector<UILayoutNode>& UILayoutCalculator::calculate(IdType rootId, Vec2 rootTopLeft)
+const std::vector<UILayoutNode>&
+UILayoutCalculator::calculate(IdType rootId, Vec2 rootTopLeft, Vec2 rootAvailable)
 {
     m_nodes.clear();
     m_scratch.clear();
+    m_rootAvailable = rootAvailable;
 
     if (buildSubtree(rootId, NO_LAYOUT_NODE) == NO_LAYOUT_NODE) return m_nodes;
 
@@ -125,7 +139,9 @@ uint UILayoutCalculator::buildSubtree(IdType nodeId, uint parentIndex)
     layoutNode.persistentKey = node->persistentKey;
     layoutNode.ignoresInput = parentIgnoresInput || *node->style.ignoreInput;
     layoutNode.acceptsInput = node->isContainer() && node->isVisible && !layoutNode.ignoresInput;
+    layoutNode.blocksInput = *node->style.blockInput;
     layoutNode.isScrollable = *node->style.overflow == UIOverflow::Scroll;
+    layoutNode.cursor = *node->style.cursor;
     layoutNode.paintLayer = parentLayer + (uint)(zIndex > 0 ? zIndex : 0);
     layoutNode.parent = parentIndex;
     m_nodes.push_back(layoutNode);
@@ -313,12 +329,15 @@ void UILayoutCalculator::computeClipRects()
 
         node.clipRect = inherited;
         node.childClipRect = inherited;
+        node.borderInset = paintedBorderWidth(node);
 
         UIOverflow overflow = *node.node->style.overflow;
         if (overflow == UIOverflow::Visible) continue;
 
-        // drawPos is the centre in a y-up space, so the rect is centre +/- half.
-        Vec2 half = node.size * 0.5f;
+        // drawPos is the centre in a y-up space, so the rect is centre +/- half. Inset by
+        // the border, or children paint over the ring their parent drew inside this same
+        // rect. Only childClipRect: the node's own quad still has to reach its own ring.
+        Vec2 half = node.size * 0.5f - Vec2(node.borderInset);
         node.childClipRect = Vec4(
             Math::max(inherited.x, node.drawPos.x - half.x),
             Math::max(inherited.y, node.drawPos.y - half.y),
@@ -628,13 +647,29 @@ void UILayoutCalculator::levelDown(UILayoutAxis axis, float deficit)
     }
 }
 
-// A root has no parent box, so Grow and Percent fall back to max-content like Fit
-// does. Deliberately not clamped to the content floor: a Fixed root narrower than its
-// content is exactly what makes children shrink and text re-wrap.
+// The available size is the window in screen space and nothing at all in world space,
+// where there is no box for a ratio to be a ratio of -- so Grow and Percent fall back to
+// max-content the way Fit does whenever it is absent, which is also what they did
+// everywhere before a size was threaded in. Fit and Fixed never read it, which is what
+// keeps every root that predates this identical. Deliberately not clamped to the content
+// floor: a Fixed root narrower than its content is exactly what makes children shrink
+// and text re-wrap.
 float UILayoutCalculator::resolveRootSize(UILayoutAxis axis) const
 {
     const UISizeSpec& spec = axisSpec(m_nodes[0].node->layout, axis);
-    float size = spec.mode == UISizeMode::Fixed ? spec.value : intrinsicMax(m_nodes[0], axis);
+    float available = axisGet(m_rootAvailable, axis);
+
+    float size;
+    switch (spec.mode) {
+    case UISizeMode::Fixed: size = spec.value; break;
+    case UISizeMode::Grow:
+        size = available > 0.0f ? available : intrinsicMax(m_nodes[0], axis);
+        break;
+    case UISizeMode::Percent:
+        size = available > 0.0f ? available * spec.value : intrinsicMax(m_nodes[0], axis);
+        break;
+    default: size = intrinsicMax(m_nodes[0], axis); break;
+    }
     return Math::min(Math::max(size, spec.min), spec.max);
 }
 

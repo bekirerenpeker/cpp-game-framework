@@ -21,6 +21,9 @@ enum class UIOverflow
     Scroll
 };
 
+// Default means "this node has no opinion", not "the arrow": the cursor is picked by
+// walking outward from the node under the pointer and taking the first node that names
+// one, so a container only overrides its ancestors when it actually sets this.
 enum class UICursor
 {
     Default,
@@ -28,7 +31,11 @@ enum class UICursor
     Text,
     Move,
     Crosshair,
-    NotAllowed
+    NotAllowed,
+    ResizeEW,
+    ResizeNS,
+    ResizeNWSE,
+    ResizeNESW
 };
 
 enum class UITransition
@@ -80,6 +87,7 @@ struct UICorners
     X(UIOverflow, overflow, UIOverflow::Visible)                                                   \
     X(bool, ignoreClip, false)                                                                     \
     X(bool, ignoreInput, false)                                                                    \
+    X(bool, blockInput, false)                                                                     \
     X(int, zIndex, 0)                                                                              \
     X(UICursor, cursor, UICursor::Default)                                                         \
     X(float, transitionDuration, 0.0f)                                                             \

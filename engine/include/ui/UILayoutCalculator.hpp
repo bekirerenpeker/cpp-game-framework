@@ -29,7 +29,11 @@ struct UILayoutNode
     // Sticky down the subtree: an overlay that should not block what it covers has to
     // stop its children blocking too, or its own contents take the hit instead.
     bool ignoresInput = false;
+    // Deliberately not sticky, unlike ignoresInput: this says the node owns a click that
+    // landed inside it, which is a fact about the node itself and not about its subtree.
+    bool blocksInput = false;
     bool isScrollable = false;
+    UICursor cursor = UICursor::Default;
     // Paint order is the preorder walk, so the tree already says what is above what.
     // This is the escape hatch for when that is not enough: a layer raises a node and
     // its whole subtree above everything in lower layers, whatever the walk says.
@@ -62,6 +66,10 @@ struct UILayoutNode
     // cutting off its own shadow, which lives outside its rect by definition.
     Vec4 clipRect = UI_NO_CLIP;
     Vec4 childClipRect = UI_NO_CLIP;
+    // The border width the renderer will actually paint, resolved once so the clip and
+    // the scrollbars can both inset by it -- neither can reach node->style, which the
+    // snapshot nulls.
+    float borderInset = 0.0f;
 };
 
 class UILayoutCalculator : public Singleton<UILayoutCalculator>
@@ -74,9 +82,11 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     std::vector<UILayoutNode> m_prevFrameNodes, m_nodes;
     std::vector<uint> m_scratch;
     uint m_rootOrder = 0;
+    Vec2 m_rootAvailable = VEC2_ZERO;
 
   public:
-    const std::vector<UILayoutNode>& calculate(IdType rootId, Vec2 rootTopLeft = VEC2_ZERO);
+    const std::vector<UILayoutNode>&
+    calculate(IdType rootId, Vec2 rootTopLeft = VEC2_ZERO, Vec2 rootAvailable = VEC2_ZERO);
     const std::vector<UILayoutNode>& getNodes() const { return m_nodes; }
     const std::vector<UILayoutNode>& getPrevFrameNodes() const { return m_prevFrameNodes; }
 

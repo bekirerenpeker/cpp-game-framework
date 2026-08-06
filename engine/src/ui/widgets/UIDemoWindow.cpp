@@ -1,4 +1,5 @@
 #include "ui/widgets/UIDemoWindow.hpp"
+#include "ui/UIStateStore.hpp"
 #include "ui/widgets/UIWidgets.hpp"
 #include "ui/theme/UIThemePresets.hpp"
 #include <format>
@@ -313,6 +314,155 @@ void scrollTab()
     text("Wheel scrolls vertically, shift+wheel horizontally, and either bar drags.");
 }
 
+// One swatch per cursor shape, each naming its own, so hovering the strip walks through
+// them. The last one sets nothing and picks up its neighbour's -- Default means "no
+// opinion", so the strip's own container is what answers for it.
+void cursorSwatch(const std::string& label, UICursor cursor)
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    openContainer(
+        {.padding = UIEdges(metrics.spacing.sm, metrics.spacing.xs)},
+        {.backgroundColor = colors.surfaceSunken,
+         .borderColor = colors.border,
+         .borderWidth = metrics.borderWidth.thin,
+         .borderRadius = metrics.radius.sm,
+         .cursor = cursor,
+         .onHover = {.backgroundColor = colors.surfaceHover}}
+    );
+    text(label);
+    closeContainer();
+}
+
+void inputTab()
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+    UIStateStore& store = UIStateStore::get();
+
+    static bool rowBlocks = true;
+    static int rowClicks = 0;
+    static int innerClicks = 0;
+    static int doubleClicks = 0;
+    static Vec2 wheelTotal = VEC2_ZERO;
+
+    // Everything below is inside this, so scrollDelta answers for the whole tab rather
+    // than for whichever box the cursor happens to be over.
+    UINodeState tab = openContainer(
+        {.width = UISizeSpec::grow(),
+         .gap = metrics.spacing.sm,
+         .direction = UILayoutDirection::Column}
+    );
+    wheelTotal = wheelTotal + tab.scrollDelta;
+
+    text("Drag the square. Its position is dragDelta added to where it was on the press,");
+    text("so letting go and grabbing it again picks up exactly where it was left.");
+    horizontalDivider();
+
+    UINodeState arena = openContainer(
+        {.width = UISizeSpec::grow(), .height = UISizeSpec::fixed(150.0f)},
+        {.backgroundColor = colors.surfaceSunken,
+         .borderColor = colors.borderStrong,
+         .borderWidth = 4.0f,
+         .borderRadius = metrics.radius.md,
+         .overflow = UIOverflow::Hidden},
+        "dragArena"
+    );
+
+    // Kept on the arena rather than on the square: the offset is an input to the square's
+    // own declaration, so it has to be readable before the square exists to have a key.
+    Vec2 boxPos = store.getVec2(arena.persistentKey, "boxPos", Vec2(12.0f, 12.0f));
+
+    UINodeState box = openContainer(
+        {.width = UISizeSpec::fixed(56.0f),
+         .height = UISizeSpec::fixed(56.0f),
+         .offset = boxPos,
+         .isFloating = true},
+        {.backgroundColor = colors.accent,
+         .borderColor = colors.accentHover,
+         .borderWidth = metrics.borderWidth.thick,
+         .borderRadius = metrics.radius.sm,
+         .blockInput = true,
+         .cursor = UICursor::Move,
+         .onHeld = {.backgroundColor = colors.accentActive}},
+        "dragBox"
+    );
+    text("drag");
+    closeContainer();
+
+    if (box.isPressed) store.setVec2(box.persistentKey, "boxOrigin", boxPos);
+    if (box.isDoubleClicked) doubleClicks++;
+    if (box.isActive) {
+        // dragDelta is solved pixels and y-up; offset is a config field in design units
+        // and y-down, so it needs both conversions or it drags at the wrong rate and the
+        // wrong way.
+        Vec2 delta = unscale(box.dragDelta);
+        boxPos = store.getVec2(box.persistentKey, "boxOrigin") + Vec2(delta.x, -delta.y);
+        store.setVec2(arena.persistentKey, "boxPos", boxPos);
+    }
+
+    closeContainer();
+
+    text(
+        std::format(
+            "grabOffset {:.0f}, {:.0f}   dragDelta {:.0f}, {:.0f}   double-clicks {}",
+            box.grabOffset.x, box.grabOffset.y, box.dragDelta.x, box.dragDelta.y, doubleClicks
+        )
+    );
+
+    horizontalDivider();
+    text("blockInput: the row below is clickable, and so is the button inside it.");
+
+    checkBox("Row blocks the button's click", rowBlocks);
+
+    UINodeState row = openContainer(
+        {.width = UISizeSpec::grow(),
+         .padding = UIEdges(metrics.spacing.md),
+         .gap = metrics.spacing.md,
+         .alignCross = UIAlign::Center},
+        {.backgroundColor = colors.surfaceRaised,
+         .borderRadius = metrics.radius.sm,
+         .onHover = {.backgroundColor = colors.surfaceHover},
+         .onHeld = {.backgroundColor = colors.accentMuted}}
+    );
+    text("Clickable row");
+    // Overriding what button() sets for itself, since the default is exactly the
+    // behaviour under test: with it off the press carries on up and the row sees it too.
+    UINodeState inner = button("Button inside", {.buttonStyle = {.blockInput = rowBlocks}});
+    closeContainer();
+
+    if (row.isPressed) rowClicks++;
+    if (inner.isPressed) innerClicks++;
+
+    text(std::format("row presses {}   button presses {}", rowClicks, innerClicks));
+    text("With it on the counts move apart; with it off every button press bumps both.");
+
+    horizontalDivider();
+    text("Cursors, taken from the innermost node that names one:");
+
+    openContainer({.width = UISizeSpec::grow(), .gap = metrics.spacing.sm});
+    cursorSwatch("Pointer", UICursor::Pointer);
+    cursorSwatch("Text", UICursor::Text);
+    cursorSwatch("Crosshair", UICursor::Crosshair);
+    cursorSwatch("ResizeNS", UICursor::ResizeNS);
+    cursorSwatch("NotAllowed", UICursor::NotAllowed);
+    closeContainer();
+
+    horizontalDivider();
+    // A wheel tick is non-zero for only the frame or two it lasts, so the instantaneous
+    // value reads as a permanent zero however hard you scroll -- the running total is the
+    // half that shows it arriving. Shift+wheel drives x.
+    text(
+        std::format(
+            "scrollDelta now {:.1f}, {:.1f}   accumulated {:.0f}, {:.0f}", tab.scrollDelta.x,
+            tab.scrollDelta.y, wheelTotal.x, wheelTotal.y
+        )
+    );
+
+    closeContainer();
+}
+
 void demoWindow()
 {
     applyEdits();
@@ -330,7 +480,9 @@ void demoWindow()
 
     openWindow("Demo Window");
 
-    toolbarMenu({"Widgets", "Display", "Sliders", "Color", "Theme", "Scroll"}, selectedMenu);
+    toolbarMenu(
+        {"Widgets", "Display", "Sliders", "Color", "Theme", "Scroll", "Input"}, selectedMenu
+    );
 
     switch (selectedMenu) {
     case 0: {
@@ -396,6 +548,8 @@ void demoWindow()
     case 4: themeTab(); break;
 
     case 5: scrollTab(); break;
+
+    case 6: inputTab(); break;
 
     default: break;
     }

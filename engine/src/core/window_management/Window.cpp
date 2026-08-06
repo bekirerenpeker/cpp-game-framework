@@ -120,6 +120,11 @@ void Window::setSize(int width, int height) { glfwSetWindowSize(m_glfwHandle, wi
 
 void Window::setPos(int x, int y) { glfwSetWindowPos(m_glfwHandle, x, y); }
 
+void Window::setCursor(CursorShape shape)
+{
+    glfwSetCursor(m_glfwHandle, (GLFWcursor*)GlfwContext::standardCursor(shape));
+}
+
 void Window::sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height)
 {
     Window* window = static_cast<Window*>(glfwGetWindowUserPointer(glfwHandle));

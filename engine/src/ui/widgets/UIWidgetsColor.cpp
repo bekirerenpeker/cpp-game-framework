@@ -16,6 +16,17 @@ namespace UIWidgets {
 
 namespace {
 
+// The three markers sit on top of the hue ramp and the saturation/value square, so what
+// they have to stay legible against is arbitrary colour rather than the theme's surface.
+// Reading a theme role here made them vanish on the hue that happened to match it, which
+// is why these are fixed and not UIThemeColors/UIThemeMetrics lookups. White on a dark
+// outline reads on every hue. Sizes stay in design units, so the UI scale still applies
+// to them the way it does to any other style length.
+const Color MARKER_FILL = COLOR_WHITE;
+const Color MARKER_OUTLINE(0.0f, 0.0f, 0.0f, 0.7f);
+constexpr float MARKER_OUTLINE_THIN = 1.0f;
+constexpr float MARKER_OUTLINE_THICK = 2.0f;
+
 // Deliberately leaked: a static GlShader would run its GL deletes at teardown, after the
 // context is already gone.
 GlShader* colorPickerShader()
@@ -49,7 +60,7 @@ UIInputState colorPicker(Color& color, const ColorPickerConfig& config)
                            .gap = metrics.spacing.sm,
                            .direction = UILayoutDirection::Column,
                            },
-        .pickerStyle = {},
+        .pickerStyle = {.blockInput = true, .cursor = UICursor::Crosshair},
         .squareLayout =
             {
                            .width = UISizeSpec::grow(),
@@ -74,10 +85,10 @@ UIInputState colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .markerStyle =
             {
-                           .borderColor = colors.foreground,
-                           .borderWidth = metrics.borderWidth.thick,
+                           .borderColor = MARKER_FILL,
+                           .borderWidth = MARKER_OUTLINE_THICK,
                            .borderRadius = 6.0f,
-                           .shadowColor = colors.shadow,
+                           .shadowColor = MARKER_OUTLINE,
                            .shadowBlurRadius = 3.0f,
                            },
         .hueMarkerLayout =
@@ -89,9 +100,9 @@ UIInputState colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .hueMarkerStyle =
             {
-                           .backgroundColor = colors.foreground,
-                           .borderColor = colors.shadow,
-                           .borderWidth = metrics.borderWidth.thin,
+                           .backgroundColor = MARKER_FILL,
+                           .borderColor = MARKER_OUTLINE,
+                           .borderWidth = MARKER_OUTLINE_THIN,
                            .borderRadius = 2.0f,
                            },
         .alphaLayout =
@@ -108,9 +119,9 @@ UIInputState colorPicker(Color& color, const ColorPickerConfig& config)
                            },
         .alphaMarkerStyle =
             {
-                           .backgroundColor = colors.foreground,
-                           .borderColor = colors.shadow,
-                           .borderWidth = metrics.borderWidth.thin,
+                           .backgroundColor = MARKER_FILL,
+                           .borderColor = MARKER_OUTLINE,
+                           .borderWidth = MARKER_OUTLINE_THIN,
                            .borderRadius = 2.0f,
                            },
         .previewLayout =
@@ -316,6 +327,8 @@ UIInputState colorPickerPopup(Color& color, const ColorPickerPopupConfig& config
                           .borderColor = colors.borderStrong,
                           .borderWidth = metrics.borderWidth.thin,
                           .borderRadius = metrics.radius.sm,
+                          .blockInput = true,
+                          .cursor = UICursor::Pointer,
                           .onHover = {.borderColor = colors.borderFocus},
                           },
         .panelLayout =

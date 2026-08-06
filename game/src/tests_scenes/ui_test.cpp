@@ -7,12 +7,51 @@ namespace {
 
 const Color BACKDROP(0.05f, 0.05f, 0.07f, 1.0f);
 
+// The only thing here that cannot live inside the demo window, because it has to *be* a
+// root: Grow on a root now measures against the window instead of falling back to
+// max-content, so this fills the screen and its aligns centre the card in it. In world
+// space there is no window to grow into and it collapses back to its content.
+void fullScreenMenu()
+{
+    using namespace UIWidgets;
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    openContainer(
+        {.width = UISizeSpec::grow(),
+         .height = UISizeSpec::grow(),
+         .alignMain = UIAlign::Center,
+         .alignCross = UIAlign::Center},
+        {.backgroundColor = Color(0.0f, 0.0f, 0.0f, 0.6f)}, "screenRoot"
+    );
+
+    openContainer(
+        {.padding = UIEdges(metrics.spacing.xl),
+         .gap = metrics.spacing.md,
+         .direction = UILayoutDirection::Column,
+         .alignCross = UIAlign::Center},
+        {.backgroundColor = colors.surfaceRaised,
+         .borderColor = colors.accent,
+         .borderWidth = metrics.borderWidth.thick,
+         .borderRadius = metrics.radius.lg}
+    );
+
+    text("Full-screen root");
+    text("A Grow root now fills the window, so this card stays centred as it resizes.");
+    horizontalDivider();
+    text("F1 closes this.");
+
+    closeContainer();
+    closeContainer();
+}
+
 }   // namespace
 
 // A bare harness: everything on screen comes out of UIWidgets::demoWindow(), and nothing
 // here loads or configures anything -- no font, no theme, no shader. The UI's font is
 // left unset, which resolves to FontLoader's default. SPACE toggles screen/world UI
-// space, and WASD/QE pan and zoom the camera, which only moves the UI in world space.
+// space, F1 the full-screen root, and WASD/QE pan and zoom the camera, which only moves
+// the UI in world space.
 int ui_test()
 {
     IdType windowId = WindowManager::get().createWindow({1600, 800, "UI Test"});
@@ -33,6 +72,8 @@ int ui_test()
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
     Input::get().addAxis("Zoom", {KeyCode::E, KeyCode::Q});
 
+    bool menuOpen = false;
+
     auto onWindowUpdate = [&](IdType id, float dt) {
         TransformComponent& transform = camera.get<TransformComponent>();
         CameraComponent& cam = camera.get<CameraComponent>();
@@ -46,6 +87,7 @@ int ui_test()
                 UIRenderer::get().getSpace() == UISpace::Screen ? UISpace::World : UISpace::Screen
             );
         }
+        if (Input::get().keyPressed(KeyCode::F1)) menuOpen = !menuOpen;
     };
 
     auto onWindowRender = [&](IdType id, float dt) {
@@ -57,6 +99,9 @@ int ui_test()
         Renderer::get().drawToWindow();
 
         UIWidgets::clear();
+        // Declared first so it paints under the demo window: roots are drawn in the
+        // order they were declared, and hit testing breaks ties the same way.
+        if (menuOpen) fullScreenMenu();
         UIWidgets::demoWindow();
         UIManager::get().draw();
     };

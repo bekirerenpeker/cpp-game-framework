@@ -73,6 +73,17 @@ Vec2 UIRenderer::getRootOrigin() const
     return window ? Vec2(0.0f, (float)window->getHeight()) : VEC2_ZERO;
 }
 
+// What a root's Grow or Percent is measured against. Zero in world space, where the UI
+// is a sprite and there is no box for a fraction to be a fraction of -- the solver reads
+// that as "no bound" and falls back to max-content.
+Vec2 UIRenderer::getRootSize() const
+{
+    if (m_space == UISpace::World) return VEC2_ZERO;
+
+    Window* window = ViewContext::get().getActiveWindow();
+    return window ? window->getSize() : VEC2_ZERO;
+}
+
 // The mouse in whatever space the UI is currently solved in, so hit testing compares
 // against a drawPos without either side knowing which space it is in.
 Vec2 UIRenderer::getMouseUiPos() const

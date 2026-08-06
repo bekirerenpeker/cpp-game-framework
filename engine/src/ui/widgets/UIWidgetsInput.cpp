@@ -46,6 +46,8 @@ UINodeState button(const std::string text, const ButtonConfig& config)
                            .borderColor = colors.accentHover,
                            .borderWidth = metrics.borderWidth.thin,
                            .borderRadius = metrics.radius.md,
+                           .blockInput = true,
+                           .cursor = UICursor::Pointer,
                            .onHover =
                     {
                         .backgroundColor = colors.accentHover,
@@ -108,6 +110,8 @@ toolbarMenu(const std::vector<std::string>& items, int& selected, const ToolbarM
                          },
         .itemStyle =
             {
+                         .blockInput = true,
+                         .cursor = UICursor::Pointer,
                          .onHover = {.backgroundColor = colors.surfaceHover},
                          .onHeld = {.backgroundColor = colors.accent},
                          },
@@ -183,7 +187,7 @@ UIInputState sliderFloat(
                            .direction = UILayoutDirection::Row,
                            .alignCross = UIAlign::Center,
                            },
-        .sliderStyle = {},
+        .sliderStyle = {.blockInput = true},
         .trackLayout =
             {
                            .width = UISizeSpec::grow(),
@@ -196,6 +200,7 @@ UIInputState sliderFloat(
                            .borderColor = colors.border,
                            .borderWidth = metrics.borderWidth.thin,
                            .borderRadius = TRACK_HEIGHT * 0.5f,
+                           .cursor = UICursor::ResizeEW,
                            .onHover = {.borderColor = colors.borderFocus},
                            },
         .fillStyle =
@@ -312,7 +317,7 @@ UIInputState checkBox(const std::string label, bool& checked, const CheckBoxConf
                         .gap = metrics.spacing.sm,
                         .alignCross = UIAlign::Center,
                         },
-        .rowStyle = {},
+        .rowStyle = {.blockInput = true, .cursor = UICursor::Pointer},
         .boxLayout =
             {
                         .width = UISizeSpec::fixed(metrics.controlHeightSmall - 2.0f),
@@ -403,7 +408,7 @@ radioGroup(const std::vector<std::string>& items, int& selected, const RadioGrou
                           .gap = metrics.spacing.sm,
                           .alignCross = UIAlign::Center,
                           },
-        .rowStyle = {},
+        .rowStyle = {.blockInput = true, .cursor = UICursor::Pointer},
         .dotLayout =
             {
                           .width = UISizeSpec::fixed(metrics.iconSize),
@@ -496,6 +501,8 @@ dropdown(const std::vector<std::string>& items, int& selected, const DropdownCon
                           .borderWidth = metrics.borderWidth.thin,
                           .borderRadius = metrics.radius.sm,
                           .overflow = UIOverflow::Hidden,
+                          .blockInput = true,
+                          .cursor = UICursor::Pointer,
                           .onHover = {.borderColor = colors.borderFocus},
                           .onHeld = {.backgroundColor = colors.surfaceHover},
                           },
@@ -542,6 +549,8 @@ dropdown(const std::vector<std::string>& items, int& selected, const DropdownCon
             {
                           .borderRadius = metrics.radius.sm,
                           .overflow = UIOverflow::Hidden,
+                          .blockInput = true,
+                          .cursor = UICursor::Pointer,
                           .onHover = {.backgroundColor = colors.surfaceHover},
                           .onHeld = {.backgroundColor = colors.accent},
                           },
