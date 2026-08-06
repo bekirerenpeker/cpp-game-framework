@@ -175,6 +175,7 @@ uint UILayoutCalculator::buildSubtree(IdType nodeId, uint parentIndex)
     layoutNode.ignoresInput = parentIgnoresInput || *node->style.ignoreInput;
     layoutNode.acceptsInput = node->isContainer() && node->isVisible && !layoutNode.ignoresInput;
     layoutNode.blocksInput = *node->style.blockInput;
+    layoutNode.isFocusable = *node->style.focusable && layoutNode.acceptsInput;
     layoutNode.isScrollable = *node->style.overflow == UIOverflow::Scroll;
     layoutNode.cursor = *node->style.cursor;
     layoutNode.paintLayer = parentLayer + (uint)(zIndex > 0 ? zIndex : 0);

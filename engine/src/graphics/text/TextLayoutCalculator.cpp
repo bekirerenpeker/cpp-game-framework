@@ -24,30 +24,6 @@ struct WrapPoint
     float ascent = 0.0f, descent = 0.0f, height = 0.0f;
 };
 
-// Same walk the layout and the measure both run, so a width worked out here cannot
-// drift from the one they agreed on.
-float runWidth(const Font& font, const TextStyle& style, std::string_view text)
-{
-    float width = 0.0f;
-    uint32_t prev = 0;
-
-    size_t i = 0;
-    while (i < text.size()) {
-        if (TextTags::isEscapedTagAt(text, i)) {
-            i++;
-            continue;
-        }
-
-        uint32_t codepoint = Utf8::next(text, i);
-        if (codepoint == 0) break;
-
-        GlyphStep glyphStep = TextMetrics::step(font, style, codepoint, prev);
-        prev = glyphStep.kerningPrev;
-        width += glyphStep.total();
-    }
-    return width;
-}
-
 }   // namespace
 
 // Which font this block actually lays out with, and whether that just changed: the
@@ -352,7 +328,7 @@ void TextLayoutCalculator::applyEllipsis(TextBlock& block, float availableWidth)
         // the text it stands in for rather than as the block's default leaking through.
         const TextRun& lastRun = block.m_runs[line.firstRun + line.runCount - 1];
         const TextStyle& markerStyle = block.styleForRun(lastRun.styleIndex);
-        float markerWidth = runWidth(font, markerStyle, ELLIPSIS);
+        float markerWidth = TextMetrics::measure(font, markerStyle, ELLIPSIS);
 
         float lineStart = block.m_runs[line.firstRun].offset.x;
         float budget = lineStart + availableWidth - markerWidth;

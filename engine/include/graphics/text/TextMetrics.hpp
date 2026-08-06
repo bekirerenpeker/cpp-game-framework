@@ -3,6 +3,7 @@
 #include "graphics/text/Font.hpp"
 #include "graphics/text/TextStyle.hpp"
 #include <cstdint>
+#include <string_view>
 
 namespace Engine {
 
@@ -28,6 +29,9 @@ constexpr float TAB_SPACES = 4.0f;
 constexpr float FALLBACK_SPACE_ADVANCE = 0.25f;
 
 GlyphStep step(const Font& font, const TextStyle& style, uint32_t codepoint, uint32_t prev);
+// The same walk the layout and the measure both run, so a width worked out here cannot
+// drift from where the glyphs actually land -- which is what a caret depends on.
+float measure(const Font& font, const TextStyle& style, std::string_view text);
 
 const Glyph* resolveGlyph(const Font& font, uint32_t codepoint);
 float spaceAdvance(const Font& font);

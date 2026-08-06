@@ -136,6 +136,45 @@ struct DividerConfig
 UINodeState horizontalDivider(const DividerConfig& config = {});
 UINodeState verticalDivider(const DividerConfig& config = {});
 
+// The string stays with the caller, like every other bound value here -- the widget owns
+// only the caret, and rereads the string each frame, so code outside may rewrite it
+// whenever it likes. filter runs per codepoint and rejects what it returns false for;
+// null accepts everything printable.
+struct TextFieldConfig
+{
+    UILayoutConfig fieldLayout;
+    UIContainerStyleSpec fieldStyle;
+    UILayoutConfig textLayout;
+    UITextConfig textConfig;
+    UILayoutConfig caretLayout;
+    UIContainerStyleSpec caretStyle;
+    UITextStyle placeholderStyle;
+    std::string placeholder;
+    bool (*filter)(uint32_t codepoint) = nullptr;
+    uint maxLength = 0;
+    std::string_view key;
+};
+UIInputState textField(std::string& text, const TextFieldConfig& config = {});
+
+// A text field that only accepts what parses, plus the two ways a number wants editing
+// that text does not: steppers and the wheel. The bound value is written only when the
+// text parses, so a half-typed "-" or "1." leaves it alone until it means something.
+struct NumberFieldConfig
+{
+    TextFieldConfig field;
+    UILayoutConfig stepperLayout;
+    UIContainerStyleSpec stepperStyle;
+    float step = 1.0f;
+    float minValue = -1e30f;
+    float maxValue = 1e30f;
+    int decimals = 3;
+    bool showSteppers = true;
+    bool scrollToChange = true;
+    std::string_view key;
+};
+UIInputState numberFieldFloat(float& value, const NumberFieldConfig& config = {});
+UIInputState numberFieldInt(int& value, const NumberFieldConfig& config = {});
+
 struct ToolbarMenuConfig
 {
     UILayoutConfig menuLayout;

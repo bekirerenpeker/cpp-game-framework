@@ -4,6 +4,7 @@
 #include "context/GlfwContext.hpp"
 #include "glad/glad.h"
 #include "graphics/gl_wrappers/GlFrameBuffer.hpp"
+#include "utils/Utf8.hpp"
 
 namespace Engine {
 
@@ -36,6 +37,8 @@ Window::Window(const WindowCreationOptions& opts, GLFWmonitor* monitor, GLFWwind
     glfwSetWindowSizeCallback(m_glfwHandle, Window::sizeUpdateCallback);
     glfwSetWindowPosCallback(m_glfwHandle, Window::positionUpdateCallback);
     glfwSetScrollCallback(m_glfwHandle, Window::scrollCallback);
+    glfwSetCharCallback(m_glfwHandle, Window::charCallback);
+    glfwSetKeyCallback(m_glfwHandle, Window::keyCallback);
 
     glfwGetWindowSize(m_glfwHandle, &m_width, &m_height);
     glfwGetWindowPos(m_glfwHandle, &m_xPos, &m_yPos);
@@ -60,6 +63,8 @@ void swap(Window& first, Window& second) noexcept
     swap(first.m_yPos, second.m_yPos);
     swap(first.m_title, second.m_title);
     swap(first.m_scrollDelta, second.m_scrollDelta);
+    swap(first.m_typedText, second.m_typedText);
+    swap(first.m_repeatedKeys, second.m_repeatedKeys);
 
     // Crucial: Update the GLFW User Pointer so callbacks point to the new instance
     if (first.m_glfwHandle) glfwSetWindowUserPointer(first.m_glfwHandle, &first);
@@ -156,11 +161,38 @@ void Window::scrollCallback(GLFWwindow* glfwHandle, double xOffset, double yOffs
     window->m_scrollDelta.y += (float)yOffset;
 }
 
+void Window::charCallback(GLFWwindow* glfwHandle, unsigned int codepoint)
+{
+    Window* window = static_cast<Window*>(glfwGetWindowUserPointer(glfwHandle));
+    if (!window) return;
+    Utf8::encode(codepoint, window->m_typedText);
+}
+
+// Press and repeat land in the same list on purpose: a caller asking "did this key fire
+// this frame" wants the first one and every repeat after it, and telling them apart would
+// only make every caller re-merge them. Release is not recorded -- polling already answers
+// that, and it is the one thing that cannot arrive twice in a frame.
+void Window::keyCallback(GLFWwindow* glfwHandle, int key, int scancode, int action, int mods)
+{
+    Window* window = static_cast<Window*>(glfwGetWindowUserPointer(glfwHandle));
+    if (!window || key < 0) return;
+    if (action != GLFW_PRESS && action != GLFW_REPEAT) return;
+
+    window->m_repeatedKeys.push_back(key);
+}
+
 Vec2 Window::consumeScrollDelta()
 {
     Vec2 delta = m_scrollDelta;
     m_scrollDelta = VEC2_ZERO;
     return delta;
+}
+
+std::string Window::consumeTypedText()
+{
+    std::string text = std::move(m_typedText);
+    m_typedText.clear();
+    return text;
 }
 
 void Window::bindRenderContext()

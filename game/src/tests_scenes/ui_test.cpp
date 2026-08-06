@@ -40,6 +40,11 @@ void fullScreenMenu()
     text("A Grow root now fills the window, so this card stays centred as it resizes.");
     horizontalDivider();
 
+    // Focus on a root that is not the demo window, since focus is resolved once for the
+    // whole UI rather than per root.
+    static std::string playerName = "Player One";
+    textField(playerName, {.fieldLayout = {.width = UISizeSpec::fixed(360.0f)}});
+
     // Three equal columns and then one cell spanning all of them -- the buttons stretch
     // to their column because a grid stretches its cells by default.
     openGrid({.columns = 3, .gridLayout = {.width = UISizeSpec::fixed(360.0f)}});

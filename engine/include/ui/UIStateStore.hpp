@@ -91,6 +91,12 @@ class UIStateStore : public Singleton<UIStateStore>
     Vec2 getVec2(uint64_t nodeKey, std::string_view field, Vec2 fallback = VEC2_ZERO);
     void setVec2(uint64_t nodeKey, std::string_view field, Vec2 value);
 
+    // Rides the same float slot, which holds every integer up to 2^24 exactly -- far past
+    // any index or count a widget keeps here. A pair rather than an int& because the slot
+    // is a float and there is nothing to hand back a reference to.
+    int getInt(uint64_t nodeKey, std::string_view field, int fallback = 0);
+    void setInt(uint64_t nodeKey, std::string_view field, int value);
+
     bool contains(uint64_t nodeKey, std::string_view field) const;
     void clear();
 

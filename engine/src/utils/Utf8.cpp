@@ -59,6 +59,54 @@ uint32_t next(std::string_view text, size_t& index)
     return codepoint;
 }
 
+// Walks back over continuation bytes to the lead, then decodes forward from there, so a
+// malformed sequence decodes to exactly what a forward walk would have produced rather
+// than to something only the backward path can see. The 4-byte cap stops a run of
+// continuation bytes with no lead from walking off the front of the string.
+uint32_t prev(std::string_view text, size_t& index)
+{
+    if (index == 0) return 0;
+
+    size_t start = index;
+    do {
+        start--;
+    } while (start > 0 && start + 4 > index && ((unsigned char)text[start] & 0xC0) == 0x80);
+
+    size_t cursor = start;
+    uint32_t codepoint = next(text, cursor);
+    // A lone continuation byte leaves cursor one past start; anything that decoded past
+    // where we began is not the codepoint before index, so fall back to a single byte.
+    if (cursor != index) {
+        index--;
+        return REPLACEMENT_CODEPOINT;
+    }
+
+    index = start;
+    return codepoint;
+}
+
+void encode(uint32_t codepoint, std::string& out)
+{
+    if (codepoint > 0x10FFFF || (codepoint >= 0xD800 && codepoint <= 0xDFFF))
+        codepoint = REPLACEMENT_CODEPOINT;
+
+    if (codepoint < 0x80) {
+        out += (char)codepoint;
+    } else if (codepoint < 0x800) {
+        out += (char)(0xC0 | (codepoint >> 6));
+        out += (char)(0x80 | (codepoint & 0x3F));
+    } else if (codepoint < 0x10000) {
+        out += (char)(0xE0 | (codepoint >> 12));
+        out += (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        out += (char)(0x80 | (codepoint & 0x3F));
+    } else {
+        out += (char)(0xF0 | (codepoint >> 18));
+        out += (char)(0x80 | ((codepoint >> 12) & 0x3F));
+        out += (char)(0x80 | ((codepoint >> 6) & 0x3F));
+        out += (char)(0x80 | (codepoint & 0x3F));
+    }
+}
+
 size_t countCodepoints(std::string_view text)
 {
     size_t count = 0;

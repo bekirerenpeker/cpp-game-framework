@@ -78,6 +78,15 @@ void UIStateStore::setVec2(uint64_t nodeKey, std::string_view field, Vec2 value)
     m_values[axisSlot(nodeKey, fieldId, 1)] = {value.y, m_frame};
 }
 
+int UIStateStore::getInt(uint64_t nodeKey, std::string_view field, int fallback)
+{
+    return (int)entryOf(nodeKey, field, (float)fallback).value;
+}
+void UIStateStore::setInt(uint64_t nodeKey, std::string_view field, int value)
+{
+    entryOf(nodeKey, field, (float)value).value = (float)value;
+}
+
 bool UIStateStore::contains(uint64_t nodeKey, std::string_view field) const
 {
     return m_values.find(uiHashCombine(nodeKey, uiStateFieldId(field))) != m_values.end();

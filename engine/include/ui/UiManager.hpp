@@ -40,6 +40,10 @@ struct UINodeState
     bool isReleased = false;
     bool isHeld = false;
     bool isDoubleClicked = false;
+    // Unlike everything above it, this one outlives the gesture that set it: focus is
+    // where the keyboard goes, so it stays put while the mouse wanders anywhere else.
+    // Only a node whose style says focusable can ever hold it.
+    bool isFocused = false;
     Vec2 relativeMousePos = VEC2_ZERO;
     Vec2 localMousePos = VEC2_ZERO;
     Vec2 pos = VEC2_ZERO;
@@ -76,6 +80,12 @@ class UIManager : public Singleton<UIManager>
     // default costs nothing.
     size_t m_pressKeyCount = 0;
     uint64_t m_activeKey = NO_KEY;
+    // Survives the press that set it, and the tree being rebuilt, because it is a
+    // persistent key rather than a frame-local id -- that is the whole difference
+    // between focus and the press capture above.
+    uint64_t m_focusedKey = NO_KEY;
+    // Reused by the tab walk so cycling does not allocate every keystroke.
+    std::vector<uint64_t> m_scratchKeys;
 
     // Only one node is ever captured, so the press-time data is a handful of members
     // rather than an entry per node in the state store.
@@ -115,6 +125,12 @@ class UIManager : public Singleton<UIManager>
 
     bool isMouseOverUi() const { return !m_hoveredKeys.empty(); }
 
+    // Keyboard focus by persistent key, so a widget can hand it to a node it is about to
+    // declare -- a field that should open focused, a dialog stealing it on appearance.
+    uint64_t getFocusedKey() const { return m_focusedKey; }
+    void setFocus(uint64_t key) { m_focusedKey = key; }
+    void clearFocus() { m_focusedKey = NO_KEY; }
+
     UINodeState openContainer(
         const UILayoutConfig& layout = {}, const UIContainerStyleSpec& style = {},
         std::string_view key = {}
@@ -140,6 +156,8 @@ class UIManager : public Singleton<UIManager>
     ~UIManager();
 
     void resolveInput();
+    void resolveFocus(const std::vector<UILayoutNode>& prev, uint hit);
+    void cycleFocus(const std::vector<UILayoutNode>& prev, bool backwards);
     bool resolveScrollbars(const std::vector<UILayoutNode>& prev, Vec2 mouse);
     void routeScrollWheel(const std::vector<UILayoutNode>& prev, uint hit);
     void applyCursor(const std::vector<UILayoutNode>& prev, uint hit) const;

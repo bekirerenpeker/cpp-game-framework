@@ -88,6 +88,7 @@ struct UICorners
     X(bool, ignoreClip, false)                                                                     \
     X(bool, ignoreInput, false)                                                                    \
     X(bool, blockInput, false)                                                                     \
+    X(bool, focusable, false)                                                                      \
     X(int, zIndex, 0)                                                                              \
     X(UICursor, cursor, UICursor::Default)                                                         \
     X(float, transitionDuration, 0.0f)                                                             \
@@ -143,6 +144,7 @@ struct UIContainerStyleSpec
     UI_CONTAINER_STYLE_FIELDS(UI_STYLE_DECLARE_FIELD)
 
     UIContainerStyle onHover;
+    UIContainerStyle onFocused;
     UIContainerStyle onHeld;
     UIContainerStyle onPressed;
     UIContainerStyle onReleased;
@@ -158,6 +160,7 @@ struct UIContainerStyleSpec
     {
         UI_CONTAINER_STYLE_FIELDS(UI_STYLE_MERGE_FIELD)
         onHover.combine(other.onHover);
+        onFocused.combine(other.onFocused);
         onHeld.combine(other.onHeld);
         onPressed.combine(other.onPressed);
         onReleased.combine(other.onReleased);

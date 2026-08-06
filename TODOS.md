@@ -6,7 +6,12 @@ they happened; the reasoning lives in CLAUDE.md, not here.
 
 ## Implement Now
 
-- [ ] **Keyboard focus + text input** — gate on `textField`. Needs focused key, character events, caret, selection, clipboard. One widget first, then generalise.
+- [ ] **Text selection + clipboard** — wanted in full rather than in pieces, so it was
+  deliberately left out of the text field: anchor index beside the caret, shift+arrows,
+  ctrl+A, mouse drag-select, double-click word select, the highlight quad, and ctrl+C/X/V
+  through `glfwGetClipboardString`. Should be designed for **multi-line** from the start —
+  a selection spanning wrapped lines is the part a single-line-only model would have to be
+  thrown away for.
 
 ## UI & text — next up
 
@@ -37,6 +42,19 @@ they happened; the reasoning lives in CLAUDE.md, not here.
 ## Done
 
 ### UI
+
+- [x] **Keyboard focus + text input** — `Input::getTypedText()` returns the frame's UTF-8
+  (glfw char callback accumulated on the `Window`, drained in `update` beside the wheel);
+  a string rather than one char because a frame can carry several and a codepoint several
+  bytes. `Input::keyRepeated()` fires on press and on every OS auto-repeat, from a real
+  glfw key callback, so the delay and rate are the user's own — general across every key,
+  not an editing-key special case. Focus is `UIManager::m_focusedKey`, claimed on press by
+  walking out to the first `style.focusable` node, plus Tab/Shift+Tab cycling in
+  declaration order; `UINodeState::isFocused` and an `onFocused` style state fall out of
+  it. `textField` and `numberFieldFloat`/`Int` in `UIWidgetsText.cpp` — caret, click to
+  position, arrows/Home/End/Backspace/Delete, horizontal scroll, blink, placeholder,
+  filtering, steppers, wheel. Also added `Utf8::prev`/`encode` and promoted `runWidth`
+  into `TextMetrics::measure` so caret x cannot drift from where glyphs land.
 
 - [x] **Grid** — `openGrid`/`closeGrid`, cells are just the children in order. Twelve
   columns by default and `.gridSpan = n` carves them up CSS-style; `.columns` takes a

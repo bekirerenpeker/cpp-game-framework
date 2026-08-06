@@ -7,6 +7,7 @@
 #include <GLFW/glfw3.h>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace Engine {
 
@@ -43,6 +44,11 @@ class Window : public IRenderContext, public IHasId
     int m_xPos = 0, m_yPos = 0;
     std::string m_title = "";
     Vec2 m_scrollDelta = VEC2_ZERO;
+    std::string m_typedText;
+    // Raw glfw key codes rather than KeyCode: a window knows nothing about the input
+    // system's enum, and Input owns that mapping already. Cleared, never freed, so a
+    // frame that repeats nothing costs no allocation.
+    std::vector<int> m_repeatedKeys;
 
     struct NoInit
     {
@@ -70,6 +76,16 @@ class Window : public IRenderContext, public IHasId
     // delivers these as events during pollEvents, so they accumulate rather than being
     // a state something can poll, and a frame may see several or none.
     Vec2 consumeScrollDelta();
+
+    // The text the OS produced since the last call, already UTF-8. Characters rather
+    // than keys: the OS has applied the keyboard layout, the modifiers and any dead-key
+    // composition by the time these arrive, which is why no amount of key polling can
+    // reconstruct them. A frame may carry several -- key repeat outruns 60Hz.
+    std::string consumeTypedText();
+    // The keys that went down or auto-repeated since the last call, as glfw key codes.
+    // Repeat only exists as an event, so this is the one thing polling cannot answer.
+    const std::vector<int>& getRepeatedKeys() const { return m_repeatedKeys; }
+    void clearRepeatedKeys() { m_repeatedKeys.clear(); }
 
     void fullscreen();
     void maximize();
@@ -111,6 +127,8 @@ class Window : public IRenderContext, public IHasId
     static void sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height);
     static void positionUpdateCallback(GLFWwindow* glfwHandle, int x, int y);
     static void scrollCallback(GLFWwindow* glfwHandle, double xOffset, double yOffset);
+    static void charCallback(GLFWwindow* glfwHandle, unsigned int codepoint);
+    static void keyCallback(GLFWwindow* glfwHandle, int key, int scancode, int action, int mods);
 };
 
 }   // namespace Engine

@@ -134,11 +134,14 @@ void applyScale(UIContainerStyle& style, float scale)
 // Lowest priority first, so a pressed button keeps the rest of its hover look instead
 // of falling back to the base. onHeld reads isActive rather than isHeld so a grip
 // dragged off itself stays lit until release, since isHeld dies the moment hover does.
+// onFocused sits above hover and below the press states: focus outlasts both, so it must
+// not paint over the feedback of a click happening right now.
 UIContainerStyle
 resolveStyle(const UIContainerStyleSpec& spec, const UINodeState& state, float scale)
 {
     UIContainerStyle style = spec.base();
     if (state.isHovered) style.combine(spec.onHover);
+    if (state.isFocused) style.combine(spec.onFocused);
     if (state.isActive) style.combine(spec.onHeld);
     if (state.isPressed) style.combine(spec.onPressed);
     if (state.isReleased) style.combine(spec.onReleased);
@@ -232,6 +235,8 @@ void UIManager::resolveInput()
         }
     }
 
+    resolveFocus(prev, hit);
+
     if (hit == NO_LAYOUT_NODE) {
         applyCursor(prev, hit);
         return;
@@ -250,6 +255,69 @@ void UIManager::resolveInput()
 
     applyCursor(prev, hit);
     routeScrollWheel(prev, hit);
+}
+
+// Focus follows the press, not the cursor: it is claimed on mouse-down and then held
+// until something takes it, which is what lets a field keep the keyboard while the mouse
+// is off doing something else. A press on a non-focusable node still clears it, because
+// clicking elsewhere is how a user says "I'm done with that field".
+void UIManager::resolveFocus(const std::vector<UILayoutNode>& prev, uint hit)
+{
+    // The node holding focus stopped being declared -- drop it rather than keeping the
+    // keyboard pointed at a key nothing will ever match again, exactly as capture does.
+    if (m_focusedKey != NO_KEY) {
+        bool stillDeclared = false;
+        for (const UILayoutNode& node : prev) {
+            if (node.persistentKey != m_focusedKey) continue;
+            stillDeclared = node.isFocusable;
+            break;
+        }
+        if (!stillDeclared) m_focusedKey = NO_KEY;
+    }
+
+    Input& input = Input::get();
+    if (input.keyRepeated(KeyCode::Tab)) {
+        bool backwards = input.keyHeld(KeyCode::LeftShift) || input.keyHeld(KeyCode::RightShift);
+        cycleFocus(prev, backwards);
+        return;
+    }
+
+    if (!input.mouseButtonPressed(MouseButton::Left)) return;
+
+    // Outward from the hit node, so clicking a label or an icon inside a field focuses
+    // the field rather than nothing -- the same walk hover and the press chain use.
+    for (uint i = hit; i != NO_LAYOUT_NODE; i = prev[i].parent) {
+        if (!prev[i].isFocusable) continue;
+        m_focusedKey = prev[i].persistentKey;
+        return;
+    }
+    m_focusedKey = NO_KEY;
+}
+
+// Declaration order is tab order: the layout array is preorder, so it already holds the
+// nodes in the order the caller wrote them. Wraps at both ends rather than stopping, and
+// starting from nothing focuses the first (or last, going backwards).
+void UIManager::cycleFocus(const std::vector<UILayoutNode>& prev, bool backwards)
+{
+    m_scratchKeys.clear();
+    for (const UILayoutNode& node : prev) {
+        if (node.isFocusable) m_scratchKeys.push_back(node.persistentKey);
+    }
+    if (m_scratchKeys.empty()) return;
+
+    size_t current = m_scratchKeys.size();
+    for (size_t i = 0; i < m_scratchKeys.size(); i++) {
+        if (m_scratchKeys[i] != m_focusedKey) continue;
+        current = i;
+        break;
+    }
+
+    size_t count = m_scratchKeys.size();
+    size_t next;
+    if (current == count) next = backwards ? count - 1 : 0;
+    else next = backwards ? (current + count - 1) % count : (current + 1) % count;
+
+    m_focusedKey = m_scratchKeys[next];
 }
 
 // The mouse and the node's rect frozen at the moment of the press, so every drag after
@@ -418,6 +486,7 @@ UINodeState UIManager::computeState(IdType id, uint64_t key, const UILayoutNode*
     state.isHovered = isKeyHovered(key);
     state.isHoveredDirectly = !m_hoveredKeys.empty() && m_hoveredKeys.front() == key;
     state.isActive = m_activeKey != NO_KEY && key == m_activeKey;
+    state.isFocused = m_focusedKey != NO_KEY && key == m_focusedKey;
     state.mousePos = UIRenderer::get().getMouseUiPos();
 
     // Bounded by the press chain rather than by hover, so a click inside a child reaches

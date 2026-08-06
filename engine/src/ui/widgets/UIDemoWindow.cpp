@@ -542,6 +542,48 @@ void gridTab()
     closeGrid();
 }
 
+// The strings and the numbers are the caller's, exactly as a slider's float is -- the
+// widgets keep only the caret. The echo below reads them straight back to make that
+// visible: nothing had to be asked of the widget to get at them.
+void textTab()
+{
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    static std::string name = "Player One";
+    static std::string seed;
+    static float gravity = 9.81f;
+    static int lives = 3;
+
+    text("Click a field to focus it, or Tab between them. Enter or clicking away commits.");
+    horizontalDivider();
+
+    openGrid({
+        .columns = {        UISizeSpec::fit(),            UISizeSpec::grow()},
+        .gridLayout = {.gap = metrics.spacing.md, .alignCross = UIAlign::Center}
+    });
+
+    text("Name");
+    textField(name);
+
+    text("Seed");
+    textField(seed, {.placeholder = "leave empty for random"});
+
+    text("Gravity");
+    numberFieldFloat(gravity, {.step = 0.1f, .minValue = 0.0f, .maxValue = 50.0f, .decimals = 2});
+
+    text("Lives");
+    numberFieldInt(lives, {.step = 1.0f, .minValue = 0.0f, .maxValue = 99.0f});
+
+    closeGrid();
+
+    horizontalDivider();
+    text(
+        std::format(
+            "name \"{}\"   seed \"{}\"   gravity {:.2f}   lives {}", name, seed, gravity, lives
+        )
+    );
+}
+
 void demoWindow()
 {
     applyEdits();
@@ -560,7 +602,8 @@ void demoWindow()
     openWindow("Demo Window");
 
     toolbarMenu(
-        {"Widgets", "Display", "Sliders", "Color", "Theme", "Scroll", "Input", "Grid"}, selectedMenu
+        {"Widgets", "Display", "Sliders", "Color", "Theme", "Scroll", "Input", "Grid", "Text"},
+        selectedMenu
     );
 
     switch (selectedMenu) {
@@ -631,6 +674,8 @@ void demoWindow()
     case 6: inputTab(); break;
 
     case 7: gridTab(); break;
+
+    case 8: textTab(); break;
 
     default: break;
     }

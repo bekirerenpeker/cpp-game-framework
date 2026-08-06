@@ -1,5 +1,7 @@
 #include "graphics/text/TextMetrics.hpp"
+#include "graphics/text/TextTags.hpp"
 #include "core/logging/LoggerMacros.hpp"
+#include "utils/Utf8.hpp"
 
 namespace Engine {
 
@@ -69,6 +71,28 @@ GlyphStep step(const Font& font, const TextStyle& style, uint32_t codepoint, uin
     if (prev != 0) result.kerning = font.getKerning(prev, codepoint) * style.size;
     result.kerningPrev = codepoint;
     return result;
+}
+
+float measure(const Font& font, const TextStyle& style, std::string_view text)
+{
+    float width = 0.0f;
+    uint32_t prev = 0;
+
+    size_t i = 0;
+    while (i < text.size()) {
+        if (TextTags::isEscapedTagAt(text, i)) {
+            i++;
+            continue;
+        }
+
+        uint32_t codepoint = Utf8::next(text, i);
+        if (codepoint == 0) break;
+
+        GlyphStep glyphStep = step(font, style, codepoint, prev);
+        prev = glyphStep.kerningPrev;
+        width += glyphStep.total();
+    }
+    return width;
 }
 
 }   // namespace TextMetrics

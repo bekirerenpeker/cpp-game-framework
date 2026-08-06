@@ -32,6 +32,9 @@ struct UILayoutNode
     // Deliberately not sticky, unlike ignoresInput: this says the node owns a click that
     // landed inside it, which is a fact about the node itself and not about its subtree.
     bool blocksInput = false;
+    // Focus only ever lands on a node that asked for it, or clicking a panel would take
+    // the keyboard away from the field inside it and every container would be a candidate.
+    bool isFocusable = false;
     bool isScrollable = false;
     UICursor cursor = UICursor::Default;
     // Paint order is the preorder walk, so the tree already says what is above what.
