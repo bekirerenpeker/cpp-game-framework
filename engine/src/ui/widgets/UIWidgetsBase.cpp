@@ -64,6 +64,27 @@ openContainer(const UILayoutConfig& layout, const UIContainerStyleSpec& style, s
 }
 void closeContainer() { UIManager::get().closeContainer(); }
 
+UINodeState openGrid(const GridConfig& config)
+{
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    // Grow rather than Fit: equal tracks only come out equal when there is a width for
+    // them to share, and a Fit grid hands them nothing but their own content.
+    UILayoutConfig defaultLayout = {
+        .width = UISizeSpec::grow(),
+        .grid = UIGridConfig {config.columns.tracks, config.rowGap},
+        .gap = metrics.spacing.sm,
+        .alignMain = UIAlign::Stretch,
+        .alignCross = UIAlign::Stretch,
+        .isGrid = true,
+    };
+
+    defaultLayout.combine(config.gridLayout);
+    return openContainer(defaultLayout, config.gridStyle, config.key);
+}
+
+void closeGrid() { closeContainer(); }
+
 IdType addTextLeaf(const UILayoutConfig& layout, const UITextConfig& config)
 {
     return UIManager::get().addTextLeaf(layout, config);

@@ -51,6 +51,16 @@ struct UILayoutNode
     float minWidth = 0.0f;
     float maxWidth = 0.0f;
 
+    // Grid cells only. The column/row a cell landed on is decided once, during the
+    // horizontal intrinsic pass, because placement reads nothing but spans and track
+    // count -- every later pass reads it back instead of walking the wrap again.
+    // gridOffset is the cell's top-left inside the grid's content box, alignment already
+    // folded in, which is what leaves the grid's positioning pass with nothing to do but
+    // add the origin.
+    uint gridColumn = 0;
+    uint gridRow = 0;
+    Vec2 gridOffset = VEC2_ZERO;
+
     Vec2 pos = VEC2_ZERO;
     Vec2 size = VEC2_ZERO;
     Vec2 drawPos = VEC2_ZERO;
@@ -81,6 +91,7 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
 
     std::vector<UILayoutNode> m_prevFrameNodes, m_nodes;
     std::vector<uint> m_scratch;
+    std::vector<float> m_trackSize, m_trackMin, m_trackMax;
     uint m_rootOrder = 0;
     Vec2 m_rootAvailable = VEC2_ZERO;
 
@@ -117,12 +128,25 @@ class UILayoutCalculator : public Singleton<UILayoutCalculator>
     void finalizeIntrinsic(uint index, UILayoutAxis axis);
     void distributeChildren(uint index, UILayoutAxis axis, bool allowShrink);
     void resolveCrossAxis(uint index, UILayoutAxis axis);
-    float resolveChildAgainst(uint index, UILayoutAxis axis, float inner) const;
+    float
+    resolveChildAgainst(uint index, UILayoutAxis axis, float inner, bool stretchFit = false) const;
     void positionChildren(uint index);
     void positionFloatingChild(uint parentIndex, uint childIndex);
 
     void levelUp(UILayoutAxis axis, float remaining);
     void levelDown(UILayoutAxis axis, float deficit);
+
+    void placeGridCells(uint index);
+    void aggregateGridIntrinsic(uint index, UILayoutAxis axis);
+    void sizeGridTracks(uint index);
+    void distributeGridWidths(uint index);
+    void distributeGridHeights(uint index);
+    void positionGridChildren(uint index);
+    void levelTracksUp(uint index, float remaining);
+    void levelTracksDown(uint index, float deficit);
+    float gridTrackExtent(uint index, uint start, uint span) const;
+    float gridTrackStart(uint index, uint column) const;
+    uint gridRowCount(uint index) const;
 
     Vec2 contentExtent(uint index) const;
     float resolveRootSize(UILayoutAxis axis) const;

@@ -4,6 +4,7 @@
 #include "utils/math/Vec2.hpp"
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 namespace Engine {
 
@@ -29,11 +30,16 @@ enum class UISizeMode : uint8_t
     Percent,
 };
 
+// Stretch is the odd one out: it places nothing, it sizes. A Fit child under it fills the
+// extent it is being aligned in instead of hugging its content, which is what makes a grid
+// cell claim the whole band its span bought. It has no meaning along a flow's main axis,
+// where Grow already says the same thing, so there it reads as Start.
 enum class UIAlign : uint8_t
 {
     Start = 0,
     Center,
     End,
+    Stretch,
 };
 
 struct UISizeSpec
@@ -78,6 +84,17 @@ struct UIEdges
     Vec2 topLeft() const { return Vec2(left, top); }
 };
 
+constexpr uint UI_GRID_DEFAULT_COLUMNS = 12;
+
+// An empty column list means UI_GRID_DEFAULT_COLUMNS equal Grow tracks, which is the
+// CSS-style default a cell carves up with gridSpan. Leaving it empty rather than
+// materialising twelve specs is what keeps the default free of an allocation.
+struct UIGridConfig
+{
+    std::vector<UISizeSpec> columns;
+    float rowGap = -1.0f;   // < 0 means "same as gap"
+};
+
 // anchor picks the point on the parent, self picks the point on the child that
 // lands on it -- Center/Center centres the child on the parent.
 struct UIFloatingConfig
@@ -106,12 +123,15 @@ struct UIFloatingConfig
     X(UIEdges, padding, UIEdges {})                                                                \
     X(UIEdges, margin, UIEdges {})                                                                 \
     X(UIFloatingConfig, floating, UIFloatingConfig {})                                             \
+    X(UIGridConfig, grid, UIGridConfig {})                                                         \
     X(Vec2, offset, VEC2_ZERO)                                                                     \
     X(Vec2, scale, VEC2_ONE)                                                                       \
     X(float, gap, 0.0f)                                                                            \
+    X(uint, gridSpan, 1)                                                                           \
     X(UILayoutDirection, direction, UILayoutDirection::Row)                                        \
     X(UIAlign, alignMain, UIAlign::Start)                                                          \
     X(UIAlign, alignCross, UIAlign::Start)                                                         \
+    X(bool, isGrid, false)                                                                         \
     X(bool, isFloating, false)                                                                     \
     X(bool, clipX, false)                                                                          \
     X(bool, clipY, false)
@@ -185,6 +205,23 @@ inline float axisTrailing(const UIEdges& edges, UILayoutAxis axis)
 inline bool axisClipped(const UILayoutConfig& config, UILayoutAxis axis)
 {
     return axis == UILayoutAxis::Horizontal ? *config.clipX : *config.clipY;
+}
+
+inline uint gridTrackCount(const UILayoutConfig& config)
+{
+    return config.grid->columns.empty() ? UI_GRID_DEFAULT_COLUMNS :
+                                          (uint)config.grid->columns.size();
+}
+
+inline const UISizeSpec& gridTrackSpec(const UILayoutConfig& config, uint track)
+{
+    static const UISizeSpec DEFAULT_TRACK = UISizeSpec::grow();
+    return config.grid->columns.empty() ? DEFAULT_TRACK : config.grid->columns[track];
+}
+
+inline float gridRowGap(const UILayoutConfig& config)
+{
+    return config.grid->rowGap < 0.0f ? *config.gap : config.grid->rowGap;
 }
 
 // Vec2 is a union of anonymous structs, so (&v.x)[axis] is not something to rely on.

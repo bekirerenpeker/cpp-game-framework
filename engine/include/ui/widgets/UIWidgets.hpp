@@ -47,6 +47,33 @@ IdType addTextLeaf(const UILayoutConfig& layout, const UITextConfig& config);
 IdType addShaderLeaf(const UILayoutConfig& layout, const UIShaderConfig& config);
 
 // composite widgets
+
+// Either a plain count -- .columns = 4 for four equal columns -- or the tracks written
+// out, .columns = {UISizeSpec::fit(), UISizeSpec::grow()}. Left alone it is the CSS-style
+// twelve, which is what .gridSpan carves up.
+struct UIGridColumns
+{
+    std::vector<UISizeSpec> tracks;
+
+    UIGridColumns() = default;
+    UIGridColumns(uint count) : tracks(count, UISizeSpec::grow()) {}
+    UIGridColumns(std::initializer_list<UISizeSpec> specs) : tracks(specs) {}
+};
+
+// Cells are the children, in order, one per child -- no per-cell call to make. A child
+// claims more than one column with .gridSpan on its own layout, and the row wraps when a
+// span no longer fits. rowGap below zero means "same as gap", matching CSS.
+struct GridConfig
+{
+    UIGridColumns columns;
+    float rowGap = -1.0f;
+    UILayoutConfig gridLayout;
+    UIContainerStyleSpec gridStyle;
+    std::string_view key;
+};
+UINodeState openGrid(const GridConfig& config = {});
+void closeGrid();
+
 struct DragHandleConfig
 {
     UILayoutConfig handleLayout;

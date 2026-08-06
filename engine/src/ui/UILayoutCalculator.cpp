@@ -50,6 +50,41 @@ bool isShrinkable(const UILayoutNode& node, UILayoutAxis axis)
     return axisClipped(node.node->layout, axis);
 }
 
+uint gridCellSpan(const UILayoutNode& node, uint trackCount)
+{
+    uint span = *node.node->layout.gridSpan;
+    if (span < 1) span = 1;
+    return span > trackCount ? trackCount : span;
+}
+
+// A cell wider than one track has no single track to charge, so what it needs beyond the
+// tracks it covers is spread over the content-sized ones among them, and over all of them
+// only when it covers none. The cheap stand-in for CSS's full span resolution, which the
+// backlog deliberately skips -- it gets a spanning cell its width without letting it
+// inflate a track a Fixed or Percent spec already spoke for.
+void spreadOverSpan(
+    std::vector<float>& tracks, const UILayoutConfig& layout, uint start, uint span, float needed
+)
+{
+    float covered = 0.0f;
+    uint absorbers = 0;
+    for (uint track = start; track < start + span; track++) {
+        covered += tracks[track];
+        UISizeMode mode = gridTrackSpec(layout, track).mode;
+        if (mode == UISizeMode::Fit || mode == UISizeMode::Grow) absorbers++;
+    }
+
+    float excess = needed - covered;
+    if (excess <= 0.0f) return;
+
+    float share = excess / (float)(absorbers > 0 ? absorbers : span);
+    for (uint track = start; track < start + span; track++) {
+        UISizeMode mode = gridTrackSpec(layout, track).mode;
+        if (absorbers > 0 && mode != UISizeMode::Fit && mode != UISizeMode::Grow) continue;
+        tracks[track] += share;
+    }
+}
+
 // Not the style field: a transparent border paints no ring however wide it is set, and
 // the shader clamps to half the short side. Anything else here would carve pixels out
 // of a ring that was never drawn, so this has to mirror UIRenderer's own rule exactly.
@@ -233,6 +268,22 @@ void UILayoutCalculator::computeFinalHeights()
 Vec2 UILayoutCalculator::contentExtent(uint index) const
 {
     const UILayoutConfig& layout = m_nodes[index].node->layout;
+    // A grid has no single flow axis to sum along, but its cells already carry the offset
+    // the solve gave them, so the extent is just the far corner of the furthest one.
+    if (*layout.isGrid) {
+        Vec2 far = VEC2_ZERO;
+        for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+             child = m_nodes[child].nextSibling) {
+            if (isFloating(m_nodes[child])) continue;
+
+            const UIEdges& margin = *m_nodes[child].node->layout.margin;
+            const Vec2& offset = m_nodes[child].gridOffset;
+            far.x = Math::max(far.x, offset.x + m_nodes[child].size.x + margin.right);
+            far.y = Math::max(far.y, offset.y + m_nodes[child].size.y + margin.bottom);
+        }
+        return far + Vec2(layout.padding->horizontal(), layout.padding->vertical());
+    }
+
     UILayoutAxis mainAxis = mainAxisOf(*layout.direction);
     UILayoutAxis crossAxis = crossAxisOf(*layout.direction);
 
@@ -350,6 +401,11 @@ void UILayoutCalculator::computeClipRects()
 void UILayoutCalculator::aggregateIntrinsic(uint index, UILayoutAxis axis)
 {
     const UILayoutConfig& layout = m_nodes[index].node->layout;
+    if (*layout.isGrid) {
+        aggregateGridIntrinsic(index, axis);
+        return;
+    }
+
     bool alongMain = axis == mainAxisOf(*layout.direction);
 
     float min = 0.0f;
@@ -412,6 +468,12 @@ void UILayoutCalculator::distributeChildren(uint index, UILayoutAxis axis, bool 
     if (m_nodes[index].firstChild == NO_LAYOUT_NODE) return;
 
     const UILayoutConfig& layout = m_nodes[index].node->layout;
+    if (*layout.isGrid) {
+        if (axis == UILayoutAxis::Horizontal) distributeGridWidths(index);
+        else distributeGridHeights(index);
+        return;
+    }
+
     if (axis != mainAxisOf(*layout.direction)) {
         resolveCrossAxis(index, axis);
         return;
@@ -443,6 +505,7 @@ void UILayoutCalculator::resolveCrossAxis(uint index, UILayoutAxis axis)
 {
     const UILayoutConfig& layout = m_nodes[index].node->layout;
     float inner = sizeOf(m_nodes[index], axis) - axisPadding(*layout.padding, axis);
+    bool stretchFit = *layout.alignCross == UIAlign::Stretch;
 
     for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
          child = m_nodes[child].nextSibling) {
@@ -452,11 +515,13 @@ void UILayoutCalculator::resolveCrossAxis(uint index, UILayoutAxis axis)
         float childInner = isFloating(m_nodes[child]) ?
                                inner :
                                inner - axisPadding(*m_nodes[child].node->layout.margin, axis);
-        setSizeOf(m_nodes[child], axis, resolveChildAgainst(child, axis, childInner));
+        setSizeOf(m_nodes[child], axis, resolveChildAgainst(child, axis, childInner, stretchFit));
     }
 }
 
-float UILayoutCalculator::resolveChildAgainst(uint index, UILayoutAxis axis, float inner) const
+float UILayoutCalculator::resolveChildAgainst(
+    uint index, UILayoutAxis axis, float inner, bool stretchFit
+) const
 {
     const UISizeSpec& spec = axisSpec(m_nodes[index].node->layout, axis);
     float floorValue = contentFloor(index, axis);
@@ -470,9 +535,14 @@ float UILayoutCalculator::resolveChildAgainst(uint index, UILayoutAxis axis, flo
         // A floating child never sat in the parent's flow, so the parent's inner size is
         // not a bound on it -- clamping to it collapses a Fit box anchored inside a
         // zero-width parent down to min-content, which for text is the longest word.
-        size = isFloating(m_nodes[index]) ?
-                   intrinsicMax(m_nodes[index], axis) :
-                   Math::min(intrinsicMax(m_nodes[index], axis), Math::max(inner, floorValue));
+        if (isFloating(m_nodes[index])) size = intrinsicMax(m_nodes[index], axis);
+        // Stretch is the caller saying the extent is the answer, so a Fit child under it
+        // stops capping itself at its content and takes the whole thing, exactly as Grow
+        // would -- the difference being that this is the parent's call, not the child's.
+        else if (stretchFit) size = Math::max(inner, floorValue);
+        else {
+            size = Math::min(intrinsicMax(m_nodes[index], axis), Math::max(inner, floorValue));
+        }
         break;
     }
     return clampToSpec(index, axis, size);
@@ -483,6 +553,11 @@ void UILayoutCalculator::positionChildren(uint index)
     if (m_nodes[index].firstChild == NO_LAYOUT_NODE) return;
 
     const UILayoutConfig& layout = m_nodes[index].node->layout;
+    if (*layout.isGrid) {
+        positionGridChildren(index);
+        return;
+    }
+
     UILayoutDirection direction = *layout.direction;
     UILayoutAxis mainAxis = mainAxisOf(direction);
     UILayoutAxis crossAxis = crossAxisOf(direction);
@@ -645,6 +720,376 @@ void UILayoutCalculator::levelDown(UILayoutAxis axis, float deficit)
         // overflow, not a bug: the boxes spill and clipping is the caller's choice.
         if (applied <= EPSILON) break;
     }
+}
+
+// Row-major, and the only pass that decides which cell goes where -- placement reads
+// nothing but spans and the track count, neither of which any sizing can change, so it
+// runs once during the horizontal intrinsic walk and every later pass reads it back.
+void UILayoutCalculator::placeGridCells(uint index)
+{
+    uint trackCount = gridTrackCount(m_nodes[index].node->layout);
+
+    uint column = 0;
+    uint row = 0;
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) continue;
+
+        uint span = gridCellSpan(m_nodes[child], trackCount);
+        if (column + span > trackCount) {
+            column = 0;
+            row++;
+        }
+
+        m_nodes[child].gridColumn = column;
+        m_nodes[child].gridRow = row;
+        column += span;
+    }
+}
+
+// Fills m_trackMin/m_trackMax with what the cells ask of each column. Shared by the
+// intrinsic pass and the sizing pass rather than cached on the node: a child's intrinsic
+// width is still the same number by the time widths are distributed, since the final
+// solve writes to size and never back to minWidth/maxWidth.
+void UILayoutCalculator::sizeGridTracks(uint index)
+{
+    const UILayoutConfig& layout = m_nodes[index].node->layout;
+    uint trackCount = gridTrackCount(layout);
+    float gap = *layout.gap;
+
+    m_trackMin.assign(trackCount, 0.0f);
+    m_trackMax.assign(trackCount, 0.0f);
+
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) continue;
+        if (gridCellSpan(m_nodes[child], trackCount) != 1) continue;
+
+        uint column = m_nodes[child].gridColumn;
+        float margin = axisPadding(*m_nodes[child].node->layout.margin, UILayoutAxis::Horizontal);
+        m_trackMin[column] = Math::max(
+            m_trackMin[column], intrinsicMin(m_nodes[child], UILayoutAxis::Horizontal) + margin
+        );
+        m_trackMax[column] = Math::max(
+            m_trackMax[column], intrinsicMax(m_nodes[child], UILayoutAxis::Horizontal) + margin
+        );
+    }
+
+    // Second pass, not folded into the first: a spanning cell is spread over what the
+    // single-span cells already settled, so all of those have to be in before any of these.
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) continue;
+
+        uint span = gridCellSpan(m_nodes[child], trackCount);
+        if (span < 2) continue;
+
+        uint column = m_nodes[child].gridColumn;
+        float margin = axisPadding(*m_nodes[child].node->layout.margin, UILayoutAxis::Horizontal);
+        float inner = gap * (float)(span - 1);
+        spreadOverSpan(
+            m_trackMin, layout, column, span,
+            intrinsicMin(m_nodes[child], UILayoutAxis::Horizontal) + margin - inner
+        );
+        spreadOverSpan(
+            m_trackMax, layout, column, span,
+            intrinsicMax(m_nodes[child], UILayoutAxis::Horizontal) + margin - inner
+        );
+    }
+
+    for (uint track = 0; track < trackCount; track++) {
+        const UISizeSpec& spec = gridTrackSpec(layout, track);
+        // Same order finalizeIntrinsic uses on a node: Fixed is an instruction rather than
+        // content, so no cell gets to argue with it, and only then does min/max clamp.
+        if (spec.mode == UISizeMode::Fixed) {
+            m_trackMin[track] = spec.value;
+            m_trackMax[track] = spec.value;
+        }
+        m_trackMin[track] = Math::clamp(m_trackMin[track], spec.min, spec.max);
+        m_trackMax[track] = Math::clamp(m_trackMax[track], m_trackMin[track], spec.max);
+    }
+}
+
+void UILayoutCalculator::aggregateGridIntrinsic(uint index, UILayoutAxis axis)
+{
+    const UILayoutConfig& layout = m_nodes[index].node->layout;
+    float pad = axisPadding(*layout.padding, axis);
+
+    if (axis == UILayoutAxis::Horizontal) {
+        placeGridCells(index);
+        sizeGridTracks(index);
+
+        uint trackCount = (uint)m_trackMin.size();
+        float min = *layout.gap * (float)(trackCount - 1);
+        float max = min;
+        for (uint track = 0; track < trackCount; track++) {
+            min += m_trackMin[track];
+            max += m_trackMax[track];
+        }
+        setIntrinsic(m_nodes[index], axis, min + pad, max + pad);
+        return;
+    }
+
+    // Rows are content-sized and there is no row span, so a row is simply its tallest
+    // cell and the grid is the rows stacked -- no min/max pair, same as any other node
+    // on an axis nothing wraps along.
+    uint rows = gridRowCount(index);
+    if (rows == 0) {
+        setIntrinsic(m_nodes[index], axis, pad, pad);
+        return;
+    }
+
+    m_trackSize.assign(rows, 0.0f);
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) continue;
+
+        float margin = axisPadding(*m_nodes[child].node->layout.margin, axis);
+        m_trackSize[m_nodes[child].gridRow] =
+            Math::max(m_trackSize[m_nodes[child].gridRow], m_nodes[child].size.y + margin);
+    }
+
+    float height = gridRowGap(layout) * (float)(rows - 1);
+    for (float row : m_trackSize) height += row;
+    setIntrinsic(m_nodes[index], axis, height + pad, height + pad);
+}
+
+void UILayoutCalculator::distributeGridWidths(uint index)
+{
+    const UILayoutConfig& layout = m_nodes[index].node->layout;
+    sizeGridTracks(index);
+
+    uint trackCount = (uint)m_trackMin.size();
+    float gap = *layout.gap;
+    float inner = sizeOf(m_nodes[index], UILayoutAxis::Horizontal) -
+                  axisPadding(*layout.padding, UILayoutAxis::Horizontal);
+    float available = inner - gap * (float)(trackCount - 1);
+    bool stretchFit = *layout.alignMain == UIAlign::Stretch;
+
+    m_trackSize.assign(trackCount, 0.0f);
+    float used = 0.0f;
+    for (uint track = 0; track < trackCount; track++) {
+        const UISizeSpec& spec = gridTrackSpec(layout, track);
+        float size;
+        switch (spec.mode) {
+        case UISizeMode::Fixed  : size = spec.value; break;
+        case UISizeMode::Percent: size = spec.value * available; break;
+        // Grow seeds at max-content for the same reason a Grow child does: the surplus
+        // pass levels it up from there, and seeding lower only wraps content early.
+        default: size = m_trackMax[track]; break;
+        }
+        m_trackSize[track] = Math::clamp(Math::max(size, m_trackMin[track]), spec.min, spec.max);
+        used += m_trackSize[track];
+    }
+
+    float remaining = available - used;
+    if (remaining > EPSILON) levelTracksUp(index, remaining);
+    else if (remaining < -EPSILON) levelTracksDown(index, -remaining);
+
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) {
+            setSizeOf(
+                m_nodes[child], UILayoutAxis::Horizontal,
+                resolveChildAgainst(child, UILayoutAxis::Horizontal, inner)
+            );
+            continue;
+        }
+
+        const UIEdges& margin = *m_nodes[child].node->layout.margin;
+        uint column = m_nodes[child].gridColumn;
+        uint span = gridCellSpan(m_nodes[child], trackCount);
+        float band = Math::max(gridTrackExtent(index, column, span) - margin.horizontal(), 0.0f);
+
+        float size = resolveChildAgainst(child, UILayoutAxis::Horizontal, band, stretchFit);
+        setSizeOf(m_nodes[child], UILayoutAxis::Horizontal, size);
+        // alignMain places the cell inside the band its span bought, not the flow inside
+        // the box: a grid's cells cannot be pushed along, only sat somewhere in a band a
+        // narrower cell did not fill.
+        m_nodes[child].gridOffset.x = gridTrackStart(index, column) + margin.left +
+                                      alignOffset(*layout.alignMain, band - size);
+    }
+}
+
+void UILayoutCalculator::distributeGridHeights(uint index)
+{
+    const UILayoutConfig& layout = m_nodes[index].node->layout;
+    float inner = sizeOf(m_nodes[index], UILayoutAxis::Vertical) -
+                  axisPadding(*layout.padding, UILayoutAxis::Vertical);
+
+    uint rows = gridRowCount(index);
+    if (rows == 0) return;
+
+    // Every row measured before any cell is resized, because resolving a cell overwrites
+    // the intrinsic height the rest of its row is still being measured from.
+    m_trackSize.assign(rows, 0.0f);
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) continue;
+
+        float margin = axisPadding(*m_nodes[child].node->layout.margin, UILayoutAxis::Vertical);
+        m_trackSize[m_nodes[child].gridRow] =
+            Math::max(m_trackSize[m_nodes[child].gridRow], m_nodes[child].size.y + margin);
+    }
+
+    float rowGap = gridRowGap(layout);
+    bool stretchFit = *layout.alignCross == UIAlign::Stretch;
+    uint row = 0;
+    float rowOrigin = 0.0f;
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) {
+            setSizeOf(
+                m_nodes[child], UILayoutAxis::Vertical,
+                resolveChildAgainst(child, UILayoutAxis::Vertical, inner)
+            );
+            continue;
+        }
+
+        // Cells arrive in placement order, so the row origin only ever moves forward.
+        while (row < m_nodes[child].gridRow) rowOrigin += m_trackSize[row++] + rowGap;
+
+        const UIEdges& margin = *m_nodes[child].node->layout.margin;
+        float band = Math::max(m_trackSize[row] - margin.vertical(), 0.0f);
+
+        float size = resolveChildAgainst(child, UILayoutAxis::Vertical, band, stretchFit);
+        setSizeOf(m_nodes[child], UILayoutAxis::Vertical, size);
+        m_nodes[child].gridOffset.y =
+            rowOrigin + margin.top + alignOffset(*layout.alignCross, band - size);
+    }
+}
+
+void UILayoutCalculator::positionGridChildren(uint index)
+{
+    const UILayoutConfig& layout = m_nodes[index].node->layout;
+    Vec2 origin = m_nodes[index].pos + layout.padding->topLeft() - m_nodes[index].scroll;
+
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (isFloating(m_nodes[child])) positionFloatingChild(index, child);
+        else m_nodes[child].pos = origin + m_nodes[child].gridOffset;
+    }
+}
+
+// levelUp over tracks instead of children. Kept separate rather than generalised because
+// the two walk different things -- node indices against their own specs there, a flat
+// float array against the parent's track list here -- and there are only ever a handful
+// of tracks, so a filtered work list would cost more than the scan it saves.
+void UILayoutCalculator::levelTracksUp(uint index, float remaining)
+{
+    const UILayoutConfig& layout = m_nodes[index].node->layout;
+    uint trackCount = (uint)m_trackSize.size();
+
+    auto canGrow = [&](uint track) {
+        const UISizeSpec& spec = gridTrackSpec(layout, track);
+        return spec.mode == UISizeMode::Grow && m_trackSize[track] < spec.max - EPSILON;
+    };
+
+    while (remaining > EPSILON) {
+        float smallest = UI_UNBOUNDED;
+        float next = UI_UNBOUNDED;
+        for (uint track = 0; track < trackCount; track++) {
+            if (!canGrow(track)) continue;
+
+            float size = m_trackSize[track];
+            if (size < smallest - EPSILON) {
+                next = smallest;
+                smallest = size;
+            } else if (size > smallest + EPSILON && size < next) {
+                next = size;
+            }
+        }
+        if (smallest >= UI_UNBOUNDED) break;
+
+        uint count = 0;
+        for (uint track = 0; track < trackCount; track++)
+            if (canGrow(track) && m_trackSize[track] <= smallest + EPSILON) count++;
+
+        float step = remaining / (float)count;
+        if (next < UI_UNBOUNDED) step = Math::min(step, next - smallest);
+
+        float applied = 0.0f;
+        for (uint track = 0; track < trackCount; track++) {
+            if (!canGrow(track) || m_trackSize[track] > smallest + EPSILON) continue;
+
+            float target = Math::min(m_trackSize[track] + step, gridTrackSpec(layout, track).max);
+            applied += target - m_trackSize[track];
+            m_trackSize[track] = target;
+        }
+
+        remaining -= applied;
+        // Nothing left that can absorb: the surplus stays unclaimed and the grid simply
+        // does not fill its box, which is what a row of Fit tracks should look like.
+        if (applied <= EPSILON) break;
+    }
+}
+
+void UILayoutCalculator::levelTracksDown(uint index, float deficit)
+{
+    uint trackCount = (uint)m_trackSize.size();
+
+    auto canShrink = [&](uint track) { return m_trackSize[track] > m_trackMin[track] + EPSILON; };
+
+    while (deficit > EPSILON) {
+        float largest = -UI_UNBOUNDED;
+        float next = -UI_UNBOUNDED;
+        for (uint track = 0; track < trackCount; track++) {
+            if (!canShrink(track)) continue;
+
+            float size = m_trackSize[track];
+            if (size > largest + EPSILON) {
+                next = largest;
+                largest = size;
+            } else if (size < largest - EPSILON && size > next) {
+                next = size;
+            }
+        }
+        if (largest <= -UI_UNBOUNDED) break;
+
+        uint count = 0;
+        for (uint track = 0; track < trackCount; track++)
+            if (canShrink(track) && m_trackSize[track] >= largest - EPSILON) count++;
+
+        float step = deficit / (float)count;
+        if (next > -UI_UNBOUNDED) step = Math::min(step, largest - next);
+
+        float applied = 0.0f;
+        for (uint track = 0; track < trackCount; track++) {
+            if (!canShrink(track) || m_trackSize[track] < largest - EPSILON) continue;
+
+            float target = Math::max(m_trackSize[track] - step, m_trackMin[track]);
+            applied += m_trackSize[track] - target;
+            m_trackSize[track] = target;
+        }
+
+        deficit -= applied;
+        // Every track on its minimum and still too wide is genuine overflow, exactly as
+        // it is for a row of children -- the cells spill and clipping is the caller's.
+        if (applied <= EPSILON) break;
+    }
+}
+
+float UILayoutCalculator::gridTrackExtent(uint index, uint start, uint span) const
+{
+    float extent = *m_nodes[index].node->layout.gap * (float)(span - 1);
+    for (uint track = start; track < start + span; track++) extent += m_trackSize[track];
+    return extent;
+}
+
+float UILayoutCalculator::gridTrackStart(uint index, uint column) const
+{
+    if (column == 0) return 0.0f;
+    return gridTrackExtent(index, 0, column) + *m_nodes[index].node->layout.gap;
+}
+
+uint UILayoutCalculator::gridRowCount(uint index) const
+{
+    uint rows = 0;
+    for (uint child = m_nodes[index].firstChild; child != NO_LAYOUT_NODE;
+         child = m_nodes[child].nextSibling) {
+        if (!isFloating(m_nodes[child])) rows = m_nodes[child].gridRow + 1;
+    }
+    return rows;
 }
 
 // The available size is the window in screen space and nothing at all in world space,

@@ -39,6 +39,17 @@ void fullScreenMenu()
     text("Full-screen root");
     text("A Grow root now fills the window, so this card stays centred as it resizes.");
     horizontalDivider();
+
+    // Three equal columns and then one cell spanning all of them -- the buttons stretch
+    // to their column because a grid stretches its cells by default.
+    openGrid({.columns = 3, .gridLayout = {.width = UISizeSpec::fixed(360.0f)}});
+    button("Easy");
+    button("Normal");
+    button("Hard");
+    button("Back", {.buttonLayout = {.gridSpan = 3}});
+    closeGrid();
+
+    horizontalDivider();
     text("F1 closes this.");
 
     closeContainer();

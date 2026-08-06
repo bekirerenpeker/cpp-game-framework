@@ -463,6 +463,85 @@ void inputTab()
     closeContainer();
 }
 
+void spanCell(const std::string& label, uint span, Color color)
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    openContainer(
+        {.padding = UIEdges(metrics.spacing.sm, metrics.spacing.xs),
+         .gridSpan = span,
+         .alignMain = UIAlign::Center},
+        {.backgroundColor = color,
+         .borderColor = colors.border,
+         .borderWidth = metrics.borderWidth.thin,
+         .borderRadius = metrics.radius.sm}
+    );
+    text(label);
+    closeContainer();
+}
+
+// Cells are just the children, in order -- nothing here marks where one ends. The three
+// grids are the three shapes worth knowing: spans over the default twelve, tracks written
+// out so one column can hug its content, and a plain count for a uniform field.
+void gridTab()
+{
+    const UIThemeColors& colors = UITheming::colors();
+    const UIThemeMetrics& metrics = UITheming::metrics();
+
+    static int quality = 2;
+    static bool longLabel = true;
+
+    text("Twelve columns unless told otherwise, and a cell takes some of them.");
+    horizontalDivider();
+
+    openGrid();
+    spanCell("3", 3, colors.accentMuted);
+    spanCell("9", 9, colors.surfaceRaised);
+    spanCell("4", 4, colors.surfaceRaised);
+    spanCell("4", 4, colors.accentMuted);
+    spanCell("4", 4, colors.surfaceRaised);
+    spanCell("5", 5, colors.accentMuted);
+    spanCell("8 -- would not fit beside the 5, so it wrapped", 8, colors.surfaceRaised);
+    closeGrid();
+
+    horizontalDivider();
+    text("Written-out tracks. The fit column is as wide as the widest label in it,");
+    text("so the second column starts at the same x on every row.");
+
+    openGrid({
+        .columns = {        UISizeSpec::fit(),            UISizeSpec::grow()},
+        .gridLayout = {.gap = metrics.spacing.md, .alignCross = UIAlign::Center}
+    });
+    text("Name");
+    button("Player One");
+    text("Texture quality");
+    dropdown({"Low", "Medium", "High"}, quality);
+    text("A deliberately long label");
+    checkBox("drags the first column out with it", longLabel);
+    closeGrid();
+
+    horizontalDivider();
+    text("Six equal columns. The cells fill their column and set their own height.");
+
+    openGrid({.columns = 6, .gridLayout = {.gap = metrics.spacing.xs}});
+    for (int i = 0; i < 18; i++) {
+        openContainer(
+            {.height = UISizeSpec::fixed(38.0f),
+             .alignMain = UIAlign::Center,
+             .alignCross = UIAlign::Center},
+            {.backgroundColor = colors.surfaceSunken,
+             .borderColor = colors.border,
+             .borderWidth = metrics.borderWidth.thin,
+             .borderRadius = metrics.radius.sm,
+             .onHover = {.backgroundColor = colors.surfaceHover}}
+        );
+        text(std::format("{}", i));
+        closeContainer();
+    }
+    closeGrid();
+}
+
 void demoWindow()
 {
     applyEdits();
@@ -481,7 +560,7 @@ void demoWindow()
     openWindow("Demo Window");
 
     toolbarMenu(
-        {"Widgets", "Display", "Sliders", "Color", "Theme", "Scroll", "Input"}, selectedMenu
+        {"Widgets", "Display", "Sliders", "Color", "Theme", "Scroll", "Input", "Grid"}, selectedMenu
     );
 
     switch (selectedMenu) {
@@ -550,6 +629,8 @@ void demoWindow()
     case 5: scrollTab(); break;
 
     case 6: inputTab(); break;
+
+    case 7: gridTab(); break;
 
     default: break;
     }

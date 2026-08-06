@@ -14,8 +14,6 @@ they happened; the reasoning lives in CLAUDE.md, not here.
 
 - [ ] **`transition`** — animate style fields per key in the state store; needs a rule for what each field interpolates as. `cursor`, its other half, has landed.
 
-- [ ] **Grid** — track list with `UISizeSpec`, distribution, row-major placement with span. Skip auto-fit/minmax/dense (~80% of value).
-
 - [ ] **More widgets** — `image`, `progressBar`, `tabs`, `treeView`, `groupBox`, `dragFloat`.
 
 - [ ] **One batch for UI rects and glyphs** — merge shaders to cut draw calls.
@@ -39,6 +37,14 @@ they happened; the reasoning lives in CLAUDE.md, not here.
 ## Done
 
 ### UI
+
+- [x] **Grid** — `openGrid`/`closeGrid`, cells are just the children in order. Twelve
+  columns by default and `.gridSpan = n` carves them up CSS-style; `.columns` takes a
+  count or a written-out `UISizeSpec` track list, so a column can hug the widest cell in
+  it. Row-major with wrapping, per-track distribution reusing the level-up/level-down
+  shape. Skipped as planned: auto-fit, minmax, dense packing, row span, column-major.
+  Brought `UIAlign::Stretch` with it — a grid stretches its cells to their band by
+  default, and flow layout's `alignCross` honours it too.
 
 - [x] **`UINodeState` drag outputs** — `mousePos`, `dragDelta`, `pressOrigin` (mouse *and*
   node rect at press), `grabOffset`, `scrollDelta`, `isDoubleClicked`. `dragDelta` is

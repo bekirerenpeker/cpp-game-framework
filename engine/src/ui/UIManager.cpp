@@ -109,6 +109,10 @@ void applyScale(UILayoutConfig& layout, float scale)
     layout.floating->offset = layout.floating->offset * scale;
     *layout.gap *= scale;
     *layout.offset = *layout.offset * scale;
+
+    for (UISizeSpec& track : layout.grid->columns) scaleSize(track, scale);
+    // Negative is the "same as gap" sentinel, and gap is scaled on its own line above.
+    if (layout.grid->rowGap > 0.0f) layout.grid->rowGap *= scale;
 }
 
 // The style's own lengths, or a scaled-up UI keeps hairline borders and tight radii on
