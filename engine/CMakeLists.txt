@@ -20,6 +20,13 @@ target_link_libraries(engine PUBLIC
 
 target_compile_definitions(engine PUBLIC GLFW_INCLUDE_NONE)
 
+# The engine's own assets have to resolve from the engine folder rather than the
+# process working directory, or nothing the engine ships can be found once the
+# executable is launched from somewhere else. PRIVATE because only engine code
+# resolves against it; a shipping game repoints it with setEngineAssetRoot.
+target_compile_definitions(engine PRIVATE
+    ENGINE_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets")
+
 # The font cache evicts stale atlases through IFileEntry::deleteFromDisk, which is
 # compiled out unless this is defined. Engine-scoped, so it un-gates deletion for
 # engine code only -- game code still gets the safe no-op.

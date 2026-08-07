@@ -1,374 +1,182 @@
 # Engine TODOs
 
-Working backlog for the engine, ordered by rough priority. Claude Code agents may
-add, edit, reorder, check off, or remove items here as tasks are defined or
-finished — keep it current, don't let it drift from reality. When an item is
-done, move it to "Done" with a one-line note of what landed (not a changelog,
-just enough to know it happened); when a plan changes, edit the item in place
-rather than leaving a stale description.
+Working backlog. Claude Code agents may add, edit, reorder, check off or remove
+items — keep it current. Open items stay **one line** wherever they can; the reasoning
+lives in CLAUDE.md, not here. Done items get one or two lines, just enough to know
+they happened.
 
-## In progress / next up
+The engine side is far ahead of the game side: UI, text, windowing, audio, ECS and the
+batched renderer are all real, and there is still no collision, no save/load and no scene
+that is not a hand-written test function. **Gameplay systems** below is the honest critical
+path; everything else is polish on things that already work.
 
-- [ ] **Engine-handled resizable containers** — `UiState` already reports
-  `isHeld` + `dragDelta` + `mouseLocal` + last frame's rect, which is all a scene
-  needs to resize a panel itself (see case 0 in `ui_layout_test`). Doing it
-  *inside* the engine needs three things that are not free: a second hit pass
-  that prefers a container's resize border over its own children (under
-  "topmost wins" the border loses the hit to any overlapping child, so the
-  container never becomes active), a long-lived `key -> size` map with its own
-  frame-age eviction since immediate mode has no destroy event, and a builder
-  that overwrites the caller's `LayoutConfig.width/height` with
-  `SizeSpec::fixed(...)`, which breaks the rule that `LayoutConfig` is purely
-  the caller's data. Only worth it once several call sites want it.
+## Implement Now
 
-- [ ] **Grid** — a track list where each track carries the same `SizeSpec`, run
-  through `LayoutCalculator`'s existing distribution routine, then row-major
-  auto-placement into cells with an optional span. That is ~80% of grid's value
-  for a fraction of CSS Grid's algorithm; auto-fit/minmax/dense packing are not
-  worth it.
+_Empty — pick the next item from the sections below._
 
-- [ ] **Widget theming** — `UiRenderer` draws `UiStyle` for real now, corner
-  radius included, and `UiPresets::panel/button/outline/divider` give starting points.
-  What is still missing is a *theme*: a named palette + role mapping those
-  presets resolve against, so a call site says "surface" or "accent" rather than
-  a literal `Color`. Only then is restyling a whole UI one edit.
+## Bugs
 
-- [ ] **Scroll + clip** — `LayoutConfig::clipX/clipY` and `scrollOffset` are
-  honoured by the solver already (a clipped axis reports `minW = 0`, which is
-  what lets it shrink below its content), but nothing sets a scissor rect or
-  drives the offset from input. Hit testing must be clipped in the same change,
-  not before it: `UiSystem`'s cached rects are currently full rects, and
-  clipping the hit test while the renderer still draws everything unclipped
-  would produce visible elements that cannot be clicked — a worse bug than the
-  one it fixes.
+- [ ] **Escape while typing quits the game** — `Application::run` closes on Escape and the text field uses it to blur. Needs the `wantsKeyboard()` item under Engine core.
+- [ ] **Home / End / PageUp / PageDown may be dead** — not reproduced; key table is aligned and the arrows share the same path. Suspect the numpad, which glfw reports as `KP_7`/`KP_1`/`KP_9`/`KP_3`. Re-test and say which keys.
 
-- [ ] **Terrain-type tilemap rework** — `Tileset::tilesConnect(a, b)` is
-  currently just `a != 0 && a == b` ([Tileset.cpp](engine/src/graphics/tilemap/Tileset.cpp)),
-  so a rule tile only autotiles against itself. Add a terrain-type concept
-  decoupled from the visual tile id (e.g. `terrainType` on `TileData`), make
-  `tilesConnect` compare terrain types, and support transition/blend tiles
-  keyed by a `(terrainA, terrainB)` pair for edges between two terrains
-  (grass/dirt/water blending, à la Terraria/RimWorld/Unity Rule Tiles). This
-  is a data-model change — do it before building real tilemap content on the
-  current single-id scheme.
+## Gameplay systems — none of this exists yet
 
-- [ ] **Tilemap vertex/perf pass** — `TileVertex`
-  ([TilemapComponent.hpp](engine/include/components/TilemapComponent.hpp))
-  is `Vec2 pos, Vec2 uv, Color color, int texIndex`; `Color` is likely 4
-  floats, so each vertex is large and full chunk meshes get rebuilt on any
-  dirty tile. Pack color to `uint32_t` RGBA8, shrink `texIndex`, consider a
-  more compact position/uv encoding. Bundle with other `TilemapRenderer`
-  chunk-rebuild optimizations (partial rebuild instead of full
-  `CHUNK_SIZE^2` rebake where feasible). Do alongside the terrain-type
-  rework since both touch `TileVertex`/`TilemapRenderer`.
+- [ ] **AABB collision** — broadphase over the ECS plus swept AABB, so a fast mover cannot tunnel.
+- [ ] **Tile collision** — sweep against `TilemapManager` rather than per-tile entities. The blocker for any movement at all.
+- [ ] **Character controller** — grounded/airborne states, coyote time, jump buffering.
+- [ ] **Tile break/place** — a tilemap edit API that re-bakes only the touched chunk.
+- [ ] **World save/load** — ECS + tilemap through `JsonFile`/`BinaryFile`; chunked so a big world streams.
+- [ ] **2D lighting** — tile flood-fill into a light texture sampled by the tile and sprite shaders. Terraria's signature look.
+- [ ] **Sprite animation** — frame ranges over a `TextureAtlas`, plus a small state machine component.
+- [ ] **Particles** — pooled, batched through the existing quad renderer.
+- [ ] **Item + inventory model** — the grid UI for it already landed.
+- [ ] **Prefabs** — spawn an entity from a JSON description instead of by hand.
 
-- [ ] **Per-sprite material uniforms** — `SpriteComponent::shader` covers
-  "draw this sprite with a different shader", but there is still no way to
-  feed a custom shader its own uniforms (tint strength, outline width, …).
-  Needs a material concept — a shared uniform set stored once and referenced
-  by sprites, applied on the shader switch in `Renderer::renderSprites` —
-  rather than per-entity uniform blobs.
+## Engine core
 
-- [ ] **`TextRenderer` line stepping ignores the *next* line's ascent** —
-  `walkSpan` steps `pen.pos.y -= pen.maxLineStep` where `maxLineStep` is the max
-  over the line being *left*. That is right when the oversized span is on the
-  current line, but a line whose content is much taller than the previous line's
-  max rides up into it: 22pt line 1 gives a ~29 step, and a 46pt span opening
-  line 2 has a ~35 ascender, so it overlaps line 1 by ~6 units. The fix is the
-  one `TextMeasure::wrapSpans` already uses — accumulate a line *top*, and place
-  each baseline at `lineTop + thatLine'sMaxAscent` instead of stepping
-  baseline-to-baseline. Do this when folding the two walks together (item
-  below), since that is where the two implementations converge anyway.
+- [ ] **Fixed timestep** — accumulator in `Application::run`; physics cannot be deterministic on a variable dt.
+- [ ] **Scene abstraction** — `onEnter`/`onExit`/`update`/`render`, replacing the hand-written test functions and the `main.cpp` switch.
+- [ ] **`UIManager::wantsKeyboard()` / `wantsMouse()`** — so gameplay input yields while a field has focus. `isMouseOverUi()` is half of this already.
+- [ ] **Named input actions** — actions over `InputAxis`, rebindable and serialized.
+- [ ] **Settings file** — resolution, volume, keybinds, through `JsonFile`.
+- [ ] **Hot-reload** — shaders first; it is the fastest iteration win in the engine.
+- [ ] **Error convention** — one way to report a recoverable failure; right now it is a mix of `nullptr`, `bool` and a log line.
 
-- [ ] **Fold `TextMeasure` and `TextRenderer::walkSpan` together** — wrapping now
-  works end to end through the UI path (`TextMeasure::wrapSpans` -> `TextRun`s ->
-  `TextRenderer::drawSpan`), but `TextRenderer::draw` on its own still only
-  breaks on an explicit `\n`, so world-space text outside the UI cannot wrap.
-  `TAB_SPACES` and `FALLBACK_SPACE_ADVANCE` are declared in both files and must
-  not diverge or measured width stops matching drawn width; both belong on
-  `TextStyle.hpp`. Ellipsis/clip overflow is still open.
+## Rendering
 
-- [ ] **One batch for UI rects and UI glyphs** — the UI now submits two batches
-  per root (rounded rects through `UiShader`, glyphs through `TextShader`), so a
-  panel and its label cost two draw calls. They cannot merge as things stand:
-  the rect shader is a rounded-box SDF with its own vertex layout and the glyph
-  shader is a distance-field sampler. Merging means one shader branching on a
-  per-vertex mode flag and one vertex format wide enough for both — worth it
-  only once a real UI shows the draw calls actually matter.
+- [ ] **Sprite culling** — the tilemap culls against `ViewContext`, sprites do not.
+- [ ] **Cache the sprite sort** — `renderSprites` re-sorts every entity every frame.
+- [ ] **Render layers** — explicit sorting groups instead of the single `layer` int.
+- [ ] **Post-processing chain** — a stack of passes, not the one hardcoded pass.
+- [ ] **Debug draw channel** — persistent per-frame lines/boxes over `addLine`/`addFrame`; collision work will need it immediately.
+- [ ] **Per-sprite material uniforms** — shared uniform set referenced by sprites, applied on shader switch.
 
-- [ ] **Named style tags** — the parser only knows `/s`. `TextTags::isTagAt`
-  is the single extension point; `/b`, `/i` or `/color=red` slot in without
-  touching the span-emitting loop or any call site.
+## Tilemap
 
-- [ ] **Layout cache** — immediate mode re-walks every string every frame
-  (~293 quads/frame in `ui_test` is fine, a full UI will not be). Key a cached
-  span list + glyph positions on `hash(text, style, maxWidth)` with frame-age
-  eviction.
+- [ ] **Terrain-type rework** — decouple terrain type from visual tile id; support `(terrainA, terrainB)` transition tiles. Data-model change, do before real tilemap content.
+- [ ] **Vertex/perf pass** — pack `TileVertex::Color` to RGBA8, shrink `texIndex`, rebuild chunks partially. Do alongside the rework.
 
-- [ ] **Pack `TextVertex`** — 7 attributes and 68 bytes per vertex, with two
-  full `Color`s. Pack both to RGBA8 and consider halving `unitRange`/`params`;
-  same change as the `TileVertex` item above, so do them together.
+## UI — widgets & features
 
-## Later
+- [ ] **`contextMenu` and menu bar** — compositions on top of the overlay machinery.
+- [ ] **`transition`** — animate style fields per key in the state store; needs a rule for what each field interpolates as. `cursor`, its other half, has landed.
+- [ ] **Keyboard-operable widgets** — focus landed but only text fields use it; buttons, checkboxes, radios and sliders should take Space/Enter/arrows.
+- [ ] **Focus ring** — a visible focus indicator for everything that is not a text field.
+- [ ] **Drag and drop** — between widgets, for the inventory.
+- [ ] **More widgets** — `image`, `progressBar`, `tabs`, `treeView`, `groupBox`, `dragFloat`.
+- [ ] **Text field follow-ups** — undo/redo (Ctrl+Z/Y); triple-click to select a line, which needs a click *count* on `UINodeState`; IME/composition input, which the char-callback path cannot represent.
 
-- [ ] **Docs pass** — no `docs/` currently exists; CLAUDE.md is the only
-  source of truth. Once the above systems stabilize, either expand
-  CLAUDE.md's "Other subsystems" section or split into a `docs/` folder per
-  subsystem (rendering, tilemap, ECS, audio, input) with best-practices notes
-  for both human and agent contributors.
+## UI — polish & known warts
+
+- [ ] **Hit test lags a frame** — this frame's mouse against last frame's geometry.
+- [ ] **No `minHeight`/`maxHeight`** — `UISizeSpec` carries min/max, `UIWidgets` never exposes them.
+- [ ] **Floating children don't scroll** — they anchor to the unscrolled parent rect.
+- [ ] **Clip rects are AABBs** — square children poke into a rounded corner's arc.
+- [ ] **Scrollbars cross in the corner** — no corner gap when both are visible.
+- [ ] **Dashed borders use the mean radius** — dashes drift on a per-corner radius.
+- [ ] **`UIWidgets` → `UI`** — rename and standardise across the project.
+
+## Text
+
+- [ ] **Text perf** — pack `TextVertex` to RGBA8, cache layouts, named style tags.
+- [ ] **Font eviction** — nothing removes a font whose bake failed.
+
+## Performance
+
+- [ ] **One batch for UI rects and glyphs** — merge the shaders to cut draw calls.
+- [ ] **Profiling scopes** — a scoped timer plus a frame-stats overlay; there is no way to see where a frame goes.
+- [ ] **Pool allocators** — for per-frame churn (UI nodes, particles) instead of `new`/`delete`.
+
+## Tooling, tests & docs
+
+- [ ] **A test runner** — there is no framework at all; a tiny assert-based one over math, ECS and the layout solver would pay for itself.
+- [ ] **UI layout inspector** — an overlay showing the node tree, solved sizes and keys. The solver is the hardest thing in the engine to debug blind.
+- [ ] **Docs pass** — split CLAUDE.md into `docs/` per subsystem now that the UI has stabilised.
 
 ## Done
 
-- [x] **Dividers + fully overridable container styling** — `UiSystem::addDivider(thickness, styles, id)`
-  pushes a leafless container with `SizeSpec::grow()` width and `SizeSpec::fixed(thickness)`
-  height, so it is a full-width rule in a column and takes the leftover main-axis
-  space in a row. `Grow`, deliberately **not** `Percent(100)`: a percent is measured
-  against a parent content box that does not exist yet when the parent is `Fit`, so
-  the rule would collapse there. It paints as a **background fill**, not a border —
-  the shader insets a border from both edges, so a 1-unit rule with a 1-unit border
-  draws itself twice; `UiPresets::divider(tint)` is the matching preset.
-  `UiStyleOverride` gained `cornerRadius`, so every `UiStyle` field is now
-  per-state overridable (it is purely visual, so it does not break the
-  style-only rule that keeps an element from resizing out from under the cursor).
-  `cornerRadius` itself already worked — the CLAUDE.md note saying it needed shader
-  work was stale from before the SDF shader landed. Verified in `ui_layout_test`
-  case 15: three rules at 1/3/8 thick, all 344 wide inside a 360 column, the 8-thick
-  one rounding into a capsule because the shader clamps the radius to the shorter
-  half-extent.
+### UI
 
-- [x] **UI renders in window space, from a rounded-rect shader** — `UiRenderer`
-  owns a `BatchRenderer<UiVertex>` over
-  [UiShader.glsl](game/assets/shaders/UiShader.glsl) instead of borrowing the
-  sprite batch, and `setViewport(screenTopLeft, pixelsPerUiUnit)` places a root
-  in **window pixels**, so the camera no longer moves or scales the UI. Every
-  container is one quad whose fragment shader evaluates a rounded-box signed
-  distance field, which is where `cornerRadius`, `borderWidth`/`borderColor` and
-  antialiased edges all come from — no texture is bound at all, hence
-  `BatchRenderer::nextQuad()` (the texture-less overload) and a guard so `flush`
-  skips the `uTextures` lookup a texture-less shader never declares, which would
-  otherwise warn every frame since missing locations are deliberately not cached.
-  A container with no visible background *and* no visible border emits **zero
-  geometry**, so layout-only containers — most of them — cost nothing.
-  Text joined the same space through `TextRenderer::setViewProjOverride`, which
-  flushes on change. The projection stays **Y-up** (`ortho(0, w, 0, h)`) rather
-  than the more obvious Y-down: glyph quads are built baseline-up, so a Y-down
-  matrix renders every string mirrored. The single Y flip therefore stays in
-  `UiRenderer::uiToScreen`, exactly where `uiToWorld` used to hold it, and hit
-  testing needs no flip at all now that client pixels and layout units share an
-  orientation — which also dropped `UiSystem`'s whole camera dependency
-  (`getMouseWorldPos`, the world-origin probe, the no-camera phantom-hover
-  guard).
-  The debug-box pass is gone: `UiStyle` is the only thing drawn.
-  `UiPresets::panel/button/outline` give starting points. `ui_layout_test` styles
-  its demo boxes rather than relying on debug outlines, and WASD/QE now pan and
-  zoom the UI viewport instead of the camera.
+- [x] **Multi-line text input, selection and clipboard** — `textArea` beside `textField` over one editing core: anchor-based selection, clipboard, word jump, per-line Home/End, PageUp/Down. Caret geometry comes from a real `TextBlock` laid out by the same calculator, so it cannot drift from the glyphs.
 
-- [x] **UI interaction + hover/press styling** — every builder now returns a
-  `UiState` ([UiInteraction.hpp](engine/include/graphics/ui/UiInteraction.hpp))
-  read from the **previous** frame's solved rects, so
-  `if (ui.addButton("Save", {}, styles).isClicked)` works inline. Identity is a
-  64-bit FNV-1a chain, `key = hash(parentKey, id)`, with the id being an explicit
-  string when given and the sibling ordinal within the parent otherwise; the root
-  seeds from the window id plus a per-frame root ordinal. `addButton` uses its
-  label as the id, so two same-labelled buttons under one parent share state —
-  pass an explicit id there. A dynamic list needs explicit ids for the same
-  reason; ordinals only hold while the tree shape does.
-  `UiSystem` keeps two rect buffers swapped at the frame boundary, and `draw()`
-  **appends** to the write buffer rather than clearing it, because one frame can
-  hold several `begin`/`draw` cycles. Rects stay in layout units with a parallel
-  per-root `{windowId, screenTopLeft, pixelsPerUiUnit}`, so the mouse is converted
-  once per root instead of every rect being converted to world space.
-  Three things had to be right or this silently misbehaves: the boundary keys on
-  **`(Time::getFrameCount(), activeWindowId)`** — the buffer swap on frame, the
-  mouse sample / hover resolve / press machine on window — because `Time::update`
-  runs once for all windows while `Input`'s cursor and button edges are
-  per-window; mouse **deltas come from screen pixels**, not world, or panning the
-  camera folds into the drag; and hit resolution walks the cached rects
-  **backwards** because that is exactly the reverse of `UiRenderer`'s paint order
-  (a z-index or floating-last pass there would have to be mirrored here).
-  `isHovered` is ancestor-inclusive (a button hovers when the cursor is on its
-  label) and `isHoveredDirect` is the exact hit; text is never hit-testable so a
-  label cannot steal its button's hit. `m_activeKey` survives the cursor leaving
-  the element, which is what makes dragging work, and is cleared on release even
-  when the element was not rebuilt that frame.
-  Styling resolves `normal -> hovered -> pressed` inside the builder, from
-  `UiStyleOverride`'s `std::optional` fields, and is **style-only** on purpose —
-  a size or padding override would grow the element out from under the cursor and
-  flicker between states at 60Hz. Label colour comes from the resolved
-  `contentColor` and has to be baked into the `TextStyle` *before* `TextLeaf::set`,
-  since `UiRenderer` reads a text element's style off its leaf, not off
-  `UiElement::textStyle`. `Time` gained a frame counter for the boundary; the
-  `UiStyle` -> draw mapping landed with it, since hover styling was invisible
-  before.
-  `begin()` returns a `UiState` too, which is what makes a **root** resizable:
-  the root is the one element whose size is a plain argument rather than
-  something the solver derives, so dragging its edge is just editing the `Vec2`
-  passed in next frame — and shrinking its width re-wraps every text block
-  inside it. Both roots in `ui_layout_test` do this from a 14 unit right/bottom
-  band, which stays inside the root's 16 unit padding so no child ever steals
-  the hit. Verified in `ui_layout_test` case 0: hover/press styling, inline
-  click counting, panel corner drag, and both roots resizing.
+- [x] **Keyboard focus + text input** — `Input::getTypedText()` (frame UTF-8, glfw char callback) and `keyRepeated()` (glfw key callback, so the OS repeat rate). Focus is `UIManager::m_focusedKey`, claimed on press by the first `style.focusable` ancestor, with Tab cycling and an `onFocused` style state.
 
-- [x] **UI renderer + styled/wrapped text** — `UiRenderer`
-  ([UiRenderer.hpp](engine/include/graphics/ui/UiRenderer.hpp)) is the Singleton
-  `UiSystem::draw()` hands the solved tree to; it replaced the throwaway
-  `UiDebugDrawer` and owns the UI->world transform, the 1x1 white texture, the
-  debug boxes and the text pass. `TextMeasure` went span-aware: `measureSpanWidths`
-  and `wrapSpans` walk a `TextTags::parse` span list, so a UI text element takes
-  `/s` tags plus a style list exactly like `TextRenderer::draw` does. `wrapSpans`
-  emits `TextRun`s carrying x **and the baseline y**, so `UiRenderer` renders by
-  calling `TextRenderer::drawSpan` per run with no second walk of the string.
-  **Line height is the max over every style on that line** (the CSS line-box
-  rule) — verified as steps `[29.3, 61.2, 29.3, 29.3]` for a block whose second
-  line holds a 46pt span among 22pt body text, and a 13pt span correctly failing
-  to shrink its line. `addText(..., fixedLineHeight = true)` opts out and steps
-  uniformly (same block: `[29.3 x4]`, 117.0 tall instead of 149.0) for the case
-  where one oversized word should not push its line apart. Wrapping backtracks
-  to the last space even when it is several spans back, and a word may straddle
-  a span boundary. Only `TextStyle::size` is scaled UI->world; every other
-  measurement is em and scales itself. Verified identical layout under both the
-  MTSDF and Bitmap atlas (Tab in `ui_layout_test`), which is the check that the
-  pipeline is font-agnostic.
-  Note: `TextRenderer`'s own `TextPen::maxLineStep` does take the max across
-  every span touching a line, but it steps by the max of the line it is
-  *leaving* — see the separate item below for the case that still breaks.
+- [x] **Grid** — `openGrid`/`closeGrid`, cells are the children in order. Twelve columns by default with `.gridSpan` carving them up; `.columns` takes a count or a `UISizeSpec` track list. Brought `UIAlign::Stretch` with it.
 
-- [x] **UI layout solver** — `LayoutCalculator`
-  ([LayoutCalculator.hpp](engine/include/graphics/ui/layout/LayoutCalculator.hpp)) plus an
-  immediate-mode `UiSystem` singleton
-  ([UiSystem.hpp](engine/include/graphics/ui/UiSystem.hpp)) under the new
-  `graphics/ui/`. Five sequential passes over a **flat preorder array** — so
-  `for (i = n; i-- > 0;)` is the bottom-up pass and `for (i = 0; ...)` is
-  top-down, with no recursion anywhere: intrinsic widths -> final widths ->
-  intrinsic heights -> final heights -> position/align. The axes are two
-  separate cycles rather than one, because a text leaf's height is a *function
-  of* its final width; width never reads height, so nothing loops and no
-  iteration-to-convergence is needed. Distribution is one routine shared by
-  passes 2 and 4, parameterized by axis: surplus levels the smallest growers up,
-  a deficit levels the largest children down toward their `contentMin`.
-  `LayoutCalculator` holds its **own** node struct carrying only layout data and a
-  `sourceIndex` back to `UiElement`, so styling never enters the solver and the
-  returned array is pure geometry. Leaves plug in through `ILeafMeasurer`
-  (`measureWidths` / `measureHeight(contentWidth, lines)`) — `TextLeaf` and
-  `ImageLeaf` ship; the leaf objects live in reusable pools on `UiSystem`
-  because `LayoutInput::measurer` is a bare pointer held from `addText` all the
-  way through pass 3. Layout space is **Y-down, top-left origin, unitless**;
-  the single Y flip lives in `UiRenderer::uiToScreen`. Verified numerically in
-  `ui_layout_test` across all 10 cases (75 nodes): Fit row = 222 exactly, two
-  growers 234/234, `sizing.max` capping at 120 with the leftover going to
-  `alignMain`, a floating child leaving its parent at 222 (identical to the same
-  row without one), an image at 388x194 from a 2:1 aspect, and text shrunk to
-  120 wrapping to 7 lines.
-  Gotchas that are handled and must stay handled: `Grow` seeds at **max**-content
-  (seeding at min lets two growers in a `Fit` parent split evenly, wrapping the
-  long one while the short one keeps slack); floating children are excluded from
-  the sum, the max **and** the `n-1` gap fence-post; a clipped axis reports
-  `minW = 0` or a scroll container could never shrink; `NO_NODE` is `(uint)-1`
-  and deliberately **not** `INVALID_ID`, because index 0 is the root.
-  Deviation from plan worth knowing: `Percent` aggregates upward like `Fit`
-  rather than contributing 0, which is what CSS does for percentages in
-  intrinsic sizing and removes a silent collapse-to-zero inside a `Fit` parent.
+- [x] **`UINodeState` drag outputs** — `dragDelta`, `pressOrigin`, `grabOffset`, `scrollDelta`, `isDoubleClicked`. Measured from the press, never accumulated: summing per-frame deltas drifts worst on the thing being dragged.
 
-- [x] **Text renderer** — `TextRenderer`
-  ([TextRenderer.hpp](engine/include/graphics/text/TextRenderer.hpp)), a
-  singleton owning a `BatchRenderer<TextVertex>` + `TextShader.glsl`, layered as
-  four functions: `draw` (parses tags, delegates all drawing), `drawSpan` (the
-  chaining primitive — takes a baseline pen, returns where the next glyph lands,
-  handles `\n`/`\t`/kerning), `drawGlyph` (one quad, also usable directly), and
-  `measure` (same walk, no geometry). `draw` takes a **top-left** origin;
-  `drawSpan` works in baseline coords so pen hand-off between spans is exact.
-  Styling is positional: `/s` opens and closes a span, `//s` is a literal `/s`,
-  and an optional `TextStyle` list is matched to the spans in order — a short
-  list silently falls back to the default, an unclosed tag styles to end of
-  string (warned once, not per frame). One `TextStyle`
-  ([TextStyle.hpp](engine/include/graphics/text/TextStyle.hpp)) for every layer
-  and both atlas types; `drawGlyph` dispatches to `appendGlyphMtsdf`/
-  `appendGlyphBitmap`, and the bitmap path zeroes `unitRange` which is exactly
-  what makes `outlineWidth`/`boldness` no-ops in the shader. Everything a style
-  varies is per-vertex, so **verified 293 quads in a single flush per frame**
-  across 9 blocks, two font atlases and four styles. Added `Utf8`
-  ([Utf8.hpp](engine/include/utils/Utf8.hpp)) because Latin-1 codepoints are
-  multi-byte in UTF-8 and a byte-wise walk would never find the baked glyphs.
-  Known and accepted: `"10 m/s"` opens a span — write `"10 m//s"`.
+- [x] **Event consumption** — `style.blockInput` bounds press/held/released to the first node that claims the click; hover keeps bubbling past it, matching CSS `:hover`.
 
-- [x] **Text effects** — `TextStyle` gained `outlineWidth`/`outlineColor`,
-  `boldness`, `softness`, `shadowColor`/`shadowWidth`/`shadowSoftness`/
-  `shadowOffset` (zero offset = centred glow), `italicSkew`, `underline` and
-  `strikethrough`. Skew is a shear about the baseline and the decorations are
-  solid quads (signalled by a negative `unitRange`, which also gives the shader
-  the plain-fill branch a future `drawRect` needs), so all three work on bitmap
-  fonts too. **All widths are em, not pixels** — they are converted to normalized
-  field units on the CPU and folded into the field value before the screen-pixel
-  conversion, which is what keeps them proportional under zoom; putting them in
-  pixels made outline/boldness drift and made a wide glow flood the quad.
-  `layerAlpha` in the shader uses a `smoothstep` bounded by `Font::MAX_FIELD_OFFSET`
-  with a one-screen-pixel softness floor, so a transition provably reaches zero
-  before the glyph quad's edge instead of leaving a faint tint. Effect width is
-  therefore capped by the baked distance range (`Font::getMaxEffectEm()`); bake
-  with a larger `distanceRangePixels` for wider outlines and glows.
+- [x] **Root sizes against the window** — `Grow`/`Percent` roots measure against `UIRenderer::getRootSize()`. `Fit`/`Fixed` never read it, so every root predating this is unchanged.
 
-- [ ] **Multi-line line height across spans is solved, wrapping is not** — a
-  `\n` now steps by the tallest style that touched the line (`TextPen::maxLineStep`)
-  and `draw`'s top-left origin clears the tallest style on the first line, so a
-  big span no longer overlaps the next line. Word wrapping still has to respect
-  the same per-line max.
+- [x] **`cursor`** — `Window::setCursor` over a `GlfwContext` cursor cache. `UICursor::Default` means "no opinion": the shape is the first node naming one, walking outward from the pointer.
 
-- [x] **Font resource + msdf-atlas-gen baker** — `Font`
-  ([Font.hpp](engine/include/graphics/text/Font.hpp)) is an `IResource` that
-  turns a `.ttf`/`.otf` into a GPU atlas + glyph metrics. `FontAtlasType` is
-  `Mtsdf` or `Bitmap` (both baked from the same font file; the type picks
-  `Linear` vs `Point` filtering internally so a caller can't get it wrong) and
-  `FontCharset` is `Ascii` or `AsciiLatin1`. Exposes `getGlyph`/`getKerning`
-  and em-unit `FontMetrics` plus `getLineHeight(pixelSize)`-style helpers.
-  `getUnitRange()` returns `distanceRange / atlasSize` for Mtsdf and
-  `VEC2_ZERO` for Bitmap — the value a future MSDF shader wants per-vertex.
-  `FontBaker` (behind the `ENGINE_BUILD_FONT_BAKER` CMake option, the only
-  file touching msdf-atlas-gen) and `FontCache` both produce the same
-  `FontData`, so the disk cache is the real interface: `.cache/fonts/<stem>-<hash>.png`
-  + `.json`, read back with `ImageFile`/`JsonFile` and needing neither
-  freetype nor msdfgen. Cache key hashes the bake settings + `BAKER_VERSION`
-  but **not** the font contents, so a rebake overwrites its own entry instead
-  of orphaning it; staleness checks size+mtime first and only rehashes
-  contents on a mismatch (a git checkout keeps its cache). Writes go to
-  `.tmp.png`/`.tmp.json` then rename, so a crash mid-bake can't leave a
-  truncated file that reads as a valid hit. `evictStale` drops sibling entries
-  baked from different bytes or an older `BAKER_VERSION` while leaving
-  legitimate settings variants alone. `lib/` gained `freetype` and
-  `msdf-atlas-gen` submodules. Verify with `ui_test`.
+- [x] **Clipping honours the parent's border** — `childClipRect` is inset by the *painted* border width; `clipRect` deliberately is not, so a node still reaches its own ring and shadow.
 
-- [x] **Separate alpha blend func** — `GladContext::applyContextOptions` now
-  uses `glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA)`.
-  Everything renders into a transparent-cleared FBO that is then composited to
-  the window, and the old plain `glBlendFunc` multiplied source alpha in twice.
-  Invisible on opaque sprites, but it eats antialiased edges — would have shown
-  up as thin, dark-fringed text.
+- [x] **`TextOverflow` clip + ellipsis** — `Ellipsis` is a layout post-pass run before alignment; both values bound glyphs at draw time, intersected with the caller's clip rather than replacing it.
 
-- [x] **Per-sprite shaders** — `SpriteComponent` gained a `GlShader* shader`
-  (`nullptr` = whatever shader is bound on the `Renderer`).
-  `Renderer::renderSprites` now sorts by `(layer, shader, texture)`, flushes
-  the batch on a shader boundary, and restores the pass shader when done.
-  `BatchRenderer::getShader()` added so the pass shader can be read back.
+- [x] **Richer input return values** — every bound-value widget returns `UIInputState` (`isChanged`/`isEditing`/`isReleased`), so expensive work hangs off release instead of every drag frame.
 
-- [x] **Application/loop wrapper** — added `Engine::Application`
-  ([Application.hpp](engine/include/core/Application.hpp) +
-  [Application.cpp](engine/src/core/Application.cpp)), wired into
-  `CoreInclude.hpp`. Holds three `Delegate`s (`onFrame`, `onWindowUpdate`,
-  `onWindowRender`) bound via `app.onFrame().bind(&fn)`; `run()` is a plain
-  non-template function. Owns the `anyWindowOpen` loop, `Time::update`,
-  per-window `ViewContext::setActiveWindow`/`Input::update`, close-window
-  bookkeeping (incl. `setCloseOnEscape`), `ViewContext::updateCamera`
-  ordering, `swapBuffers`, and `GlfwContext::pollEvents` — render body stays
-  fully scene-owned. Unbound phases are skipped, so each is optional.
-  Migrated `tilemap_test.cpp` and `batch_renderer_test.cpp`.
+- [x] **Scroll** — `overflow = Scroll` is the whole interface: clips, zeroes the content floor, drives the offset from the store and draws the bars. `contentSize` comes from solved child sizes, not intrinsics, or a nested scroller reveals nothing. Bars are derived from geometry, not nodes.
 
-- [x] **`Delegate` binds plain callables** — added a
-  `bind(C* callable)` overload to
-  [Delegate.hpp](engine/include/ecs/signals/Delegate.hpp) that binds a
-  lambda or functor through its `operator()`, alongside the existing
-  free-function and member-function `bind`s. Constrained with a `requires`
-  clause so a signature mismatch errors on the `bind` line naming the
-  expected argument list, instead of failing deep inside the stub. Stores
-  only a pointer, so the callable must outlive the delegate — taking it by
-  pointer is what prevents binding a temporary. Generic (`auto`-parameter)
-  lambdas are not supported: their `operator()` is a template with no single
-  address to take.
+- [x] **Retained state store** — `UIStateStore` keyed by `persistentKey`: a system struct plus a `string -> float` bag, with frame-age eviction. Folded in five ad-hoc maps and their keying bugs.
+
+- [x] **Theming** — `UIThemeManager` with 21 colour roles derived from three seeds, a metric ramp and named text styles. Widgets read roles inline; the UI core reads only the scale.
+
+- [x] **UI scale** — `UIThemeMetrics::scale` multiplies every pixel-valued field once in `addNode`. Scaling the *inputs* keeps the solve in real pixels, so hit testing needs no changes; feeding solved geometry back needs `unscale`.
+
+- [x] **Widget layer over the primitives** — `UIWidgets` is the single public face: thin forwarders plus one free function and config struct per widget. No widget touches `UIManager`'s privates.
+
+- [x] **Window widget** — movable, resizable, collapsible, geometry in the state store. Collapse discards content in `closeWindow`, since immediate mode cannot stop a caller declaring it.
+
+- [x] **Overlay machinery** — `ignoreClip`, `ignoreInput` and `zIndex`, with hit resolution ordered by the same three keys the painter uses. `tooltip`, `colorPickerPopup` and `dropdown` sit on it.
+
+- [x] **Optional style/layout structs** — `UIContainerStyle`, `UITextStyle` and `UILayoutConfig` are generated from one X-macro each, with `combine` and `fillDefaults`. Adding a field is one line.
+
+- [x] **Per-state styles** — `UIContainerStyleSpec` carries `onHover`/`onHeld`/`onPressed`/`onReleased`, merged lowest priority first. `onHeld` reads `isActive`, so a grip dragged off itself stays lit.
+
+- [x] **Mouse capture + paint layers** — one `m_activeKey` holds the pressed node until release wherever the cursor goes; `draw()` flushes boxes and glyphs per layer, or glyphs paint over boxes.
+
+- [x] **Hit resolution** — resolved once in `clear()`, pairing this frame's mouse with last frame's geometry. Last hit in paint order wins, then hover bubbles to every ancestor.
+
+- [x] **Overflow clipping** — two rects per node resolved top-down; both shaders discard outside, and hit testing reads the same rect.
+
+- [x] **Containers paint through `UIRenderer`** — one quad carries background, image, border ring, per-corner radius, dashes and shadow from a single rounded-box SDF. Nothing visible emits no geometry.
+
+- [x] **UI space switch** — `setSpace` picks screen or world, and the matrix, root origin and mouse all read the one field. Screen space is Y-up because glyph quads are built baseline-up.
+
+- [x] **Per-corner border radius + image rotation** — `UICorners` with the SDF picking the radius per fragment; rotation reuses a spare vertex slot instead of growing the vertex.
+
+- [x] **Engine-owned assets** — `FileManager::engineAsset()` resolves from `engine/assets` whatever the game's cwd, so the engine stays redistributable.
+
+- [x] **Window projection on `ViewContext`** — view and proj stored separately; `UIRenderer` no longer builds its own.
+
+- [x] **UI font** — `UIManager::setFont` for the shared face, `UITextConfig::font` to override per leaf. Null is normal and resolves to `FontLoader`'s default.
+
+- [x] **Pre-rewrite UI (superseded)** — the old `UiSystem`/`UiRenderer`/`LayoutCalculator` stack landed in full and was deleted in `a886a32`. Recover with `git show a886a32^:<path>`.
+
+### Text
+
+- [x] **Text layout folded out of `TextRenderer`** — wrapping, line boxes and alignment in one stateless `TextLayoutCalculator` over a `TextBlock`. `TextMetrics::step` is shared by the measuring and emitting walks, so widths cannot drift.
+
+- [x] **Async font loading** — the constructor queues the bake and returns; a loading font answers from a placeholder and the atlas uploads on the GL thread. The baker takes a quarter of the cores — at full width it starved the render thread.
+
+- [x] **Default font on `FontLoader`** — bakes a system face, queued ahead of whatever triggered it, so a font still baking borrows a real face instead of drawing placeholder boxes.
+
+- [x] **Text renderer** — `TextRenderer` over `BatchRenderer<TextVertex>`, with `/s` span tags. Everything a style varies is per-vertex, so many styles still share one flush.
+
+- [x] **Text effects** — outline, boldness, softness, shadow, italic skew, underline, strikethrough. All widths in **em**, not pixels, or they drift under zoom.
+
+- [x] **Font resource + msdf baker** — `Font` is an `IResource` producing an atlas plus em metrics. The disk cache in `.cache/fonts/` is the real interface, so neither freetype nor msdfgen is needed to load one.
+
+### Engine
+
+- [x] **`Application` loop wrapper** — owns the window loop, `Time::update`, per-window input and camera ordering; scenes supply `onFrame`/`onWindowUpdate`/`onWindowRender`.
+
+- [x] **`Delegate` binds plain callables** — a `requires`-constrained `bind(C*)` for lambdas and functors. Stores only a pointer, so the callable must outlive the delegate.
+
+- [x] **Per-sprite shaders** — `SpriteComponent::shader`; `renderSprites` sorts by `(layer, shader, texture)` and flushes on a shader boundary.
+
+- [x] **Separate alpha blend func** — `glBlendFuncSeparate`; the plain version multiplied source alpha in twice against the transparent FBO and ate antialiased edges.
+
+- [x] **HSV on `Color`** — `toHsv()`/`fromHsv()`, moved off the colour picker so anything can use them.

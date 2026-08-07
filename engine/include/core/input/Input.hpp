@@ -6,6 +6,7 @@
 #include "utils/TypeAliases.hpp"
 #include "utils/math/Vec2.hpp"
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace Engine {
@@ -30,8 +31,11 @@ class Input : public Singleton<Input>
     struct WindowState
     {
         bool keyCurrState[KEY_COUNT] = {}, keyPrevState[KEY_COUNT] = {};
+        bool keyRepeatState[KEY_COUNT] = {};
         bool buttonCurrState[BUTTON_COUNT] = {}, buttonPrevState[BUTTON_COUNT] = {};
         Vec2 mousePos = VEC2_ZERO;
+        Vec2 scrollDelta = VEC2_ZERO;
+        std::string typedText;
     };
 
     std::unordered_map<IdType, WindowState> m_windowStates;
@@ -48,16 +52,34 @@ class Input : public Singleton<Input>
     bool keyPressed(KeyCode key);
     bool keyReleased(KeyCode key);
     bool keyHeld(KeyCode key);
+    // True on the frame the key goes down and again on every OS auto-repeat while it is
+    // held, so the delay and the rate are the ones the user configured rather than a
+    // constant picked here. What a caret, a stepper or any held-to-continue action wants;
+    // keyPressed stays the right call for anything that must fire exactly once per press.
+    bool keyRepeated(KeyCode key);
 
     bool mouseButtonPressed(MouseButton button);
     bool mouseButtonReleased(MouseButton button);
     bool mouseButtonHeld(MouseButton button);
 
     Vec2 getMousePos();
+    // x right, y up, in wheel ticks. A trackpad reports both axes itself; a wheel only
+    // reports y, so shift moves it onto x here -- which channel a device's scroll lands
+    // in is settled once, so a reader only ever sees a Vec2.
+    Vec2 getScrollDelta();
+
+    // The text typed this frame, UTF-8, empty when nothing was. Characters, not keys:
+    // the OS has already applied the layout, the modifiers and any dead-key composition,
+    // so this is the only correct source for what a text field should insert. Iterate it
+    // with Utf8::next -- one frame can carry several codepoints and one codepoint can be
+    // several bytes.
+    std::string_view getTypedText();
 
   private:
     Input() = default;
     ~Input() = default;
+
+    static const std::unordered_map<int, uint>& glfwKeyLookup();
 };
 
 }   // namespace Engine

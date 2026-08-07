@@ -26,7 +26,10 @@ class ViewContext : public Singleton<ViewContext>
     IdType m_activeWindowId = INVALID_ID;
     Entity m_activeCamera = NULL_ENTITY;
 
+    Mat4 m_viewMat;
+    Mat4 m_projMat;
     Mat4 m_viewProjMat;
+    Mat4 m_windowProjMat;
     WorldBounds m_visibleBounds;
 
     Vec2 m_cameraPos = VEC2_ZERO;
@@ -41,7 +44,10 @@ class ViewContext : public Singleton<ViewContext>
     void updateCamera(Registry& registry);
     Entity getActiveCamera() const { return m_activeCamera; }
 
+    const Mat4& getViewMat() const { return m_viewMat; }
+    const Mat4& getProjMat() const { return m_projMat; }
     const Mat4& getViewProjMat() const { return m_viewProjMat; }
+    const Mat4& getWindowProjMat() const { return m_windowProjMat; }
     const WorldBounds& getVisibleWorldBounds() const { return m_visibleBounds; }
     bool isVisible(Vec2 pos, Vec2 halfExtents) const;
 

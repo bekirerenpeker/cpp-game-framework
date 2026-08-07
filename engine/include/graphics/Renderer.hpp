@@ -26,12 +26,16 @@ class Renderer : public Singleton<Renderer>
 
   private:
     IdType m_boundWindowId = INVALID_ID;
+    IdType m_defaultShaderId = INVALID_ID;
     BatchRenderer<VertexData> m_batch;
 
   public:
-    void init(size_t maxQuadCount, GlShader* shader);
+    // A null shader takes the engine's own, which is what almost every caller wants;
+    // pass one only to render the batch through something else.
+    void init(size_t maxQuadCount = 2000, GlShader* shader = nullptr);
 
     void setShader(GlShader* shader);
+    GlShader* getDefaultShader();
     void releaseRenderContext();
 
     void beginPass();
@@ -50,6 +54,8 @@ class Renderer : public Singleton<Renderer>
         Vec2 pos, Vec2 size, Color color, const GlTexture* texture, Vec2 uvMin = VEC2_ZERO,
         Vec2 uvMax = VEC2_ONE, float angleRad = 0.0f
     );
+    void addLine(Vec2 start, Vec2 end, Color color, float thickness = 1.0f);
+    void addFrame(Vec2 pos, Vec2 size, Color color, float thickness = 1.0f);
 
   private:
     void syncRenderContext();

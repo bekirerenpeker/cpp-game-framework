@@ -1,5 +1,7 @@
 #include "graphics/Renderer.hpp"
 #include "components/TransformComponent.hpp"
+#include "core/file_management/FileManager.hpp"
+#include "core/resource_management/ResourceManager.hpp"
 #include "components/SpriteComponent.hpp"
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/WindowManager.hpp"
@@ -27,8 +29,20 @@ void Renderer::init(size_t maxQuadCount, GlShader* shader)
             {GlDataType::Float, 4},
             {  GlDataType::Int, 1},
     },
-        shader
+        shader ? shader : getDefaultShader()
     );
+}
+
+// Owned by the ResourceManager like any other heap resource, and loaded on first ask so
+// a caller that supplies its own shader never pays for one it will not use.
+GlShader* Renderer::getDefaultShader()
+{
+    if (m_defaultShaderId == INVALID_ID) {
+        m_defaultShaderId = ResourceManager::get().addResource<GlShader>(
+            FileManager::get().engineAsset("shaders/QuadShader.glsl")
+        );
+    }
+    return ResourceManager::get().getResource<GlShader>(m_defaultShaderId);
 }
 
 void Renderer::clear()
@@ -215,6 +229,58 @@ void Renderer::addQuad(
         Vec2 corner = rotated ? corners[i].rotatedAround(VEC2_ZERO, angleRad) : corners[i];
         quad.verts[i] = {pos + corner * size / 2.f, uvs[i], color, quad.texIndex};
     }
+}
+
+void Renderer::addLine(Vec2 start, Vec2 end, Color color, float thickness)
+{
+    if (m_boundWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
+    if (!context || !context->srcBuffer()) return;
+
+    Vec2 direction = end - start;
+    float length = direction.magnitude();
+    if (length == 0) return;
+
+    Vec2 center = (start + end) * 0.5f;
+    float angle = std::atan2(direction.y, direction.x);
+
+    addQuad(
+        center, Vec2(length, thickness), color, context->srcBuffer()->getTexture(), VEC2_ZERO,
+        VEC2_ONE, angle
+    );
+}
+
+void Renderer::addFrame(Vec2 pos, Vec2 size, Color color, float thickness)
+{
+    if (m_boundWindowId == INVALID_ID) return;
+    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
+    if (!context || !context->srcBuffer()) return;
+
+    GlTexture* texture = context->srcBuffer()->getTexture();
+
+    // Top edge (full width)
+    addQuad(
+        pos + Vec2(size.x * 0.5f, thickness * 0.5f), Vec2(size.x, thickness), color, texture,
+        VEC2_ZERO, VEC2_ONE
+    );
+
+    // Bottom edge (full width)
+    addQuad(
+        pos + Vec2(size.x * 0.5f, size.y - thickness * 0.5f), Vec2(size.x, thickness), color,
+        texture, VEC2_ZERO, VEC2_ONE
+    );
+
+    // Left edge (excluding corners)
+    addQuad(
+        pos + Vec2(thickness * 0.5f, size.y * 0.5f), Vec2(thickness, size.y - 2 * thickness), color,
+        texture, VEC2_ZERO, VEC2_ONE
+    );
+
+    // Right edge (excluding corners)
+    addQuad(
+        pos + Vec2(size.x - thickness * 0.5f, size.y * 0.5f),
+        Vec2(thickness, size.y - 2 * thickness), color, texture, VEC2_ZERO, VEC2_ONE
+    );
 }
 
 }   // namespace Engine

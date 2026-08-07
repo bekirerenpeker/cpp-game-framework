@@ -2,8 +2,8 @@
 
 #include "graphics/BatchRenderer.hpp"
 #include "graphics/text/Font.hpp"
+#include "graphics/text/TextLayout.hpp"
 #include "graphics/text/TextStyle.hpp"
-#include "graphics/text/TextTags.hpp"
 #include "utils/Singleton.hpp"
 #include "utils/math/Vec2.hpp"
 #include <string_view>
@@ -11,21 +11,22 @@
 
 namespace Engine {
 
-// unitRange is per-vertex, not a uniform, so glyphs from different fonts and
-// different styles all stay in one batch. It also selects the shader's branch:
-// negative is a solid untextured fill (underline, strikethrough, UI rects), zero
-// is a plain coverage mask (bitmap atlas), positive is a distance field.
+// unitRange is per-vertex, not a uniform, so glyphs from different fonts and styles
+// stay in one batch. It also selects the shader's branch: negative is a solid fill
+// (underline, strikethrough), zero is a coverage mask (bitmap atlas), positive is a
+// distance field.
 struct TextVertex
 {
     Vec2 pos;
     Vec2 uv;
+    Vec4 clipRect;   // minX, minY, maxX, maxY, in the same space as pos
     Color color;
     Color outlineColor;
     Color shadowColor;
     Vec2 unitRange;
     Vec2 shadowOffset;
     float shadowSoftness;
-    float reserved;
+    float reserved;   // pads shadowOffset+shadowSoftness to a vec4 slot; unused
     float outlineWidth;
     float boldness;
     float softness;
@@ -38,26 +39,38 @@ class TextRenderer : public Singleton<TextRenderer>
     friend class Singleton<TextRenderer>;
 
   private:
-    static constexpr float TAB_SPACES = 4.0f;
-    static constexpr float FALLBACK_SPACE_ADVANCE = 0.25f;
     // The font exposes no x-height, so the strikethrough rides a fraction of the
     // ascender instead.
     static constexpr float STRIKETHROUGH_ASCENDER_RATIO = 0.28f;
     static constexpr float SOLID_UNIT_RANGE = -1.0f;
+    // Far enough out that no real geometry reaches it, so unclipped text needs no
+    // branch -- the shader always tests the rect, it just always passes.
+    static constexpr float NO_CLIP_EXTENT = 1e30f;
 
     BatchRenderer<TextVertex> m_batch;
-    std::vector<TextSpan> m_spans;
     Mat4 m_viewProjOverride;
+    Vec4 m_clipRect;
     bool m_hasViewProjOverride = false;
     bool m_initialized = false;
-    bool m_warnedMissingGlyph = false;
-    bool m_warnedUnclosedTag = false;
+    IdType m_defaultShaderId = INVALID_ID;
+    bool m_warnedDirtyBlock = false;
 
   public:
-    void init(GlShader* shader, size_t maxQuadCount = 4000);
+    // A null shader takes the engine's own, which is what almost every caller wants;
+    // pass one only to render the glyph batch through something else.
+    void init(GlShader* shader = nullptr, size_t maxQuadCount = 4000);
+    void setShader(GlShader* shader);
 
     void setViewProjOverride(const Mat4& viewProj);
     void clearViewProjOverride();
+
+    // Bounds every glyph emitted from here on, in the space the text is drawn in.
+    // Unlike the view-proj override this needs no flush: the rect is per-vertex, so
+    // text under different clips still shares one draw call.
+    void setClipRect(const Vec4& clipRect);
+    void clearClipRect();
+
+    Vec2 draw(const TextBlock& block, Vec2 origin, Vec2 boxSize = VEC2_ZERO);
 
     Vec2 draw(
         const Font& font, std::string_view text, Vec2 origin, const TextStyle& style = {},
@@ -65,29 +78,15 @@ class TextRenderer : public Singleton<TextRenderer>
     );
 
     Vec2 drawSpan(
-        const Font& font, std::string_view text, const TextStyle& style, Vec2 pen, float lineOriginX
-    );
-
-    Vec2 drawGlyph(const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen);
-
-    Vec2 measure(
-        const Font& font, std::string_view text, const TextStyle& style = {},
-        const std::vector<TextStyle>& spanStyles = {}
+        const Font& requested, std::string_view text, const TextStyle& style, Vec2 pen,
+        float lineOriginX
     );
 
     void flush();
 
   private:
-    TextRenderer() = default;
+    TextRenderer();
     ~TextRenderer() = default;
-
-    struct TextPen
-    {
-        Vec2 pos = VEC2_ZERO;
-        float maxX = 0.0f;
-        float maxLineStep = 0.0f;
-        float maxLineSize = 0.0f;
-    };
 
     struct GlyphAppearance
     {
@@ -104,12 +103,7 @@ class TextRenderer : public Singleton<TextRenderer>
     };
 
     bool ensureReady();
-    void parseSpans(std::string_view text);
-    void walkSpan(
-        const Font& font, std::string_view text, const TextStyle& style, TextPen& pen,
-        float lineOriginX, bool emit
-    );
-    const Glyph* resolveGlyph(const Font& font, uint32_t codepoint);
+    void appendGlyph(const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen);
     void appendGlyphMtsdf(const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen);
     void appendGlyphBitmap(const Font& font, const Glyph& glyph, const TextStyle& style, Vec2 pen);
     void writeQuad(
@@ -121,13 +115,6 @@ class TextRenderer : public Singleton<TextRenderer>
     );
     void appendSolidQuad(
         const GlTexture* texture, Vec2 min, Vec2 max, Color color, float baselineY, float italicSkew
-    );
-    static float firstLineSize(
-        const std::vector<TextSpan>& spans, const TextStyle& style,
-        const std::vector<TextStyle>& spanStyles
-    );
-    static const TextStyle& pickStyle(
-        const TextSpan& span, const TextStyle& style, const std::vector<TextStyle>& spanStyles
     );
 };
 

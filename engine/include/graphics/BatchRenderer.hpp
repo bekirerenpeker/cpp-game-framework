@@ -23,10 +23,14 @@ template<typename Vertex> class BatchRenderer
   private:
     static constexpr int MAX_TEX_COUNT = 32;
     size_t m_maxQuadCount = 0, m_quadCount = 0;
+
     GlBuffer m_vertexBuffer, m_indexBuffer;
     GlLayout m_layout;
     GlVertexArray* m_vao = nullptr;
+
     GlShader* m_shader = nullptr;
+    GlTexture m_defaultTexture;
+
     Mat4 m_viewProjMat;
     Vertex* m_vertices = nullptr;
     const GlTexture* m_textures[MAX_TEX_COUNT];
@@ -40,7 +44,9 @@ template<typename Vertex> class BatchRenderer
     };
 
     BatchRenderer()
-        : m_vertexBuffer(GlBufferType::VertexBuffer), m_indexBuffer(GlBufferType::IndexBuffer)
+        : m_vertexBuffer(GlBufferType::VertexBuffer),
+          m_indexBuffer(GlBufferType::IndexBuffer),
+          m_defaultTexture(COLOR_WHITE)
     {
     }
     ~BatchRenderer() { delete[] m_vertices; }
@@ -161,13 +167,26 @@ template<typename Vertex> class BatchRenderer
     }
 
   private:
+    // Slot 0 is reserved for the white default, so an untextured quad resolves to a
+    // real sampler without costing a slot or a branch in the shader.
     int getTextureIndex(const GlTexture* texture)
     {
+        if (m_textureCount == 0) {
+            m_textures[0] = &m_defaultTexture;
+            m_textureCount++;
+        }
+        if (!texture) return 0;
+
         for (int i = 0; i < m_textureCount; i++) {
             if (m_textures[i] == texture) return i;
         }
 
-        if (m_textureCount >= MAX_TEX_COUNT) flush();
+        if (m_textureCount >= MAX_TEX_COUNT) {
+            flush();
+            m_textures[0] = &m_defaultTexture;
+            m_textureCount = 1;
+        }
+
         m_textures[m_textureCount] = texture;
         return m_textureCount++;
     }

@@ -6,15 +6,25 @@
 #include "utils/TypeAliases.hpp"
 #include "utils/math/Vec2.hpp"
 #include <cstdint>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 
 namespace Engine {
 
+struct FontLoadJob;
+
 enum class FontAtlasType : uint8_t
 {
     Mtsdf = 0,
     Bitmap,
+};
+
+enum class FontLoadState : uint8_t
+{
+    Loading = 0,
+    Ready,
+    Failed,
 };
 
 enum class FontCharset : uint8_t
@@ -80,7 +90,9 @@ class Font : public IResource
     Vec2 m_atlasSize = VEC2_ZERO;
     Vec2 m_unitRange = VEC2_ZERO;
     float m_distanceRange = 0.0f;
-    bool m_isValid = false;
+    std::shared_ptr<FontLoadJob> m_job;
+    FontLoadState m_state = FontLoadState::Loading;
+    uint m_loadVersion = 0;
 
   public:
     // The field only encodes distances over half its range either side of the edge,
@@ -98,7 +110,20 @@ class Font : public IResource
     Font(Font&& other) noexcept;
     Font& operator=(Font&& other) noexcept;
 
-    bool isValid() const { return m_isValid; }
+    // The constructor only queues the bake, so every query below answers from a
+    // placeholder (a generic glyph box, no texture, plausible metrics) until the atlas
+    // lands; no call ever blocks on the worker. isValid means "usable" and is true
+    // while loading; isReady asks for the real face, and getLoadVersion changes when
+    // it arrives.
+    bool isValid() const;
+    bool isLoading() const;
+    bool isReady() const;
+    uint getLoadVersion() const;
+
+    // Blocks for the rare caller that needs the real metrics immediately rather than a
+    // frame or two later -- a startup measurement, a tool. Never call it per frame.
+    void waitForLoad();
+
     FontAtlasType getAtlasType() const { return m_settings.atlasType; }
     const FontBakeSettings& getBakeSettings() const { return m_settings; }
     const fs::path& getSourcePath() const { return m_sourcePath; }
@@ -123,7 +148,9 @@ class Font : public IResource
     size_t getGlyphCount() const { return m_glyphs.size(); }
 
   private:
-    void load();
+    void beginLoad();
+    void pollLoad() const;
+    void finishLoad();
     void adopt(FontData& data);
 
     static uint64_t kerningKey(uint32_t left, uint32_t right);

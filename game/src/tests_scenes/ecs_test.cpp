@@ -41,7 +41,6 @@ struct SignalTracker
 
 int ecs_test()
 {
-    // Helper lambda to measure block execution time accurately using std::chrono
     auto measure = [](const char* name, auto&& func) {
         auto start = std::chrono::high_resolution_clock::now();
         func();
@@ -57,22 +56,18 @@ int ecs_test()
     std::vector<EntityHandle> entities;
     entities.reserve(ENTITY_COUNT);
 
-    // 1. Entity Creation
     measure("Create 1,000,000 Entities", [&]() {
         for (int i = 0; i < ENTITY_COUNT; ++i) { entities.push_back(registry.create()); }
     });
 
-    // 2. Add Components (Dense Population)
     measure("Add Position to all 1M entities", [&]() {
         for (auto& e : entities) { e.emplace<Position>(0.0f, 0.0f); }
     });
 
-    // 3. Add Components (Sparse Population)
     measure("Add Velocity to 500K entities", [&]() {
         for (int i = 0; i < ENTITY_COUNT; i += 2) { entities[i].emplace<Velocity>(1.0f, 1.0f); }
     });
 
-    // 4. Add Tags (Testing if constexpr isEmpty optimization)
     measure("Add PlayerTag (Empty) to 250K entities", [&]() {
         for (int i = 0; i < ENTITY_COUNT; i += 4) { entities[i].emplace<PlayerTag>(); }
     });
@@ -83,7 +78,6 @@ int ecs_test()
 
     LOG_INFO("-----------------------------------------------------------");
 
-    // 5. Iterate Single Type
     size_t countSingle = 0;
     measure("Iterate Single Type (Position, 1M entities)", [&]() {
         View<Position> view(registry);
@@ -93,10 +87,8 @@ int ecs_test()
             countSingle++;
         });
     });
-    if (countSingle == 1'000'000) LOG_INFO("      SUCCESS: Counted exactly 1,000,000 entities.");
-    else LOG_ERROR("      ERROR: Expected 1,000,000 but got {}", countSingle);
+    if (countSingle != 1'000'000) LOG_ERROR("Expected 1,000,000 but got {}", countSingle);
 
-    // 6. Iterate Multi Type (Testing driver pool optimization)
     size_t countMulti = 0;
     measure("Iterate Multi Type (Position, Velocity, 500K matches)", [&]() {
         View<Position, Velocity> view(registry);
@@ -106,10 +98,8 @@ int ecs_test()
             countMulti++;
         });
     });
-    if (countMulti == 500'000) LOG_INFO("      SUCCESS: Counted exactly 500,000 entities.");
-    else LOG_ERROR("      ERROR: Expected 500,000 but got {}", countMulti);
+    if (countMulti != 500'000) LOG_ERROR("Expected 500,000 but got {}", countMulti);
 
-    // 7. Iterate Multi Type with Tags
     size_t countTag = 0;
     measure("Iterate with Tag (Position, Velocity, PlayerTag, 250K matches)", [&]() {
         View<Position, Velocity, PlayerTag> view(registry);
@@ -118,10 +108,10 @@ int ecs_test()
             countTag++;
         });
     });
-    if (countTag == 250'000) LOG_INFO("      SUCCESS: Counted exactly 250,000 entities.");
-    else LOG_ERROR("      ERROR: Expected 250,000 but got {}", countTag);
+    if (countTag != 250'000) LOG_ERROR("Expected 250,000 but got {}", countTag);
 
-    // 8. Iterate Multi Type with Exclusions!
+    // Static is on indices 1, 5, 9...; Velocity is on 0, 2, 4... -- they never overlap,
+    // so all 500K survive the exclusion.
     size_t countExcl = 0;
     measure("Iterate with Exclude (Pos, Vel, Exclude<Static>, 500K matches)", [&]() {
         View<Position, Velocity, Exclude<Static>> view(registry);
@@ -130,45 +120,38 @@ int ecs_test()
             countExcl++;
         });
     });
-    // Static is on indices 1, 5, 9... Velocity is on 0, 2, 4... They never overlap! So all 500K should remain.
-    if (countExcl == 500'000) LOG_INFO("      SUCCESS: Counted exactly 500,000 entities.");
-    else LOG_ERROR("      ERROR: Expected 500,000 but got {}", countExcl);
+    if (countExcl != 500'000) LOG_ERROR("Expected 500,000 but got {}", countExcl);
 
     LOG_INFO("-----------------------------------------------------------");
 
-    // 9. Test Component Signals
     measure("Test Component Signals (onCreate, onSet, onDestroy)", [&]() {
         SignalTracker tracker;
         auto& posPool = registry.getPool<Position>();
 
-        // Connect our tracker methods to the Sinks
         posPool.onCreate().connect<&SignalTracker::onCreated, SignalTracker>(&tracker);
         posPool.onSet().connect<&SignalTracker::onSet, SignalTracker>(&tracker);
         posPool.onDestroy().connect<&SignalTracker::onDestroyed, SignalTracker>(&tracker);
 
         EntityHandle sigEntity = registry.create();
 
-        sigEntity.emplace<Position>(1.0f, 1.0f);   // Should trigger onCreate
-        sigEntity.emplace<Position>(2.0f, 2.0f);   // Should trigger onSet
-        sigEntity.destroy();                       // Should trigger onDestroy
+        sigEntity.emplace<Position>(1.0f, 1.0f);
+        sigEntity.emplace<Position>(2.0f, 2.0f);
+        sigEntity.destroy();
 
-        if (tracker.created == 1 && tracker.set == 1 && tracker.destroyed == 1) {
-            LOG_INFO("      SUCCESS: Signals triggered perfectly (1 Create, 1 Set, 1 Destroy).");
-        } else {
+        if (tracker.created != 1 || tracker.set != 1 || tracker.destroyed != 1) {
             LOG_ERROR(
-                "      ERROR: Signals failed! Created: {} Set: {} Destroyed: {}", tracker.created,
-                tracker.set, tracker.destroyed
+                "Signals failed! Created: {} Set: {} Destroyed: {}", tracker.created, tracker.set,
+                tracker.destroyed
             );
         }
 
-        // CRITICAL: Disconnect listeners before tracker goes out of scope,
-        // otherwise mass destruction below will crash trying to call the destroyed object!
+        // CRITICAL: disconnect before tracker goes out of scope, or the mass
+        // destruction below crashes calling into the destroyed object.
         posPool.onCreate().disconnect<&SignalTracker::onCreated, SignalTracker>(&tracker);
         posPool.onSet().disconnect<&SignalTracker::onSet, SignalTracker>(&tracker);
         posPool.onDestroy().disconnect<&SignalTracker::onDestroyed, SignalTracker>(&tracker);
     });
 
-    // 10. Test Clone Feature
     measure("Test Clone Entity", [&]() {
         EntityHandle source = registry.create();
         source.emplace<Position>(10.0f, 20.0f);
@@ -176,14 +159,9 @@ int ecs_test()
         source.emplace<PlayerTag>();
 
         EntityHandle cloned = source.clone();
-        if (cloned.containsAll<Position, Health, PlayerTag>()) {
-            LOG_INFO("      SUCCESS: Cloned entity successfully inherited all components.");
-        } else {
-            LOG_ERROR("      ERROR: Clone feature failed!");
-        }
+        if (!cloned.containsAll<Position, Health, PlayerTag>()) LOG_ERROR("Clone feature failed!");
     });
 
-    // 11. Test TryGet Feature
     measure("Test tryGet()", [&]() {
         EntityHandle source = registry.create();
         source.emplace<Health>(50);
@@ -191,40 +169,28 @@ int ecs_test()
         Health* hp = source.tryGet<Health>();
         Velocity* vel = source.tryGet<Velocity>();
 
-        if (hp != nullptr && hp->hp == 50 && vel == nullptr) {
-            LOG_INFO("      SUCCESS: tryGet returns pointers correctly.");
-        } else {
-            LOG_ERROR("      ERROR: tryGet feature failed!");
-        }
+        if (hp == nullptr || hp->hp != 50 || vel != nullptr) LOG_ERROR("tryGet feature failed!");
     });
 
-    // 12. Test Deferred Destruction
     measure("Test Deferred Destruction", [&]() {
         size_t initialSize = registry.getPool<Position>().size();
 
         registry.destroyDeferred(entities[0].getEntity());
         registry.destroyDeferred(entities[1].getEntity());
 
-        if (registry.getPool<Position>().size() == initialSize) {
-            LOG_INFO("      SUCCESS: Entities safely deferred. (Size unchanged)");
-        }
+        if (registry.getPool<Position>().size() != initialSize)
+            LOG_ERROR("Deferred destruction removed an entity before flush!");
 
         registry.flush();
 
-        if (registry.getPool<Position>().size() == initialSize - 2) {
-            LOG_INFO("      SUCCESS: Flush executed destructions. (Size -2)");
-        } else {
-            LOG_ERROR("      ERROR: Deferred destruction flush failed!");
-        }
+        if (registry.getPool<Position>().size() != initialSize - 2)
+            LOG_ERROR("Deferred destruction flush failed!");
     });
 
     LOG_INFO("-----------------------------------------------------------");
 
-    // 13. Mass Destruction
     measure("Destroy remaining ~1,000,000 Entities", [&]() {
-        for (int i = 2; i < ENTITY_COUNT; ++i) {   // Start from 2 because 0,1 were destroyed
-            entities[i].destroy();
-        }
+        for (int i = 2; i < ENTITY_COUNT; ++i) entities[i].destroy();
     });
 
     LOG_INFO("===========================================================\n");

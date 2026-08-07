@@ -39,10 +39,10 @@ int batch_renderer_test()
         return 1;
     }
 
-    GlShader shader("game/assets/shaders/QuadShader.glsl");
     GlShader grayShader("game/assets/shaders/GrayscaleQuadShader.glsl");
     GlShader ppShader("game/assets/shaders/PostProcessingShader.glsl");
-    Renderer::get().init(10000, &shader);
+    Renderer::get().init(10000);
+    GlShader* shader = Renderer::get().getDefaultShader();
 
     constexpr int STACK_COUNT = 5, LAYERS_PER_STACK = 5;
     std::vector<Entity> stackSprites;
@@ -152,7 +152,7 @@ int batch_renderer_test()
 
     auto onWindowRender = [&](IdType windowId, float dt) {
         Renderer::get().beginPass();
-        Renderer::get().setShader(&shader);
+        Renderer::get().setShader(shader);
         Renderer::get().clearColor(Color(0.5f, 0.5f, 1.0f, 1.0f));
 
         Renderer::get().renderSprites(registry);

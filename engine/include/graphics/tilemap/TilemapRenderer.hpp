@@ -19,9 +19,13 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
   private:
     BatchRenderer<TileVertex> m_batch;
     bool m_initialized = false;
+    IdType m_defaultShaderId = INVALID_ID;
 
   public:
-    void init(GlShader* shader, size_t maxQuadCount = 20000);
+    // A null shader takes the engine's own, which is what almost every caller wants;
+    // pass one only to render the tile batch through something else.
+    void init(GlShader* shader = nullptr, size_t maxQuadCount = 20000);
+    void setShader(GlShader* shader);
     void render(TilemapComponent& tilemap);
     void render(Registry& registry);
 
