@@ -10,10 +10,16 @@ than a real gameplay loop.
 
 ## Working backlog
 
-[TODOS.md](TODOS.md) is the backlog — planned work, and a "Done" section holding the
-reasoning behind what already landed. Check it when picking up a task and keep it current:
-add items as work is defined, edit them when a plan changes, and move them to Done with a
-short note when they land. Don't let it drift from what the code actually does.
+[TODOS.md](TODOS.md) is the backlog — planned work under section headings, plus a "Done"
+section recording what landed. Check it when picking up a task and keep it current: add
+items as work is defined, edit them when a plan changes, and move them to Done when they
+land. Don't let it drift from what the code actually does.
+
+**Keep it short.** An open item is **one line**: a bold title and a clause saying what it
+is or why it matters. A done item is **one or two lines** — what landed, and at most the
+one decision worth remembering. TODOS.md is an index, not a design document; the reasoning
+belongs in this file or in a comment next to the code. If an entry needs a paragraph to
+explain itself, that paragraph is in the wrong place.
 
 ## Build & Run
 

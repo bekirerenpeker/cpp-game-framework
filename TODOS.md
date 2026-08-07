@@ -1,356 +1,182 @@
 # Engine TODOs
 
 Working backlog. Claude Code agents may add, edit, reorder, check off or remove
-items — keep it current. Done items get **one or two lines**, just enough to know
-they happened; the reasoning lives in CLAUDE.md, not here.
+items — keep it current. Open items stay **one line** wherever they can; the reasoning
+lives in CLAUDE.md, not here. Done items get one or two lines, just enough to know
+they happened.
 
-## bugs
-
-- [ ] **Home / End / PageUp / PageDown reportedly do nothing** — not reproduced. The key
-  table is aligned (`KeyCode::Home` is enum 62 and `glfwKeyCodes[62]` is 268), `keyRepeated`
-  is the same path the arrows use and those work, and the handlers in `applyEdits` read
-  correctly. Two open possibilities: the symptom was really the two rendering bugs fixed
-  alongside it (a one-line field ate its own text when scrolled, so End moved the caret
-  invisibly), or the keys being pressed are the **numeric keypad's** Home/End/PgUp/PgDn,
-  which glfw reports as `KP_7`/`KP_1`/`KP_9`/`KP_3` and nothing maps. Re-test and say which
-  keys.
+The engine side is far ahead of the game side: UI, text, windowing, audio, ECS and the
+batched renderer are all real, and there is still no collision, no save/load and no scene
+that is not a hand-written test function. **Gameplay systems** below is the honest critical
+path; everything else is polish on things that already work.
 
 ## Implement Now
 
-- [ ] **`contextMenu` and menu bar** — compositions on top of overlay machinery.
+_Empty — pick the next item from the sections below._
 
-## UI & text — next up
+## Bugs
 
-- [ ] **Text field follow-ups** — deferred from the selection work, in rough order of value:
-  **undo/redo** (Ctrl+Z / Ctrl+Y, an edit-history ring per field — not yet certain it is
-  wanted); **triple-click to select a line**, which needs a click *count* on `UINodeState`
-  rather than the current double-click bool; and **IME / composition input**, which the
-  char-callback path cannot represent at all and which any CJK user would need.
+- [ ] **Escape while typing quits the game** — `Application::run` closes on Escape and the text field uses it to blur. Needs the `wantsKeyboard()` item under Engine core.
+- [ ] **Home / End / PageUp / PageDown may be dead** — not reproduced; key table is aligned and the arrows share the same path. Suspect the numpad, which glfw reports as `KP_7`/`KP_1`/`KP_9`/`KP_3`. Re-test and say which keys.
 
-- [ ] **`transition`** — animate style fields per key in the state store; needs a rule for what each field interpolates as. `cursor`, its other half, has landed.
+## Gameplay systems — none of this exists yet
 
-- [ ] **More widgets** — `image`, `progressBar`, `tabs`, `treeView`, `groupBox`, `dragFloat`.
+- [ ] **AABB collision** — broadphase over the ECS plus swept AABB, so a fast mover cannot tunnel.
+- [ ] **Tile collision** — sweep against `TilemapManager` rather than per-tile entities. The blocker for any movement at all.
+- [ ] **Character controller** — grounded/airborne states, coyote time, jump buffering.
+- [ ] **Tile break/place** — a tilemap edit API that re-bakes only the touched chunk.
+- [ ] **World save/load** — ECS + tilemap through `JsonFile`/`BinaryFile`; chunked so a big world streams.
+- [ ] **2D lighting** — tile flood-fill into a light texture sampled by the tile and sprite shaders. Terraria's signature look.
+- [ ] **Sprite animation** — frame ranges over a `TextureAtlas`, plus a small state machine component.
+- [ ] **Particles** — pooled, batched through the existing quad renderer.
+- [ ] **Item + inventory model** — the grid UI for it already landed.
+- [ ] **Prefabs** — spawn an entity from a JSON description instead of by hand.
 
-- [ ] **One batch for UI rects and glyphs** — merge shaders to cut draw calls.
+## Engine core
 
-- [ ] **Text perf** — pack `TextVertex` to RGBA8, layout cache, named style tags.
+- [ ] **Fixed timestep** — accumulator in `Application::run`; physics cannot be deterministic on a variable dt.
+- [ ] **Scene abstraction** — `onEnter`/`onExit`/`update`/`render`, replacing the hand-written test functions and the `main.cpp` switch.
+- [ ] **`UIManager::wantsKeyboard()` / `wantsMouse()`** — so gameplay input yields while a field has focus. `isMouseOverUi()` is half of this already.
+- [ ] **Named input actions** — actions over `InputAxis`, rebindable and serialized.
+- [ ] **Settings file** — resolution, volume, keybinds, through `JsonFile`.
+- [ ] **Hot-reload** — shaders first; it is the fastest iteration win in the engine.
+- [ ] **Error convention** — one way to report a recoverable failure; right now it is a mix of `nullptr`, `bool` and a log line.
 
-- [ ] **Known warts** — hit test lags a frame; dashed borders use mean radius; no `minHeight`/`maxHeight`; scrollbars cross in corner; floating children don't scroll; clip rects are AABBs, so square children still poke into a rounded corner's arc.
+## Rendering
 
-## Other systems
-
-- [ ] **Terrain-type tilemap rework** — decouple terrain type from visual tile id; support `(terrainA, terrainB)` transition tiles. Data-model change, do before real tilemap content.
-
-- [ ] **Tilemap vertex/perf pass** — pack `TileVertex::Color` to RGBA8, shrink `texIndex`, rebuild chunks partially. Do alongside terrain rework.
-
+- [ ] **Sprite culling** — the tilemap culls against `ViewContext`, sprites do not.
+- [ ] **Cache the sprite sort** — `renderSprites` re-sorts every entity every frame.
+- [ ] **Render layers** — explicit sorting groups instead of the single `layer` int.
+- [ ] **Post-processing chain** — a stack of passes, not the one hardcoded pass.
+- [ ] **Debug draw channel** — persistent per-frame lines/boxes over `addLine`/`addFrame`; collision work will need it immediately.
 - [ ] **Per-sprite material uniforms** — shared uniform set referenced by sprites, applied on shader switch.
 
-- [ ] **Docs pass** — split CLAUDE.md into `docs/` per subsystem once UI stabilises.
+## Tilemap
 
-- [ ] **Rework namespace names** — `UIWidgets` → `UI`, standardise across the project.
+- [ ] **Terrain-type rework** — decouple terrain type from visual tile id; support `(terrainA, terrainB)` transition tiles. Data-model change, do before real tilemap content.
+- [ ] **Vertex/perf pass** — pack `TileVertex::Color` to RGBA8, shrink `texIndex`, rebuild chunks partially. Do alongside the rework.
+
+## UI — widgets & features
+
+- [ ] **`contextMenu` and menu bar** — compositions on top of the overlay machinery.
+- [ ] **`transition`** — animate style fields per key in the state store; needs a rule for what each field interpolates as. `cursor`, its other half, has landed.
+- [ ] **Keyboard-operable widgets** — focus landed but only text fields use it; buttons, checkboxes, radios and sliders should take Space/Enter/arrows.
+- [ ] **Focus ring** — a visible focus indicator for everything that is not a text field.
+- [ ] **Drag and drop** — between widgets, for the inventory.
+- [ ] **More widgets** — `image`, `progressBar`, `tabs`, `treeView`, `groupBox`, `dragFloat`.
+- [ ] **Text field follow-ups** — undo/redo (Ctrl+Z/Y); triple-click to select a line, which needs a click *count* on `UINodeState`; IME/composition input, which the char-callback path cannot represent.
+
+## UI — polish & known warts
+
+- [ ] **Hit test lags a frame** — this frame's mouse against last frame's geometry.
+- [ ] **No `minHeight`/`maxHeight`** — `UISizeSpec` carries min/max, `UIWidgets` never exposes them.
+- [ ] **Floating children don't scroll** — they anchor to the unscrolled parent rect.
+- [ ] **Clip rects are AABBs** — square children poke into a rounded corner's arc.
+- [ ] **Scrollbars cross in the corner** — no corner gap when both are visible.
+- [ ] **Dashed borders use the mean radius** — dashes drift on a per-corner radius.
+- [ ] **`UIWidgets` → `UI`** — rename and standardise across the project.
+
+## Text
+
+- [ ] **Text perf** — pack `TextVertex` to RGBA8, cache layouts, named style tags.
+- [ ] **Font eviction** — nothing removes a font whose bake failed.
+
+## Performance
+
+- [ ] **One batch for UI rects and glyphs** — merge the shaders to cut draw calls.
+- [ ] **Profiling scopes** — a scoped timer plus a frame-stats overlay; there is no way to see where a frame goes.
+- [ ] **Pool allocators** — for per-frame churn (UI nodes, particles) instead of `new`/`delete`.
+
+## Tooling, tests & docs
+
+- [ ] **A test runner** — there is no framework at all; a tiny assert-based one over math, ECS and the layout solver would pay for itself.
+- [ ] **UI layout inspector** — an overlay showing the node tree, solved sizes and keys. The solver is the hardest thing in the engine to debug blind.
+- [ ] **Docs pass** — split CLAUDE.md into `docs/` per subsystem now that the UI has stabilised.
 
 ## Done
 
 ### UI
 
-- [x] **Multi-line text input, selection and clipboard** — `textArea` beside `textField`,
-  sharing one editing core. Caret geometry comes from a real `TextBlock` laid out by
-  `TextLayoutCalculator`, so a caret x cannot drift from the glyphs; byte-index ↔ line
-  mapping is read off the runs, with blank lines handled by the fact that only an explicit
-  newline can produce one. Selection is an anchor beside the caret — shift+arrows, Ctrl+A,
-  mouse drag, double-click word — drawn as one floating quad per line behind the text.
-  Clipboard is Ctrl+C/X/V through two new `Window` methods. Also Ctrl+arrows by word,
-  per-line Home/End with Ctrl+Home/End for the whole text, PageUp/PageDown, and Up/Down
-  with a remembered column. The area scrolls through the ordinary `overflow = Scroll`
-  machinery, so scrollbars and the wheel came for free.
+- [x] **Multi-line text input, selection and clipboard** — `textArea` beside `textField` over one editing core: anchor-based selection, clipboard, word jump, per-line Home/End, PageUp/Down. Caret geometry comes from a real `TextBlock` laid out by the same calculator, so it cannot drift from the glyphs.
 
-- [x] **Keyboard focus + text input** — `Input::getTypedText()` returns the frame's UTF-8
-  (glfw char callback accumulated on the `Window`, drained in `update` beside the wheel);
-  a string rather than one char because a frame can carry several and a codepoint several
-  bytes. `Input::keyRepeated()` fires on press and on every OS auto-repeat, from a real
-  glfw key callback, so the delay and rate are the user's own — general across every key,
-  not an editing-key special case. Focus is `UIManager::m_focusedKey`, claimed on press by
-  walking out to the first `style.focusable` node, plus Tab/Shift+Tab cycling in
-  declaration order; `UINodeState::isFocused` and an `onFocused` style state fall out of
-  it. `textField` and `numberFieldFloat`/`Int` in `UIWidgetsText.cpp` — caret, click to
-  position, arrows/Home/End/Backspace/Delete, horizontal scroll, blink, placeholder,
-  filtering, steppers, wheel. Also added `Utf8::prev`/`encode` and promoted `runWidth`
-  into `TextMetrics::measure` so caret x cannot drift from where glyphs land.
+- [x] **Keyboard focus + text input** — `Input::getTypedText()` (frame UTF-8, glfw char callback) and `keyRepeated()` (glfw key callback, so the OS repeat rate). Focus is `UIManager::m_focusedKey`, claimed on press by the first `style.focusable` ancestor, with Tab cycling and an `onFocused` style state.
 
-- [x] **Grid** — `openGrid`/`closeGrid`, cells are just the children in order. Twelve
-  columns by default and `.gridSpan = n` carves them up CSS-style; `.columns` takes a
-  count or a written-out `UISizeSpec` track list, so a column can hug the widest cell in
-  it. Row-major with wrapping, per-track distribution reusing the level-up/level-down
-  shape. Skipped as planned: auto-fit, minmax, dense packing, row span, column-major.
-  Brought `UIAlign::Stretch` with it — a grid stretches its cells to their band by
-  default, and flow layout's `alignCross` honours it too.
+- [x] **Grid** — `openGrid`/`closeGrid`, cells are the children in order. Twelve columns by default with `.gridSpan` carving them up; `.columns` takes a count or a `UISizeSpec` track list. Brought `UIAlign::Stretch` with it.
 
-- [x] **`UINodeState` drag outputs** — `mousePos`, `dragDelta`, `pressOrigin` (mouse *and*
-  node rect at press), `grabOffset`, `scrollDelta`, `isDoubleClicked`. `dragDelta` is
-  measured **from the press, never accumulated frame to frame**, which is the whole point:
-  summing per-frame deltas drifts, and drifts worst on the node being dragged since it
-  moves under its own answer. The press data lives as plain members on `UIManager` next to
-  `m_activeKey` rather than in `UIStateStore` — only one node is ever captured, so a table
-  keyed per node would be waste. `dragVec2` lost `"dragActive"` and `"dragPointerOrigin"`
-  and now keeps only the caller's value baseline, which the engine cannot know. Sliders and
-  the colour picker deliberately stay on `relativeMousePos`: they are absolute positional
-  drags with no grab offset by design, so a `grabOffset` would change how they feel.
+- [x] **`UINodeState` drag outputs** — `dragDelta`, `pressOrigin`, `grabOffset`, `scrollDelta`, `isDoubleClicked`. Measured from the press, never accumulated: summing per-frame deltas drifts worst on the thing being dragged.
 
-- [x] **Event consumption** — `style.blockInput` bounds press/held/released to the hover
-  chain up to and including the first node that sets it; **hover itself keeps bubbling all
-  the way**, matching CSS `:hover`, so a panel stays lit while the cursor is on its
-  children. Stored as `m_pressKeyCount` — the same walk that builds `m_hoveredKeys`, cut
-  short — so the default costs nothing and `false` is bit-identical to the old behaviour.
-  Copied onto `UILayoutNode` (the snapshot nulls `.node`) and, unlike `ignoresInput`,
-  deliberately **not** sticky down the subtree: it says this node owns a click that landed
-  in it, not that its descendants cannot be hit. The built-in widgets set it on themselves,
-  so a button in a clickable row no longer fires the row too. Falls out for free: a panel
-  with an `onPressed` style stops flashing when something inside it is clicked.
+- [x] **Event consumption** — `style.blockInput` bounds press/held/released to the first node that claims the click; hover keeps bubbling past it, matching CSS `:hover`.
 
-- [x] **Root sizes against the window** — `resolveRootSize` gained `Grow → available` and
-  `Percent → available * value`, threaded in as a third `calculate` argument from
-  `UIRenderer::getRootSize()` (the window in screen space, zero in world space, where there
-  is no box for a ratio to be a ratio of). **`Fit` and `Fixed` never read it**, which is
-  what makes every root that predates this bit-identical — including `openWindow`'s
-  wrapper, which is `Fit`. A full-screen menu is now `grow`/`grow` plus centre aligns on a
-  root; `ui_test` toggles one with F1.
+- [x] **Root sizes against the window** — `Grow`/`Percent` roots measure against `UIRenderer::getRootSize()`. `Fit`/`Fixed` never read it, so every root predating this is unchanged.
 
-- [x] **`cursor`** — the dead style field is wired: `Window::setCursor(CursorShape)` over a
-  `GLFWcursor*` cache owned by `GlfwContext`, which is what owns the `glfwTerminate`
-  lifetime they must die before. `UICursor::Default` means **"no opinion"**, not "arrow" —
-  the shape is the first node naming one, walking outward from the pointer, so a container
-  only affects the cursor when it actually sets one and ancestors inherit down. Resolved
-  once per frame at the end of `resolveInput`. Per-state cursors (`onHover`, `onPressed`)
-  came free from the existing style flattening. Enum gained the four resize shapes.
+- [x] **`cursor`** — `Window::setCursor` over a `GlfwContext` cursor cache. `UICursor::Default` means "no opinion": the shape is the first node naming one, walking outward from the pointer.
 
-- [x] **Clipping honours the parent's border** — `childClipRect` is inset by the border
-  width, so a child of an `overflow: Hidden` container no longer paints over the ring its
-  parent drew inside the same rect. `clipRect` is deliberately **not** inset — the node
-  still has to reach its own ring and shadow. The inset is the width the renderer *actually*
-  paints (`UILayoutNode::borderInset`), replicating `UIRenderer`'s own rule: a transparent
-  border draws nothing however wide it is set, and the shader clamps to half the short side,
-  so anything else would carve pixels out of a ring that was never there. `scrollbarOf`
-  insets by the same value. Still an AABB, so rounded corners leak — logged as a wart.
+- [x] **Clipping honours the parent's border** — `childClipRect` is inset by the *painted* border width; `clipRect` deliberately is not, so a node still reaches its own ring and shadow.
 
-- [x] **`TextOverflow` clip + ellipsis** — `Ellipsis` is a post-pass in
-  `TextLayoutCalculator`, run before alignment (cutting a line changes the slack it
-  aligns against) and after the walk, so the wrap has already settled. It rebuilds
-  the run vector forward rather than editing in place, since dropping runs from the
-  middle would shift every later line's `firstRun`. The marker takes the style of
-  the run the cut lands in, and is `"..."` not `U+2026`, which is outside Latin-1
-  and so outside what gets baked. `Clip` has no layout half: both values bound the
-  glyphs to the box in `TextRenderer::draw`, **intersected** with the caller's clip
-  rather than replacing it, and restored after so it does not leak into the next
-  block on the batch. `addTextLeaf` sets `clipX` from a non-Visible overflow, the
-  leaf-side twin of overflow implying the zero floor — without it the leaf keeps
-  its full width and there is nothing to cut. Alignment now uses the width the
-  block was *given*, not just its own longest line, or right-aligned non-wrapping
-  text had no slack to move in.
+- [x] **`TextOverflow` clip + ellipsis** — `Ellipsis` is a layout post-pass run before alignment; both values bound glyphs at draw time, intersected with the caller's clip rather than replacing it.
 
-- [x] **Richer input return values** — every bound-value widget returns a
-  `UIInputState`: its `UINodeState` plus `isChanged` / `isEditing` / `isReleased`,
-  so an expensive update hangs off release instead of running every frame of a
-  drag. The value still travels through the caller's reference; the struct only
-  says *when* to act. A widget with no drag to it (checkbox, radio, dropdown,
-  toolbar) completes on the click, so it fires `isChanged` and `isReleased`
-  together and never `isEditing` — otherwise a caller waiting on release would
-  wait forever. `dragInputState` holds the one bit that cannot be derived from the
-  frame (was a gesture live last frame) in the state store. Sliders measure change
-  *after* snapping, so clamping a caller's out-of-range value is not reported as an
-  edit, and the picker measures on hsv rather than the colour, which it rebuilds
-  every frame and so drifts a bit or two when untouched.
+- [x] **Richer input return values** — every bound-value widget returns `UIInputState` (`isChanged`/`isEditing`/`isReleased`), so expensive work hangs off release instead of every drag frame.
 
-- [x] **Scroll** — `overflow = UIOverflow::Scroll` is the entire interface: it clips,
-  gives both axes a zero content floor, drives the offset and draws the bars. The
-  placeholder scaffolding it replaced was wrong in three ways and all three
-  changed: `scrollOffset` left `UILayoutConfig` (retained state a caller cannot
-  set, read from the store by a `resolveScroll` pass between the sizes and the
-  positions, so it clamps against *this* frame's content); `overflow` now implies
-  the zero floor instead of pairing with `clipX`/`clipY`, which stay only for a
-  leaf that has no style to put an overflow on; and the vertical pass now shrinks,
-  without which a `Grow` scroll container grew past its parent instead of becoming
-  a viewport. `contentSize` is measured from the children's **solved** sizes, not
-  from intrinsics: a scrollable child asked for its content, which it then clips,
-  so a scroller inside a scroller gave its parent a range that revealed nothing.
-  Bars are **not nodes** — `scrollbarOf` derives them from a solved
-  `UILayoutNode`, so no key, no tree slot, no frame of lag; they draw after the
-  layer's glyph flush and carry their own capture in `UIManager`. Wheel routes
-  outward along the hover chain and leaves an axis it cannot move, so a list hands
-  its parent the rest at the end. `Input::getScrollDelta` is one `Vec2`: the
-  trackpad's own x, or shift+wheel remapped onto it.
+- [x] **Scroll** — `overflow = Scroll` is the whole interface: clips, zeroes the content floor, drives the offset from the store and draws the bars. `contentSize` comes from solved child sizes, not intrinsics, or a nested scroller reveals nothing. Bars are derived from geometry, not nodes.
 
-- [x] **Retained state store** — `UIStateStore`, keyed by `UINode::persistentKey`
-  (now also on `UINodeState`, so a widget can address its own entry). A slim
-  `UINodeSystemState` for what the UI's systems own — `scroll`, `contentSize`,
-  unwired until scroll lands — plus a flat `string -> float` bag for widgets,
-  hashed to one slot per `(node, field)`. Frame-age eviction, swept in
-  `beginFrame` so no `float&` can be live when an erase happens; the window is
-  deliberately long, since a hidden tab's node is untouched but its scroll
-  position still matters. The five ad-hoc maps folded in, which also killed their
-  keying bugs: two same-named windows shared geometry, and a dropdown keyed on
-  `&selected` broke on a reallocating vector or a stack local.
+- [x] **Retained state store** — `UIStateStore` keyed by `persistentKey`: a system struct plus a `string -> float` bag, with frame-age eviction. Folded in five ad-hoc maps and their keying bugs.
 
-- [x] **Theming** — `UIThemeManager` (its own Singleton, outside `styling/`) holds
-  21 colour roles, a metric ramp and string-keyed text styles. Colours are a spec
-  of optionals: set `background`/`accent`/`foreground` and `resolve()` derives the other
-  18 by lighten/darken/mix, so a retheme is three lines; `onAccent` picks white or
-  near-black off the accent's Rec. 709 luminance. Widgets read roles inline
-  (`UITheming::colors().accent`) — the theme holds no per-widget presets, and
-  nothing in `UIManager`, the solver or the renderer reads it except the scale.
-  Extra roles go in a `custom` string map; extra text styles just take a new name.
+- [x] **Theming** — `UIThemeManager` with 21 colour roles derived from three seeds, a metric ramp and named text styles. Widgets read roles inline; the UI core reads only the scale.
 
-- [x] **UI scale (and DPI with it)** — `UIThemeMetrics::scale` multiplies every
-  pixel-valued layout and style field once, in `UIManager::addNode`. Scaling the
-  *inputs* rather than the projection is what keeps the solve's output in real
-  window pixels, so hit testing, clip rects and `getMouseUiPos` need no changes.
-  Percent/Grow are ratios and text `size` scales while its em-based effects do
-  not. The one trap: `UINodeState` hands back solved geometry in real pixels, so
-  anything feeding it back into a config goes through `UIWidgets::unscale` — the
-  window drag, the tooltip anchor and both popup offsets do.
+- [x] **UI scale** — `UIThemeMetrics::scale` multiplies every pixel-valued field once in `addNode`. Scaling the *inputs* keeps the solve in real pixels, so hit testing needs no changes; feeding solved geometry back needs `unscale`.
 
-- [x] **Widget layer over the primitives** — `UIWidgets` is the single public face:
-  thin forwarders for the primitives plus every widget as a free function with one
-  config struct each. `UIManager` stays the tree owner and no widget touches its
-  privates. Shipped: `button`, `text`, `dividers`, `toolbarMenu`, `sliderFloat`/
-  `sliderInt`, `checkBox`, `radioGroup`, `tooltip`, `colorPicker`,
-  `colorPickerPopup`, `dropdown`, `dragHandle`, `openSection`/`closeSection`,
-  `openWindow`/`closeWindow`. The demo window's Theme tab edits a live theme and
-  switches between seven built-in presets.
+- [x] **Widget layer over the primitives** — `UIWidgets` is the single public face: thin forwarders plus one free function and config struct per widget. No widget touches `UIManager`'s privates.
 
-- [x] **Window widget** — movable, resizable from an image drag handle, and
-  collapsible. Geometry lives in the state store, not on the caller. Collapse
-  works by `UIManager::removeChildren` at `closeWindow`, since immediate mode
-  gives a widget no way to stop its caller declaring content.
+- [x] **Window widget** — movable, resizable, collapsible, geometry in the state store. Collapse discards content in `closeWindow`, since immediate mode cannot stop a caller declaring it.
 
-- [x] **Overlay machinery + the widgets on it** — `ignoreClip` escapes every
-  clipping ancestor for a whole subtree, `ignoreInput` makes a subtree transparent
-  to hit testing, `zIndex` lifts a paint layer, and hit resolution orders by the
-  same three keys the painter uses (`rootOrder`, `paintLayer`, preorder).
-  `tooltip`, `colorPickerPopup` and `dropdown` are built on it.
+- [x] **Overlay machinery** — `ignoreClip`, `ignoreInput` and `zIndex`, with hit resolution ordered by the same three keys the painter uses. `tooltip`, `colorPickerPopup` and `dropdown` sit on it.
 
-- [x] **Optional style/layout structs, one field list each** — `UIContainerStyle`,
-  `UITextStyle` and `UILayoutConfig` are all `std::optional` fields generated from
-  an X-macro, with `combine` (input side wins) and `fillDefaults` (plain unthemed
-  fallbacks) for free. Filling happens once per node in `UIManager`, so everything
-  downstream dereferences and no default is decided twice.
+- [x] **Optional style/layout structs** — `UIContainerStyle`, `UITextStyle` and `UILayoutConfig` are generated from one X-macro each, with `combine` and `fillDefaults`. Adding a field is one line.
 
-- [x] **Per-state styles** — `openContainer` takes a `UIContainerStyleSpec`: every
-  style field plus `onHover`/`onHeld`/`onPressed`/`onReleased`, merged lowest
-  priority first into the one style stored on the node. `onHeld` reads `isActive`
-  (capture), not `isHeld`, so a grip dragged off itself stays lit.
+- [x] **Per-state styles** — `UIContainerStyleSpec` carries `onHover`/`onHeld`/`onPressed`/`onReleased`, merged lowest priority first. `onHeld` reads `isActive`, so a grip dragged off itself stays lit.
 
-- [x] **Mouse capture + paint layers** — one `m_activeKey` claims the topmost node
-  on press and holds it until release wherever the cursor goes, suppressing hover
-  elsewhere; it survives one frame past button-up so the pressed node sees the
-  release. `paintLayer` implements `zIndex` as an offset from the parent, and
-  `draw()` flushes boxes and glyphs **per layer**, or every glyph would paint over
-  every box.
+- [x] **Mouse capture + paint layers** — one `m_activeKey` holds the pressed node until release wherever the cursor goes; `draw()` flushes boxes and glyphs per layer, or glyphs paint over boxes.
 
-- [x] **Hit resolution: topmost wins, hover bubbles** — resolved once per frame in
-  `clear()`, pairing this frame's mouse with last frame's geometry. The last hit
-  in paint order is the topmost; `isHovered` then bubbles to every ancestor, with
-  `isHoveredDirectly` for the single node. Leaves are excluded, or a label would
-  swallow its button's hit.
+- [x] **Hit resolution** — resolved once in `clear()`, pairing this frame's mouse with last frame's geometry. Last hit in paint order wins, then hover bubbles to every ancestor.
 
-- [x] **Overflow clipping** — resolved once in the solver, top-down, into two rects
-  per node: `clipRect` bounds the node's own drawing, `childClipRect` what it hands
-  down. They differ by the node's own overflow, which is what stops a clipping
-  container erasing its own shadow. Both shaders `discard` outside; glyphs cut
-  mid-letter. Hit testing reads the same rect.
+- [x] **Overflow clipping** — two rects per node resolved top-down; both shaders discard outside, and hit testing reads the same rect.
 
-- [x] **Containers paint through `UIRenderer`** — one quad carries a whole
-  container: background, image, border ring, per-corner radius, dash pattern and
-  shadow all out of a single rounded-box SDF. Every field is per-vertex, never a
-  uniform. A container with nothing visible emits zero geometry — so an unstyled
-  container is invisible, not a white debug box.
+- [x] **Containers paint through `UIRenderer`** — one quad carries background, image, border ring, per-corner radius, dashes and shadow from a single rounded-box SDF. Nothing visible emits no geometry.
 
-- [x] **UI space switch** — `UIRenderer::setSpace` picks `Screen` (one unit per
-  window pixel, camera-independent) or `World`, and the matrix, root origin and
-  mouse position all read the one `m_space` so they cannot disagree. Screen space
-  is Y-up, because glyph quads are built baseline-up and a Y-down matrix mirrors
-  every string.
+- [x] **UI space switch** — `setSpace` picks screen or world, and the matrix, root origin and mouse all read the one field. Screen space is Y-up because glyph quads are built baseline-up.
 
-- [x] **Per-corner border radius + image rotation** — `UICorners` on
-  `borderRadius`, with the SDF picking the radius per fragment;
-  `imageRotation` rotates the uv lookup, reusing a spare vertex slot rather than
-  growing `UIBoxVertex`.
+- [x] **Per-corner border radius + image rotation** — `UICorners` with the SDF picking the radius per fragment; rotation reuses a spare vertex slot instead of growing the vertex.
 
-- [x] **Engine-owned assets** — `FileManager::engineAsset()` resolves from
-  `engine/assets` regardless of the game's cwd, so the engine stays
-  redistributable. The quad/text/tilemap/uibox/colour-picker shaders auto-load
-  through `ResourceManager` in their own subsystem's `init`, with no user-facing
-  load call and a pointer override for anyone who wants their own.
+- [x] **Engine-owned assets** — `FileManager::engineAsset()` resolves from `engine/assets` whatever the game's cwd, so the engine stays redistributable.
 
-- [x] **Window projection on `ViewContext`** — view and proj are stored separately
-  with `getViewMat`/`getProjMat`/`getWindowProjMat`; `UIRenderer` no longer builds
-  its own.
+- [x] **Window projection on `ViewContext`** — view and proj stored separately; `UIRenderer` no longer builds its own.
 
-- [x] **UI font** — `UIManager::setFont` holds the face every text leaf uses;
-  `UITextConfig::font` is a per-leaf override for mixing faces. A null font is
-  normal: it resolves to `FontLoader`'s default further down.
+- [x] **UI font** — `UIManager::setFont` for the shared face, `UITextConfig::font` to override per leaf. Null is normal and resolves to `FontLoader`'s default.
 
-- [x] **Pre-rewrite UI (superseded)** — the immediate-mode `UiSystem`/`UiRenderer`/
-  `LayoutCalculator` stack landed in full (five-pass solver, rounded-rect shader,
-  hover/press styling, interaction keys) and was deleted in `a886a32` for the
-  current `UIManager`/`UILayoutCalculator`/`UIRenderer`. Recover with
-  `git show a886a32^:<path>` if any of it is ever wanted back.
+- [x] **Pre-rewrite UI (superseded)** — the old `UiSystem`/`UiRenderer`/`LayoutCalculator` stack landed in full and was deleted in `a886a32`. Recover with `git show a886a32^:<path>`.
 
 ### Text
 
-- [x] **Text layout folded out of `TextRenderer`** — wrapping, line boxes and
-  alignment live in one stateless `TextLayoutCalculator` over a `TextBlock` that
-  carries input and solved output together. Line height is the max over every
-  style on the line and baselines are placed at `lineTop + ascent`, never stepped;
-  `TextMetrics::step` is shared by the measuring and emitting walks so a measured
-  width cannot drift from a drawn one. `TextBlock` is neither copyable nor
-  movable — its runs hold views into its own string.
+- [x] **Text layout folded out of `TextRenderer`** — wrapping, line boxes and alignment in one stateless `TextLayoutCalculator` over a `TextBlock`. `TextMetrics::step` is shared by the measuring and emitting walks, so widths cannot drift.
 
-- [x] **Async font loading** — `Font`'s constructor queues the bake on `FontLoader`
-  and returns; a loading font answers from a placeholder, and the const accessors
-  poll so the atlas uploads on the GL thread with no owner and no `update()`. The
-  queue is shortest-job-first and the baker takes a **quarter** of the cores at
-  below-normal priority — at full width it starved the render thread.
-  Gap: nothing evicts a font whose bake failed.
+- [x] **Async font loading** — the constructor queues the bake and returns; a loading font answers from a placeholder and the atlas uploads on the GL thread. The baker takes a quarter of the cores — at full width it starved the render thread.
 
-- [x] **Default font on `FontLoader`** — bakes a system face as a small bitmap
-  atlas, queued ahead of whatever triggered it, and every text entry point
-  resolves through it, so a font that is still baking borrows a real face instead
-  of drawing placeholder boxes. `TextBlock` records *which* font it solved with,
-  since that resolution flips mid-life.
+- [x] **Default font on `FontLoader`** — bakes a system face, queued ahead of whatever triggered it, so a font still baking borrows a real face instead of drawing placeholder boxes.
 
-- [x] **Text renderer** — `TextRenderer` over `BatchRenderer<TextVertex>`, layered
-  as `draw` / `drawSpan` (the chaining primitive) / `appendGlyph` / measure.
-  Positional styling via `/s` tags plus a style list; `//s` escapes. Everything a
-  style varies is per-vertex, so many styles still share one flush. `Utf8::next`
-  because Latin-1 codepoints are multi-byte.
+- [x] **Text renderer** — `TextRenderer` over `BatchRenderer<TextVertex>`, with `/s` span tags. Everything a style varies is per-vertex, so many styles still share one flush.
 
-- [x] **Text effects** — outline, boldness, softness, shadow/glow, italic skew,
-  underline, strikethrough. **All widths are em, not pixels**, or they drift under
-  zoom. Effect width is capped by the baked distance range
-  (`Font::getMaxEffectEm()`).
+- [x] **Text effects** — outline, boldness, softness, shadow, italic skew, underline, strikethrough. All widths in **em**, not pixels, or they drift under zoom.
 
-- [x] **Font resource + msdf-atlas-gen baker** — `Font` is an `IResource` producing
-  an atlas + em-unit metrics, as `Mtsdf` or `Bitmap` (the type picks the filtering
-  internally). The disk cache in `.cache/fonts/` is the real interface, so neither
-  freetype nor msdfgen is needed to load one. Writes go to a temp file then
-  rename, so a crash cannot leave a truncated file that reads as a valid hit.
+- [x] **Font resource + msdf baker** — `Font` is an `IResource` producing an atlas plus em metrics. The disk cache in `.cache/fonts/` is the real interface, so neither freetype nor msdfgen is needed to load one.
 
 ### Engine
 
-- [x] **`Application` loop wrapper** — owns the window loop, `Time::update`,
-  per-window input and camera ordering, `swapBuffers` and `pollEvents`; scenes
-  supply `onFrame`/`onWindowUpdate`/`onWindowRender`.
+- [x] **`Application` loop wrapper** — owns the window loop, `Time::update`, per-window input and camera ordering; scenes supply `onFrame`/`onWindowUpdate`/`onWindowRender`.
 
-- [x] **`Delegate` binds plain callables** — a `bind(C*)` overload for lambdas and
-  functors, `requires`-constrained so a signature mismatch errors at the call.
-  Stores only a pointer, so the callable must outlive the delegate.
+- [x] **`Delegate` binds plain callables** — a `requires`-constrained `bind(C*)` for lambdas and functors. Stores only a pointer, so the callable must outlive the delegate.
 
-- [x] **Per-sprite shaders** — `SpriteComponent::shader`; `renderSprites` sorts by
-  `(layer, shader, texture)` and flushes on a shader boundary.
+- [x] **Per-sprite shaders** — `SpriteComponent::shader`; `renderSprites` sorts by `(layer, shader, texture)` and flushes on a shader boundary.
 
-- [x] **Separate alpha blend func** — `glBlendFuncSeparate`, because everything
-  renders into a transparent FBO and the old plain `glBlendFunc` multiplied source
-  alpha in twice, eating antialiased edges.
+- [x] **Separate alpha blend func** — `glBlendFuncSeparate`; the plain version multiplied source alpha in twice against the transparent FBO and ate antialiased edges.
 
-- [x] **HSV on `Color`** — `toHsv()` / `fromHsv()`, moved off the colour picker so
-  anything can use them.
+- [x] **HSV on `Color`** — `toHsv()`/`fromHsv()`, moved off the colour picker so anything can use them.
