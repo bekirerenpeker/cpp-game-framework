@@ -130,6 +130,17 @@ void Window::setCursor(CursorShape shape)
     glfwSetCursor(m_glfwHandle, (GLFWcursor*)GlfwContext::standardCursor(shape));
 }
 
+std::string Window::getClipboardText() const
+{
+    const char* text = glfwGetClipboardString(m_glfwHandle);
+    return text ? std::string(text) : std::string();
+}
+
+void Window::setClipboardText(const std::string& text)
+{
+    glfwSetClipboardString(m_glfwHandle, text.c_str());
+}
+
 void Window::sizeUpdateCallback(GLFWwindow* glfwHandle, int width, int height)
 {
     Window* window = static_cast<Window*>(glfwGetWindowUserPointer(glfwHandle));

@@ -45,6 +45,9 @@ void fullScreenMenu()
     static std::string playerName = "Player One";
     textField(playerName, {.fieldLayout = {.width = UISizeSpec::fixed(360.0f)}});
 
+    static std::string motd = "Multi-line, wrapped, selectable and scrollable.";
+    textArea(motd, {.areaLayout = {.width = UISizeSpec::fixed(360.0f)}, .rows = 3});
+
     // Three equal columns and then one cell spanning all of them -- the buttons stretch
     // to their column because a grid stretches its cells by default.
     openGrid({.columns = 3, .gridLayout = {.width = UISizeSpec::fixed(360.0f)}});

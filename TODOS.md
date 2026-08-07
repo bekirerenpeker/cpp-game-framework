@@ -4,18 +4,28 @@ Working backlog. Claude Code agents may add, edit, reorder, check off or remove
 items — keep it current. Done items get **one or two lines**, just enough to know
 they happened; the reasoning lives in CLAUDE.md, not here.
 
+## bugs
+
+- [ ] **Home / End / PageUp / PageDown reportedly do nothing** — not reproduced. The key
+  table is aligned (`KeyCode::Home` is enum 62 and `glfwKeyCodes[62]` is 268), `keyRepeated`
+  is the same path the arrows use and those work, and the handlers in `applyEdits` read
+  correctly. Two open possibilities: the symptom was really the two rendering bugs fixed
+  alongside it (a one-line field ate its own text when scrolled, so End moved the caret
+  invisibly), or the keys being pressed are the **numeric keypad's** Home/End/PgUp/PgDn,
+  which glfw reports as `KP_7`/`KP_1`/`KP_9`/`KP_3` and nothing maps. Re-test and say which
+  keys.
+
 ## Implement Now
 
-- [ ] **Text selection + clipboard** — wanted in full rather than in pieces, so it was
-  deliberately left out of the text field: anchor index beside the caret, shift+arrows,
-  ctrl+A, mouse drag-select, double-click word select, the highlight quad, and ctrl+C/X/V
-  through `glfwGetClipboardString`. Should be designed for **multi-line** from the start —
-  a selection spanning wrapped lines is the part a single-line-only model would have to be
-  thrown away for.
+- [ ] **`contextMenu` and menu bar** — compositions on top of overlay machinery.
 
 ## UI & text — next up
 
-- [ ] **`contextMenu` and menu bar** — compositions on top of overlay machinery.
+- [ ] **Text field follow-ups** — deferred from the selection work, in rough order of value:
+  **undo/redo** (Ctrl+Z / Ctrl+Y, an edit-history ring per field — not yet certain it is
+  wanted); **triple-click to select a line**, which needs a click *count* on `UINodeState`
+  rather than the current double-click bool; and **IME / composition input**, which the
+  char-callback path cannot represent at all and which any CJK user would need.
 
 - [ ] **`transition`** — animate style fields per key in the state store; needs a rule for what each field interpolates as. `cursor`, its other half, has landed.
 
@@ -42,6 +52,17 @@ they happened; the reasoning lives in CLAUDE.md, not here.
 ## Done
 
 ### UI
+
+- [x] **Multi-line text input, selection and clipboard** — `textArea` beside `textField`,
+  sharing one editing core. Caret geometry comes from a real `TextBlock` laid out by
+  `TextLayoutCalculator`, so a caret x cannot drift from the glyphs; byte-index ↔ line
+  mapping is read off the runs, with blank lines handled by the fact that only an explicit
+  newline can produce one. Selection is an anchor beside the caret — shift+arrows, Ctrl+A,
+  mouse drag, double-click word — drawn as one floating quad per line behind the text.
+  Clipboard is Ctrl+C/X/V through two new `Window` methods. Also Ctrl+arrows by word,
+  per-line Home/End with Ctrl+Home/End for the whole text, PageUp/PageDown, and Up/Down
+  with a remembered column. The area scrolls through the ordinary `overflow = Scroll`
+  machinery, so scrollbars and the wheel came for free.
 
 - [x] **Keyboard focus + text input** — `Input::getTypedText()` returns the frame's UTF-8
   (glfw char callback accumulated on the `Window`, drained in `update` beside the wheel);

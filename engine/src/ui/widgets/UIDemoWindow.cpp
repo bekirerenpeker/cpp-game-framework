@@ -577,9 +577,25 @@ void textTab()
     closeGrid();
 
     horizontalDivider();
+    text("A text area. Enter makes a new line, Ctrl+Enter commits, and it wraps and scrolls.");
+
+    static std::string notes =
+        "Select with shift+arrows, ctrl+A or the mouse, and double-click a word.\n"
+        "Ctrl+C, Ctrl+X and Ctrl+V go through the system clipboard, so text moves in and "
+        "out of other applications. Ctrl+arrows jump by word, Home and End go to the ends "
+        "of the visual line, and PageUp and PageDown move by a screenful.";
+    UIInputState area = textArea(notes, {.placeholder = "notes...", .rows = 5});
+
+    horizontalDivider();
     text(
         std::format(
             "name \"{}\"   seed \"{}\"   gravity {:.2f}   lives {}", name, seed, gravity, lives
+        )
+    );
+    text(
+        std::format(
+            "area: {} chars, {}   {}", notes.size(), area.isEditing ? "editing" : "idle",
+            area.isReleased ? "committed this frame" : ""
         )
     );
 }

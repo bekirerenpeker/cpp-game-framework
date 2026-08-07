@@ -105,6 +105,9 @@ class Window : public IRenderContext, public IHasId
     void setPos(int x, int y);
     void setCursor(CursorShape shape);
 
+    std::string getClipboardText() const;
+    void setClipboardText(const std::string& text);
+
     const GLFWwindow* getGlfwHandle() const { return m_glfwHandle; }
     GLFWwindow* getGlfwHandle() { return m_glfwHandle; }
     int getWidth() const { return m_width; }

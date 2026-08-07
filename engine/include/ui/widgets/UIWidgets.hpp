@@ -148,6 +148,7 @@ struct TextFieldConfig
     UITextConfig textConfig;
     UILayoutConfig caretLayout;
     UIContainerStyleSpec caretStyle;
+    UIContainerStyleSpec selectionStyle;
     UITextStyle placeholderStyle;
     std::string placeholder;
     bool (*filter)(uint32_t codepoint) = nullptr;
@@ -155,6 +156,26 @@ struct TextFieldConfig
     std::string_view key;
 };
 UIInputState textField(std::string& text, const TextFieldConfig& config = {});
+
+// The same editing, selection and clipboard as textField, over wrapped text. Enter inserts
+// a newline here rather than committing, so a commit is Ctrl+Enter or losing focus. Scrolls
+// through the ordinary overflow machinery, so it gets real scrollbars and the wheel.
+struct TextAreaConfig
+{
+    UILayoutConfig areaLayout;
+    UIContainerStyleSpec areaStyle;
+    UILayoutConfig textLayout;
+    UITextConfig textConfig;
+    UILayoutConfig caretLayout;
+    UIContainerStyleSpec caretStyle;
+    UIContainerStyleSpec selectionStyle;
+    UITextStyle placeholderStyle;
+    std::string placeholder;
+    uint rows = 4;
+    uint maxLength = 0;
+    std::string_view key;
+};
+UIInputState textArea(std::string& text, const TextAreaConfig& config = {});
 
 // A text field that only accepts what parses, plus the two ways a number wants editing
 // that text does not: steppers and the wheel. The bound value is written only when the
