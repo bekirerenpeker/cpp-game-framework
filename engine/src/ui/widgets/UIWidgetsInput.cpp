@@ -634,7 +634,7 @@ dropdown(const std::vector<std::string>& items, int& selected, const DropdownCon
 
         closeContainer();
 
-        if (Input::get().mouseButtonPressed(MouseButton::Left) && !panel.isHovered &&
+        if (Input::get().uncaptured().mouseButtonPressed(MouseButton::Left) && !panel.isHovered &&
             !button.isHovered) {
             open = false;
         }

@@ -393,7 +393,7 @@ EditResult applyEdits(
     std::string& text, int& caret, int& anchor, float& desiredColumn, const EditContext& context
 )
 {
-    Input& input = Input::get();
+    Input::Uncaptured input = Input::get().uncaptured();
     EditResult result;
 
     bool shift = input.keyHeld(KeyCode::LeftShift) || input.keyHeld(KeyCode::RightShift);
@@ -432,7 +432,7 @@ EditResult applyEdits(
 
     // Typed text after the clipboard, so a Ctrl+V that some layout also reports as a
     // character cannot paste and type in the same frame.
-    std::string_view typed = ctrl ? std::string_view {} : Input::get().getTypedText();
+    std::string_view typed = ctrl ? std::string_view {} : Input::get().uncaptured().getTypedText();
     if (!typed.empty()) {
         deleteSelection(text, caret, anchor);
         insertFiltered(text, caret, anchor, typed, context, result.isChanged);
@@ -684,8 +684,8 @@ EditFrame runField(
             caret = (int)end;
             wordSelected = true;
         } else if (field.isPressed) {
-            bool shift = Input::get().keyHeld(KeyCode::LeftShift) ||
-                         Input::get().keyHeld(KeyCode::RightShift);
+            bool shift = Input::get().uncaptured().keyHeld(KeyCode::LeftShift) ||
+                         Input::get().uncaptured().keyHeld(KeyCode::RightShift);
             // Shift-click extends from wherever the selection was anchored, the same as
             // shift-arrow does -- so it must not move the anchor.
             caret = hit;
@@ -703,7 +703,7 @@ EditFrame runField(
     if (field.isFocused) {
         frame.result = applyEdits(text, caret, anchor, desiredColumn, context);
 
-        if (frame.result.isCommitted || Input::get().keyPressed(KeyCode::Escape))
+        if (frame.result.isCommitted || Input::get().uncaptured().keyPressed(KeyCode::Escape))
             UIManager::get().clearFocus();
 
         // Any edit restarts the blink, so the caret is never invisible at the moment the

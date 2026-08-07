@@ -185,7 +185,7 @@ void UIManager::resolveInput()
 
     Vec2 mouse = UIRenderer::get().getMouseUiPos();
     const std::vector<UILayoutNode>& prev = UILayoutCalculator::get().getPrevFrameNodes();
-    Input& input = Input::get();
+    Input::Uncaptured input = Input::get().uncaptured();
 
     // Scrollbars are derived from solved geometry rather than declared as nodes, so they
     // are not in the array everything below searches and have to be resolved first.
@@ -275,7 +275,7 @@ void UIManager::resolveFocus(const std::vector<UILayoutNode>& prev, uint hit)
         if (!stillDeclared) m_focusedKey = NO_KEY;
     }
 
-    Input& input = Input::get();
+    Input::Uncaptured input = Input::get().uncaptured();
     if (input.keyRepeated(KeyCode::Tab)) {
         bool backwards = input.keyHeld(KeyCode::LeftShift) || input.keyHeld(KeyCode::RightShift);
         cycleFocus(prev, backwards);
@@ -365,7 +365,7 @@ void UIManager::applyCursor(const std::vector<UILayoutNode>& prev, uint hit) con
 // of the gesture to the panel once it has reached its own end.
 void UIManager::routeScrollWheel(const std::vector<UILayoutNode>& prev, uint hit)
 {
-    Vec2 wheel = Input::get().getScrollDelta();
+    Vec2 wheel = Input::get().uncaptured().getScrollDelta();
     if (wheel == VEC2_ZERO) return;
 
     wheel = wheel * (SCROLL_WHEEL_STEP * UIThemeManager::get().getScale());
@@ -398,7 +398,7 @@ void UIManager::routeScrollWheel(const std::vector<UILayoutNode>& prev, uint hit
 
 bool UIManager::resolveScrollbars(const std::vector<UILayoutNode>& prev, Vec2 mouse)
 {
-    Input& input = Input::get();
+    Input::Uncaptured input = Input::get().uncaptured();
     UIStateStore& store = UIStateStore::get();
     float scale = UIThemeManager::get().getScale();
 
@@ -493,7 +493,7 @@ UINodeState UIManager::computeState(IdType id, uint64_t key, const UILayoutNode*
     // the containers around it only up to the first one that claims it. Two *overlapping*
     // containers still cannot both react, since only the topmost one's ancestors are in
     // the chain at all.
-    Input& input = Input::get();
+    Input::Uncaptured input = Input::get().uncaptured();
     bool pressable = isKeyPressable(key);
     state.isPressed = pressable && input.mouseButtonPressed(MouseButton::Left);
     state.isReleased = pressable && input.mouseButtonReleased(MouseButton::Left);
@@ -763,6 +763,10 @@ void UIManager::draw()
     }
 
     TextRenderer::get().clearViewProjOverride();
+
+    // After the widgets, not after resolveInput: a field that dropped focus on Escape must
+    // not still be claiming the keyboard.
+    Input::get().setUiCapture(isKeyboardUsed(), isMouseUsed());
 }
 
 }   // namespace Engine

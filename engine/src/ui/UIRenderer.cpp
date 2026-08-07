@@ -94,7 +94,7 @@ Vec2 UIRenderer::getMouseUiPos() const
     if (!window) return VEC2_ZERO;
     // Input reports window-centred pixels, +Y up; screen space is the same pixels
     // measured from the bottom-left corner.
-    return Input::get().getMousePos() + Vec2(window->getWidth() * 0.5f, window->getHeight() * 0.5f);
+    return Input::get().uncaptured().getMousePos() + Vec2(window->getWidth() * 0.5f, window->getHeight() * 0.5f);
 }
 
 bool UIRenderer::ensureReady()

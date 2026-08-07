@@ -27,6 +27,13 @@ int Input::getAxis(const std::string& name) { return m_axises.at(name).getValue(
 
 void Input::update()
 {
+    // Promoted then reset, so nothing has to remember to release a capture: whatever
+    // claimed it stops re-claiming and the device frees itself a frame later.
+    m_uiKeyboardCapture = m_pendingUiKeyboardCapture;
+    m_uiMouseCapture = m_pendingUiMouseCapture;
+    m_pendingUiKeyboardCapture = false;
+    m_pendingUiMouseCapture = false;
+
     if (!WindowManager::get().anyWindowOpen()) return;
 
     IdType windowId = ViewContext::get().getActiveWindowId();
@@ -80,60 +87,91 @@ void Input::update()
     window->clearRepeatedKeys();
 }
 
-bool Input::keyPressed(KeyCode key)
+void Input::setUiCapture(bool keyboard, bool mouse)
+{
+    m_pendingUiKeyboardCapture = keyboard;
+    m_pendingUiMouseCapture = mouse;
+}
+
+bool Input::readKeyPressed(KeyCode key) const
 {
     if (!m_currState) return false;
     return !m_currState->keyPrevState[(int)key] && m_currState->keyCurrState[(int)key];
 }
-bool Input::keyReleased(KeyCode key)
+bool Input::readKeyReleased(KeyCode key) const
 {
     if (!m_currState) return false;
     return m_currState->keyPrevState[(int)key] && !m_currState->keyCurrState[(int)key];
 }
-bool Input::keyHeld(KeyCode key)
+bool Input::readKeyHeld(KeyCode key) const
 {
     if (!m_currState) return false;
     return m_currState->keyCurrState[(int)key];
 }
-
-bool Input::keyRepeated(KeyCode key)
+bool Input::readKeyRepeated(KeyCode key) const
 {
     if (!m_currState) return false;
     return m_currState->keyRepeatState[(int)key];
 }
-
-bool Input::mouseButtonPressed(MouseButton button)
+bool Input::readMouseButtonPressed(MouseButton button) const
 {
     if (!m_currState) return false;
     return !m_currState->buttonPrevState[(int)button] && m_currState->buttonCurrState[(int)button];
 }
-bool Input::mouseButtonReleased(MouseButton button)
+bool Input::readMouseButtonReleased(MouseButton button) const
 {
     if (!m_currState) return false;
     return m_currState->buttonPrevState[(int)button] && !m_currState->buttonCurrState[(int)button];
 }
-bool Input::mouseButtonHeld(MouseButton button)
+bool Input::readMouseButtonHeld(MouseButton button) const
 {
     if (!m_currState) return false;
     return m_currState->buttonCurrState[(int)button];
 }
-
-Vec2 Input::getMousePos()
+Vec2 Input::readMousePos() const
 {
     if (!m_currState) return VEC2_ZERO;
     return m_currState->mousePos;
 }
-
-Vec2 Input::getScrollDelta()
+Vec2 Input::readScrollDelta() const
 {
     if (!m_currState) return VEC2_ZERO;
     return m_currState->scrollDelta;
 }
-
-std::string_view Input::getTypedText()
+std::string_view Input::readTypedText() const
 {
     if (!m_currState) return {};
     return m_currState->typedText;
+}
+
+// Release is filtered too: a caller that never saw the press must not act on the release.
+bool Input::keyPressed(KeyCode key) { return m_uiKeyboardCapture ? false : readKeyPressed(key); }
+bool Input::keyReleased(KeyCode key) { return m_uiKeyboardCapture ? false : readKeyReleased(key); }
+bool Input::keyHeld(KeyCode key) { return m_uiKeyboardCapture ? false : readKeyHeld(key); }
+
+bool Input::keyRepeated(KeyCode key) { return m_uiKeyboardCapture ? false : readKeyRepeated(key); }
+
+bool Input::mouseButtonPressed(MouseButton button)
+{
+    return m_uiMouseCapture ? false : readMouseButtonPressed(button);
+}
+bool Input::mouseButtonReleased(MouseButton button)
+{
+    return m_uiMouseCapture ? false : readMouseButtonReleased(button);
+}
+bool Input::mouseButtonHeld(MouseButton button)
+{
+    return m_uiMouseCapture ? false : readMouseButtonHeld(button);
+}
+
+// Unfiltered: where the pointer is stays true whoever owns it.
+Vec2 Input::getMousePos() { return readMousePos(); }
+
+Vec2 Input::getScrollDelta() { return m_uiMouseCapture ? VEC2_ZERO : readScrollDelta(); }
+
+std::string_view Input::getTypedText()
+{
+    return m_uiKeyboardCapture ? std::string_view {} : readTypedText();
 }
 
 }   // namespace Engine

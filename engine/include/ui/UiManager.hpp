@@ -125,6 +125,13 @@ class UIManager : public Singleton<UIManager>
 
     bool isMouseOverUi() const { return !m_hoveredKeys.empty(); }
 
+    // Hover alone is not enough: a drag that left the widget still owns the mouse.
+    bool isMouseUsed() const
+    {
+        return !m_hoveredKeys.empty() || m_activeKey != NO_KEY || m_scrollDrag.key != NO_KEY;
+    }
+    bool isKeyboardUsed() const { return m_focusedKey != NO_KEY; }
+
     // Keyboard focus by persistent key, so a widget can hand it to a node it is about to
     // declare -- a field that should open focused, a dialog stealing it on appearance.
     uint64_t getFocusedKey() const { return m_focusedKey; }

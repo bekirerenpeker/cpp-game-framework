@@ -12,11 +12,10 @@ path; everything else is polish on things that already work.
 
 ## Implement Now
 
-_Empty — pick the next item from the sections below._
+- [ ] **Organize namespaces** — everything is in `Engine`; split into `Engine::UI`, `Engine::Rendering`, `Engine::Audio`, `Engine::ECS` etc. Folds in the `UIWidgets` → `UI` rename.
 
 ## Bugs
 
-- [ ] **Escape while typing quits the game** — `Application::run` closes on Escape and the text field uses it to blur. Needs the `wantsKeyboard()` item under Engine core.
 - [ ] **Home / End / PageUp / PageDown may be dead** — not reproduced; key table is aligned and the arrows share the same path. Suspect the numpad, which glfw reports as `KP_7`/`KP_1`/`KP_9`/`KP_3`. Re-test and say which keys.
 
 ## Gameplay systems — none of this exists yet
@@ -36,7 +35,6 @@ _Empty — pick the next item from the sections below._
 
 - [ ] **Fixed timestep** — accumulator in `Application::run`; physics cannot be deterministic on a variable dt.
 - [ ] **Scene abstraction** — `onEnter`/`onExit`/`update`/`render`, replacing the hand-written test functions and the `main.cpp` switch.
-- [ ] **`UIManager::wantsKeyboard()` / `wantsMouse()`** — so gameplay input yields while a field has focus. `isMouseOverUi()` is half of this already.
 - [ ] **Named input actions** — actions over `InputAxis`, rebindable and serialized.
 - [ ] **Settings file** — resolution, volume, keybinds, through `JsonFile`.
 - [ ] **Hot-reload** — shaders first; it is the fastest iteration win in the engine.
@@ -74,7 +72,6 @@ _Empty — pick the next item from the sections below._
 - [ ] **Clip rects are AABBs** — square children poke into a rounded corner's arc.
 - [ ] **Scrollbars cross in the corner** — no corner gap when both are visible.
 - [ ] **Dashed borders use the mean radius** — dashes drift on a per-corner radius.
-- [ ] **`UIWidgets` → `UI`** — rename and standardise across the project.
 
 ## Text
 
@@ -96,6 +93,8 @@ _Empty — pick the next item from the sections below._
 ## Done
 
 ### UI
+
+- [x] **UI input capture** — `UIManager::isMouseUsed()`/`isKeyboardUsed()` (hover-or-capture, and whether anything holds focus) pushed into `Input::setUiCapture` each frame; every key and button query answers "nothing happened" while captured, so gameplay needs no guard and axes go quiet on their own. The UI reads between the clear and the set, so it never filters itself out.
 
 - [x] **Multi-line text input, selection and clipboard** — `textArea` beside `textField` over one editing core: anchor-based selection, clipboard, word jump, per-line Home/End, PageUp/Down. Caret geometry comes from a real `TextBlock` laid out by the same calculator, so it cannot drift from the glyphs.
 

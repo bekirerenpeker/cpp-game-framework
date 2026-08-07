@@ -43,8 +43,54 @@ class Input : public Singleton<Input>
 
     std::unordered_map<std::string, InputAxis> m_axises;
 
+    bool m_uiKeyboardCapture = false;
+    bool m_uiMouseCapture = false;
+    bool m_pendingUiKeyboardCapture = false;
+    bool m_pendingUiMouseCapture = false;
+
   public:
+    // The device without the UI capture filter, for whatever system is doing the
+    // capturing. Never for gameplay.
+    class Uncaptured
+    {
+        friend class Input;
+
+      private:
+        Input& m_input;
+        explicit Uncaptured(Input& input) : m_input(input) {}
+
+      public:
+        bool keyPressed(KeyCode key) const { return m_input.readKeyPressed(key); }
+        bool keyReleased(KeyCode key) const { return m_input.readKeyReleased(key); }
+        bool keyHeld(KeyCode key) const { return m_input.readKeyHeld(key); }
+        bool keyRepeated(KeyCode key) const { return m_input.readKeyRepeated(key); }
+
+        bool mouseButtonPressed(MouseButton button) const
+        {
+            return m_input.readMouseButtonPressed(button);
+        }
+        bool mouseButtonReleased(MouseButton button) const
+        {
+            return m_input.readMouseButtonReleased(button);
+        }
+        bool mouseButtonHeld(MouseButton button) const
+        {
+            return m_input.readMouseButtonHeld(button);
+        }
+
+        Vec2 getMousePos() const { return m_input.readMousePos(); }
+        Vec2 getScrollDelta() const { return m_input.readScrollDelta(); }
+        std::string_view getTypedText() const { return m_input.readTypedText(); }
+    };
+
     void update();
+
+    Uncaptured uncaptured() { return Uncaptured(*this); }
+
+    // Takes effect on the next update(), so it decays unless re-claimed every frame.
+    void setUiCapture(bool keyboard, bool mouse);
+    bool isKeyboardCapturedByUi() const { return m_uiKeyboardCapture; }
+    bool isMouseCapturedByUi() const { return m_uiMouseCapture; }
 
     void addAxis(const std::string& name, const InputAxis& axis);
     int getAxis(const std::string& name);
@@ -52,10 +98,6 @@ class Input : public Singleton<Input>
     bool keyPressed(KeyCode key);
     bool keyReleased(KeyCode key);
     bool keyHeld(KeyCode key);
-    // True on the frame the key goes down and again on every OS auto-repeat while it is
-    // held, so the delay and the rate are the ones the user configured rather than a
-    // constant picked here. What a caret, a stepper or any held-to-continue action wants;
-    // keyPressed stays the right call for anything that must fire exactly once per press.
     bool keyRepeated(KeyCode key);
 
     bool mouseButtonPressed(MouseButton button);
@@ -63,16 +105,7 @@ class Input : public Singleton<Input>
     bool mouseButtonHeld(MouseButton button);
 
     Vec2 getMousePos();
-    // x right, y up, in wheel ticks. A trackpad reports both axes itself; a wheel only
-    // reports y, so shift moves it onto x here -- which channel a device's scroll lands
-    // in is settled once, so a reader only ever sees a Vec2.
-    Vec2 getScrollDelta();
-
-    // The text typed this frame, UTF-8, empty when nothing was. Characters, not keys:
-    // the OS has already applied the layout, the modifiers and any dead-key composition,
-    // so this is the only correct source for what a text field should insert. Iterate it
-    // with Utf8::next -- one frame can carry several codepoints and one codepoint can be
-    // several bytes.
+    Vec2 getScrollDelta();   // x right, y up, in wheel ticks
     std::string_view getTypedText();
 
   private:
@@ -80,6 +113,17 @@ class Input : public Singleton<Input>
     ~Input() = default;
 
     static const std::unordered_map<int, uint>& glfwKeyLookup();
+
+    bool readKeyPressed(KeyCode key) const;
+    bool readKeyReleased(KeyCode key) const;
+    bool readKeyHeld(KeyCode key) const;
+    bool readKeyRepeated(KeyCode key) const;
+    bool readMouseButtonPressed(MouseButton button) const;
+    bool readMouseButtonReleased(MouseButton button) const;
+    bool readMouseButtonHeld(MouseButton button) const;
+    Vec2 readMousePos() const;
+    Vec2 readScrollDelta() const;
+    std::string_view readTypedText() const;
 };
 
 }   // namespace Engine
