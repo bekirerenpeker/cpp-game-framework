@@ -17,6 +17,7 @@ path; everything else is polish on things that already work.
 ## Bugs
 
 - [ ] **Home / End / PageUp / PageDown may be dead** — not reproduced; key table is aligned and the arrows share the same path. Suspect the numpad, which glfw reports as `KP_7`/`KP_1`/`KP_9`/`KP_3`. Re-test and say which keys.
+- [ ] **Shutdown leaks** — `GlfwContext::quit()` is called from nowhere so glfw's ~90KB never frees, and a `ui_test` text widget outlives its `std::string`; the other ~67KB every scene reports is MSVC's `<chrono>` tzdb cache from `Time.cpp` and is not ours to fix.
 
 ## Gameplay systems — none of this exists yet
 
@@ -77,6 +78,7 @@ path; everything else is polish on things that already work.
 
 - [ ] **Text perf** — pack `TextVertex` to RGBA8, cache layouts, named style tags.
 - [ ] **Font eviction** — nothing removes a font whose bake failed.
+- [ ] **Loading placeholders only exist in the UI** — the placeholder quads shown while a font bakes were wired into the UI path only; `TextRenderer` on its own still has nothing to draw during a cold bake.
 
 ## Performance
 
