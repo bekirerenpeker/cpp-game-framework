@@ -22,6 +22,7 @@ struct FontLoadJob
     FontBakeSettings settings;
     FontData data;
     uint64_t estimatedCost = 0;
+    bool isDefaultFont = false;
     std::atomic<bool> isDone {false};
     bool succeeded = false;
 };
@@ -39,6 +40,7 @@ class FontLoader : public Singleton<FontLoader>
 
     Font* m_defaultFont = nullptr;
     bool m_defaultRequested = false;
+    bool m_isBakingDefaultFont = false;
 
   public:
     std::shared_ptr<FontLoadJob>
@@ -61,7 +63,7 @@ class FontLoader : public Singleton<FontLoader>
     ~FontLoader();
 
     void ensureDefaultFont();
-    std::shared_ptr<FontLoadJob> takeCheapestJob();
+    std::shared_ptr<FontLoadJob> takeNextJob();
 
     void workerMain();
     static void lowerWorkerPriority();

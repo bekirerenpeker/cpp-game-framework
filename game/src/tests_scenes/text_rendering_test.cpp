@@ -144,20 +144,6 @@ int text_rendering_test()
     );
     Font bitmapFont(fontPath, {.atlasType = FontAtlasType::Bitmap, .emPixelSize = 16});
 
-    // Fonts bake on a worker thread now, and everything below this line -- the logged
-    // numbers especially -- is about the real metrics, not the placeholder a loading
-    // font answers with. This is the case waitForLoad exists for.
-    mtsdfFont.waitForLoad();
-    bitmapFont.waitForLoad();
-
-    logFont(mtsdfFont, "mtsdf");
-    logFont(bitmapFont, "bitmap");
-
-    if (!mtsdfFont.isValid() && !bitmapFont.isValid()) {
-        LOG_ERROR("neither atlas could be built from {}; nothing to draw", fontPath);
-        return 1;
-    }
-
     GlShader atlasShader("game/assets/shaders/AtlasDebugShader.glsl");
     // Plain pass-through for the final blit instead of PostProcessingShader, whose
     // UV gradient would tint everything and make the styled colours unverifiable.
@@ -251,64 +237,97 @@ int text_rendering_test()
     bool showBitmap = false;
     int viewMode = 1;
 
-    // Measure every block once and fit the camera to the result, so the whole sheet
-    // is on screen whatever gets added to `cases`. Both fonts come from the same
-    // file and so share metrics, which is why one set of sizes positions both.
+    // Both fonts come from the same file and so share metrics, which is why one set of
+    // sizes positions both.
     const float BLOCK_GAP = 0.04f;
     const float WINDOW_ASPECT = 1.0f;
 
     // TextBlock owns its string and holds views into it, so it is deliberately
     // neither copyable nor movable -- hence pointers rather than a vector of values.
     std::vector<TextBlock*> blocks;
-    float totalHeight = 0.0f, widest = 0.0f;
     for (const TextCase& textCase : cases) {
         TextBlock* block = new TextBlock(&mtsdfFont, textCase.text, base);
         block->setSpanStyles(textCase.spanStyles);
-
-        // An unbounded width breaks only on explicit newlines, which is the
-        // shrink-to-fit measurement this camera fit wants.
-        TextLayoutCalculator::get().calculate(*block, 0.0f);
-        Vec2 size = block->getBounds();
-
         blocks.push_back(block);
-        totalHeight += size.y + BLOCK_GAP;
-        if (size.x > widest) widest = size.x;
     }
 
-    logLayoutProof(mtsdfFont, base, bigCyan, huge);
+    Vec2 blockOrigin = VEC2_ZERO;
+    float fittedOrthoSize = 1.0f;
 
-    // Async only from here: the startup proof above has to survive a hard kill, and
-    // the queue is what the frame loop actually needs.
-    Logger::get().setUseAsync(true);
-    // Room for the mixed-font line appended after the blocks.
-    totalHeight += mtsdfFont.getLineHeight(bigCyan.size);
+    // Per frame rather than once at startup: nothing here waits on a bake, so the sheet
+    // reflows twice on a cold cache -- placeholder, then the borrowed default, then the
+    // real atlas -- and the fit has to follow both swaps. calculate() early-outs on a
+    // clean block, so the settled state costs nothing.
+    auto refit = [&]() {
+        float totalHeight = 0.0f, widest = 0.0f;
+        for (TextBlock* block : blocks) {
+            // An unbounded width breaks only on explicit newlines, which is the
+            // shrink-to-fit measurement this camera fit wants.
+            TextLayoutCalculator::get().calculate(*block, 0.0f);
+            Vec2 size = block->getBounds();
 
-    const Vec2 blockOrigin(-widest * 0.5f, totalHeight * 0.5f);
-    const float fittedOrthoSize = Math::max(totalHeight, widest / WINDOW_ASPECT) * 1.06f;
-    camera.get<CameraComponent>().orthoSize = fittedOrthoSize;
+            totalHeight += size.y + BLOCK_GAP;
+            if (size.x > widest) widest = size.x;
+        }
+
+        // Room for the mixed-font line appended after the blocks.
+        totalHeight += mtsdfFont.getLineHeight(bigCyan.size);
+
+        blockOrigin = Vec2(-widest * 0.5f, totalHeight * 0.5f);
+        fittedOrthoSize = Math::max(totalHeight, widest / WINDOW_ASPECT) * 1.06f;
+    };
 
     bool inputSettled = false;
+    bool cameraTaken = false;
+    bool layoutProven = false;
+    float appliedOrthoSize = -1.0f;
 
     auto onWindowUpdate = [&](IdType id, float dt) {
         TransformComponent& transform = camera.get<TransformComponent>();
         CameraComponent& cam = camera.get<CameraComponent>();
 
+        // Tab swaps the atlas. setFont early-returns when unchanged, so the steady state
+        // costs nothing and only an actual swap re-walks the strings.
+        const Font& font = showBitmap ? bitmapFont : mtsdfFont;
+        for (TextBlock* block : blocks) block->setFont(&font);
+        refit();
+
+        // The proof is about the real metrics, not the placeholder or the borrowed
+        // default, so it waits for the atlas here rather than blocking startup on it.
+        if (!layoutProven && !mtsdfFont.isLoading()) {
+            layoutProven = true;
+            logFont(mtsdfFont, "mtsdf");
+            logFont(bitmapFont, "bitmap");
+            if (mtsdfFont.isReady()) logLayoutProof(mtsdfFont, base, bigCyan, huge);
+
+            // Async only from here: the proof above has to survive a hard kill, and the
+            // queue is what the frame loop actually needs.
+            Logger::get().setUseAsync(true);
+        }
+
         int hAxis = Input::get().getAxis("Horizontal");
         int vAxis = Input::get().getAxis("Vertical");
         int zoomAxis = Input::get().getAxis("Zoom");
 
-        // GLFW reports a phantom held key for the first frames after the window
-        // opens, which would drift the fitted camera before anything is touched.
-        // Hold the fit until every axis reads zero once.
+        // GLFW reports a phantom held key for the first frames after the window opens,
+        // which would drift the fitted camera before anything is touched. Hold the fit
+        // until every axis reads zero once, then keep re-applying it until the user
+        // actually moves -- an atlas landing mid-run reflows the sheet under the camera.
         if (!inputSettled) {
             if (hAxis == 0 && vAxis == 0 && zoomAxis == 0) inputSettled = true;
-            cam.orthoSize = fittedOrthoSize;
-            transform.position.x = 0.0f;
-            transform.position.y = 0.0f;
-        } else {
+        } else if (hAxis != 0 || vAxis != 0 || zoomAxis != 0) {
+            cameraTaken = true;
+        }
+
+        if (cameraTaken) {
             transform.position.x += hAxis * dt * cam.orthoSize;
             transform.position.y += vAxis * dt * cam.orthoSize;
             cam.orthoSize -= zoomAxis * dt * cam.orthoSize;
+        } else if (!inputSettled || fittedOrthoSize != appliedOrthoSize) {
+            appliedOrthoSize = fittedOrthoSize;
+            cam.orthoSize = fittedOrthoSize;
+            transform.position.x = 0.0f;
+            transform.position.y = 0.0f;
         }
 
         if (Input::get().keyPressed(KeyCode::Space)) {
@@ -332,8 +351,10 @@ int text_rendering_test()
         Renderer::get().setShader(&atlasShader);
         Renderer::get().clearColor(Color(0.1f, 0.1f, 0.12f, 1.0f));
 
+        // isReady, not isValid: a loading font has no texture yet, and a null one draws
+        // the batch's white default over the whole screen.
         if (showAtlas) {
-            if (font.isValid()) {
+            if (font.isReady()) {
                 atlasShader.setUniform<int>("uViewMode", viewMode);
                 Renderer::get().addQuad(VEC2_ZERO, VEC2_ONE * 2.0f, COLOR_WHITE, font.getTexture());
             }
@@ -344,12 +365,6 @@ int text_rendering_test()
 
             Vec2 origin = blockOrigin;
             for (TextBlock* block : blocks) {
-                // Tab swaps the atlas. setFont early-returns when unchanged and
-                // calculate early-outs on a clean block, so the steady state costs
-                // nothing and only an actual swap re-walks the strings.
-                block->setFont(&font);
-                TextLayoutCalculator::get().calculate(*block, 0.0f);
-
                 TextRenderer::get().draw(*block, origin);
                 origin.y -= block->getBounds().y + BLOCK_GAP;
             }

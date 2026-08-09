@@ -194,6 +194,21 @@ void Font::waitForLoad()
     finishLoad();
 }
 
+// A loading font measures with the face its text is actually being laid out in -- the
+// default one it borrows -- rather than with PLACEHOLDER_METRICS, so a caller reading a
+// line height straight off the font agrees with what the layout path resolved to. Only
+// the metrics can be borrowed: a glyph carries uvs into the atlas it was baked from, and
+// this font's texture is still null.
+const FontMetrics& Font::getMetrics() const
+{
+    pollLoad();
+    if (m_state != FontLoadState::Loading) return m_metrics;
+
+    const Font* fallback = FontLoader::get().getDefaultFont();
+    if (!fallback || fallback == this || !fallback->isReady()) return m_metrics;
+    return fallback->m_metrics;
+}
+
 // The field encodes distances over +-distanceRange/2 atlas pixels; MAX_FIELD_OFFSET
 // is the shader's saturation clamp expressed back in em.
 float Font::getMaxEffectEm() const

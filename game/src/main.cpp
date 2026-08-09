@@ -6,5 +6,5 @@ using namespace Engine;
 int main()
 {
     Logger::get().addSink<FileSink>("game/output/log.txt");
-    return ui_test();
+    return text_rendering_test();
 }

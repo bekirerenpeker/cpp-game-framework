@@ -68,7 +68,11 @@ void FontLoader::ensureDefaultFont()
         if (!FileManager::get().doesPathExist(candidate)) continue;
 
         LOG_INFO("baking {} as the default font", candidate);
+        // Read back by the submit the constructor below is about to make, since that is
+        // the only way this job can be told apart from any other by the time it is queued.
+        m_isBakingDefaultFont = true;
         m_defaultFont = new Font(candidate, DEFAULT_FONT_BAKE);
+        m_isBakingDefaultFont = false;
         return;
     }
 
@@ -107,6 +111,7 @@ FontLoader::submit(const fs::path& sourcePath, const FontBakeSettings& settings)
     job->sourcePath = sourcePath;
     job->settings = settings;
     job->estimatedCost = estimateCost(settings);
+    job->isDefaultFont = m_isBakingDefaultFont;
 
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -140,18 +145,24 @@ uint64_t FontLoader::estimateCost(const FontBakeSettings& settings)
     return glyphCount * area * perGlyph;
 }
 
-// Shortest job first, so a cheap bitmap atlas queued behind an mtsdf one is not stuck
-// waiting seconds for work it could finish in a fraction of the time. Nothing starves,
-// since the queue is a startup burst rather than a live stream.
-std::shared_ptr<FontLoadJob> FontLoader::takeCheapestJob()
+// The default font first, then shortest job first, so a cheap bitmap atlas queued behind
+// an mtsdf one is not stuck waiting seconds for work it could finish in a fraction of the
+// time. Nothing starves, since the queue is a startup burst rather than a live stream.
+// The default outranks cost because every other font borrows it while it bakes, so a
+// cheaper job overtaking it delays all of them rather than just itself.
+std::shared_ptr<FontLoadJob> FontLoader::takeNextJob()
 {
-    size_t cheapest = 0;
+    size_t next = 0;
     for (size_t i = 1; i < m_queue.size(); i++) {
-        if (m_queue[i]->estimatedCost < m_queue[cheapest]->estimatedCost) cheapest = i;
+        if (m_queue[next]->isDefaultFont != m_queue[i]->isDefaultFont) {
+            if (m_queue[i]->isDefaultFont) next = i;
+            continue;
+        }
+        if (m_queue[i]->estimatedCost < m_queue[next]->estimatedCost) next = i;
     }
 
-    std::shared_ptr<FontLoadJob> job = m_queue[cheapest];
-    m_queue.erase(m_queue.begin() + cheapest);
+    std::shared_ptr<FontLoadJob> job = m_queue[next];
+    m_queue.erase(m_queue.begin() + next);
     return job;
 }
 
@@ -177,7 +188,7 @@ void FontLoader::workerMain()
             m_wakeup.wait(lock, [this] { return !m_isRunning || !m_queue.empty(); });
             if (!m_isRunning) return;
 
-            job = takeCheapestJob();
+            job = takeNextJob();
         }
 
         runJob(*job);

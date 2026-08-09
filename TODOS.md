@@ -17,6 +17,7 @@ path; everything else is polish on things that already work.
 ## Bugs
 
 - [ ] **Home / End / PageUp / PageDown may be dead** — not reproduced; key table is aligned and the arrows share the same path. Suspect the numpad, which glfw reports as `KP_7`/`KP_1`/`KP_9`/`KP_3`. Re-test and say which keys.
+- [ ] **GL errors on shutdown** — three `GL_INVALID_OPERATION` on shader handles as the window closes; a `GlShader` is destroyed after its context is gone.
 - [ ] **Shutdown leaks** — `GlfwContext::quit()` is called from nowhere so glfw's ~90KB never frees, and a `ui_test` text widget outlives its `std::string`; the other ~67KB every scene reports is MSVC's `<chrono>` tzdb cache from `Time.cpp` and is not ours to fix.
 
 ## Gameplay systems — none of this exists yet
@@ -78,7 +79,6 @@ path; everything else is polish on things that already work.
 
 - [ ] **Text perf** — pack `TextVertex` to RGBA8, cache layouts, named style tags.
 - [ ] **Font eviction** — nothing removes a font whose bake failed.
-- [ ] **Loading placeholders only exist in the UI** — the placeholder quads shown while a font bakes were wired into the UI path only; `TextRenderer` on its own still has nothing to draw during a cold bake.
 
 ## Performance
 
@@ -157,6 +157,10 @@ path; everything else is polish on things that already work.
 - [x] **Pre-rewrite UI (superseded)** — the old `UiSystem`/`UiRenderer`/`LayoutCalculator` stack landed in full and was deleted in `a886a32`. Recover with `git show a886a32^:<path>`.
 
 ### Text
+
+- [x] **Loading fonts measure with the face they borrow** — `Font::getMetrics` answers from `FontLoader`'s default while baking instead of `PLACEHOLDER_METRICS`, so measuring a font directly agrees with the layout. Only metrics are borrowed; a glyph's uvs are meaningless against another atlas.
+
+- [x] **Cold bake proven end to end** — `text_rendering_test` dropped its two `waitForLoad` calls, which had frozen the whole scene before the first frame, and refits per frame instead. The default font now outranks cost in `FontLoader`'s queue: a cheaper job overtaking it delays every font that borrows it.
 
 - [x] **Text layout folded out of `TextRenderer`** — wrapping, line boxes and alignment in one stateless `TextLayoutCalculator` over a `TextBlock`. `TextMetrics::step` is shared by the measuring and emitting walks, so widths cannot drift.
 

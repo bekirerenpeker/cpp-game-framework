@@ -111,8 +111,8 @@ class Font : public IResource
     Font& operator=(Font&& other) noexcept;
 
     // The constructor only queues the bake, so every query below answers from a
-    // placeholder (a generic glyph box, no texture, plausible metrics) until the atlas
-    // lands; no call ever blocks on the worker. isValid means "usable" and is true
+    // placeholder (a generic glyph box, no texture, the default face's metrics) until the
+    // atlas lands; no call ever blocks on the worker. isValid means "usable" and is true
     // while loading; isReady asks for the real face, and getLoadVersion changes when
     // it arrives.
     bool isValid() const;
@@ -137,10 +137,10 @@ class Font : public IResource
     float getMaxEffectEm() const;
     float getNativePixelSize() const { return (float)m_settings.emPixelSize; }
 
-    const FontMetrics& getMetrics() const { return m_metrics; }
-    float getLineHeight(float pixelSize) const { return m_metrics.lineHeight * pixelSize; }
-    float getAscender(float pixelSize) const { return m_metrics.ascender * pixelSize; }
-    float getDescender(float pixelSize) const { return m_metrics.descender * pixelSize; }
+    const FontMetrics& getMetrics() const;
+    float getLineHeight(float pixelSize) const { return getMetrics().lineHeight * pixelSize; }
+    float getAscender(float pixelSize) const { return getMetrics().ascender * pixelSize; }
+    float getDescender(float pixelSize) const { return getMetrics().descender * pixelSize; }
 
     const Glyph* getGlyph(uint32_t codepoint) const;
     bool hasGlyph(uint32_t codepoint) const;
