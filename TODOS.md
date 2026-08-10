@@ -18,6 +18,7 @@ path; everything else is polish on things that already work.
 
 - [ ] **Home / End / PageUp / PageDown may be dead** — not reproduced; key table is aligned and the arrows share the same path. Suspect the numpad, which glfw reports as `KP_7`/`KP_1`/`KP_9`/`KP_3`. Re-test and say which keys.
 - [ ] **GL errors on shutdown** — three `GL_INVALID_OPERATION` on shader handles as the window closes; a `GlShader` is destroyed after its context is gone.
+- [ ] **Registry contexts are never freed** — `~Registry` and `clear()` delete the pools but ignore `m_contexes`, and a context is stored as `void*` so no destructor could run anyway. `PhysicsWorld` is the first one holding heap members. Needs a type-erased holder with a virtual destructor, like `ISparseSet`.
 - [ ] **Shutdown leaks** — `GlfwContext::quit()` is called from nowhere so glfw's ~90KB never frees, and a `ui_test` text widget outlives its `std::string`; the other ~67KB every scene reports is MSVC's `<chrono>` tzdb cache from `Time.cpp` and is not ours to fix.
 
 ## Gameplay systems — none of this exists yet

@@ -1,4 +1,5 @@
 #include "EngineInclude.hpp"
+#include "physics/PhysicsManager.hpp"
 #include "test_funcs.hpp"
 
 using namespace Engine;
@@ -26,6 +27,8 @@ int physics_test()
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
     Input::get().addAxis("Zoom", {KeyCode::E, KeyCode::Q});
 
+    auto onFixedUpdate = [&](float dt) { PhysicsManager::get().step(registry, dt); };
+
     auto onWindowUpdate = [&](IdType winId, float dt) {
         TransformComponent& transform = camera.get<TransformComponent>();
         CameraComponent& cam = camera.get<CameraComponent>();
@@ -45,6 +48,7 @@ int physics_test()
     };
 
     Application app(registry);
+    app.onFixedUpdate().bind(&onFixedUpdate);
     app.onWindowUpdate().bind(&onWindowUpdate);
     app.onWindowRender().bind(&onWindowRender);
     app.run();
