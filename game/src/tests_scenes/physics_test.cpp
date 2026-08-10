@@ -1,10 +1,80 @@
 #include "EngineInclude.hpp"
 #include "physics/PhysicsManager.hpp"
 #include "test_funcs.hpp"
+#include <format>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 using namespace Engine;
 
 namespace {
+
+struct SpawnSettings
+{
+    float speedRange = 280.0f;
+    float liftMin = -200.0f;
+    float liftMax = 320.0f;
+    float bouncinessMin = 0.0f;
+    float bouncinessMax = 0.9f;
+    float friction = 0.3f;
+};
+
+// The trigger box publishes onTriggerEnter/onTriggerExit once per pair per crossing; counting
+// them here is what shows the diffing works rather than firing every frame the pair overlaps.
+struct TriggerLog
+{
+    Registry* registry = nullptr;
+    int enterCount = 0;
+    int exitCount = 0;
+    std::unordered_set<Entity> inside;
+    std::vector<std::string> lines;
+
+    void onEnter(const ContactRecord& record);
+    void onExit(const ContactRecord& record);
+    void clear();
+    void push(std::string line);
+};
+
+SpawnSettings g_spawn;
+TriggerLog g_triggerLog;
+
+Entity triggerPartner(Registry& registry, const ContactRecord& record)
+{
+    SparseSet<ColliderComponent>& colliders = registry.getPool<ColliderComponent>();
+    if (colliders.contains(record.a) && colliders.get(record.a).isTrigger) return record.b;
+    return record.a;
+}
+
+void TriggerLog::onEnter(const ContactRecord& record)
+{
+    Entity entity = triggerPartner(*registry, record);
+    enterCount++;
+    inside.insert(entity);
+    push(std::format("enter  entity {}", entity));
+}
+
+void TriggerLog::onExit(const ContactRecord& record)
+{
+    Entity entity = triggerPartner(*registry, record);
+    exitCount++;
+    inside.erase(entity);
+    push(std::format("exit   entity {}", entity));
+}
+
+void TriggerLog::clear()
+{
+    enterCount = 0;
+    exitCount = 0;
+    inside.clear();
+    lines.clear();
+}
+
+void TriggerLog::push(std::string line)
+{
+    lines.insert(lines.begin(), std::move(line));
+    if (lines.size() > 6) lines.pop_back();
+}
 
 EntityHandle makeCollider(Registry& registry, Vec2 pos, BodyType type, bool hasBody)
 {
@@ -52,15 +122,18 @@ void drawColliders(Registry& registry)
     view.each([&](Entity entity, TransformComponent& transform, ColliderComponent& collider) {
         RigidBodyComponent* body = bodies.contains(entity) ? &bodies.get(entity) : nullptr;
         Color color = colliderColor(body, collider);
+        float thickness = g_triggerLog.inside.count(entity) ? 4.0f : 2.0f;
 
         if (collider.shape == ColliderShape::Circle) {
             Collisions::Circle circle = Collisions::toCircle(transform, collider);
-            Renderer::get().addCircleFrame(circle.center, circle.radius, color, 2.0f);
+            Renderer::get().addCircleFrame(circle.center, circle.radius, color, thickness);
             return;
         }
 
         Collisions::Box box = Collisions::toBox(transform, collider);
-        Renderer::get().addFrame(box.center - box.halfExtents, box.halfExtents * 2, color, 2.0f);
+        Renderer::get().addFrame(
+            box.center - box.halfExtents, box.halfExtents * 2, color, thickness
+        );
     });
 }
 
@@ -74,12 +147,15 @@ void drawContacts(Registry& registry)
     }
 }
 
-void toss(EntityHandle entity, float bounciness)
+void toss(EntityHandle entity)
 {
     RigidBodyComponent& body = entity.get<RigidBodyComponent>();
-    body.velocity = Vec2(Random::rangeFloat(-280.0f, 280.0f), Random::rangeFloat(-200.0f, 320.0f));
-    body.bounciness = bounciness;
-    body.friction = 0.3f;
+    body.velocity = Vec2(
+        Random::rangeFloat(-g_spawn.speedRange, g_spawn.speedRange),
+        Random::rangeFloat(g_spawn.liftMin, g_spawn.liftMax)
+    );
+    body.bounciness = Random::rangeFloat(g_spawn.bouncinessMin, g_spawn.bouncinessMax);
+    body.friction = g_spawn.friction;
 }
 
 Entity buildScene(Registry& registry)
@@ -94,14 +170,14 @@ Entity buildScene(Registry& registry)
 
     makeBox(registry, Vec2(250, -240), Vec2(70, 70), BodyType::Static, false, true);
 
-    toss(makeBox(registry, Vec2(-200, 200), Vec2(25, 25), BodyType::Dynamic), 0.0f);
-    toss(makeBox(registry, Vec2(-140, 340), Vec2(30, 18), BodyType::Dynamic), 0.3f);
-    toss(makeBox(registry, Vec2(40, 260), Vec2(20, 20), BodyType::Dynamic), 0.6f);
-    toss(makeBox(registry, Vec2(300, 300), Vec2(35, 35), BodyType::Dynamic), 0.9f);
+    toss(makeBox(registry, Vec2(-200, 200), Vec2(25, 25), BodyType::Dynamic));
+    toss(makeBox(registry, Vec2(-140, 340), Vec2(30, 18), BodyType::Dynamic));
+    toss(makeBox(registry, Vec2(40, 260), Vec2(20, 20), BodyType::Dynamic));
+    toss(makeBox(registry, Vec2(300, 300), Vec2(35, 35), BodyType::Dynamic));
 
-    toss(makeCircle(registry, Vec2(-60, 380), 28.0f, BodyType::Dynamic), 0.2f);
-    toss(makeCircle(registry, Vec2(120, 180), 34.0f, BodyType::Dynamic), 0.55f);
-    toss(makeCircle(registry, Vec2(230, 420), 22.0f, BodyType::Dynamic), 0.85f);
+    toss(makeCircle(registry, Vec2(-60, 380), 28.0f, BodyType::Dynamic));
+    toss(makeCircle(registry, Vec2(120, 180), 34.0f, BodyType::Dynamic));
+    toss(makeCircle(registry, Vec2(230, 420), 22.0f, BodyType::Dynamic));
 
     return platform.getEntity();
 }
@@ -118,6 +194,7 @@ Entity resetScene(Registry& registry)
     world.contacts.clear();
     world.triggerPairs.clear();
     world.prevTriggerPairs.clear();
+    g_triggerLog.clear();
 
     return buildScene(registry);
 }
@@ -148,24 +225,53 @@ const Color QUERY_HIT(1.0f, 0.45f, 0.2f);
 const float CAST_RADIUS = 40.0f;
 const Vec2 CAST_HALF_EXTENTS(50.0f, 32.0f);
 
-void toolbar(bool& resetClicked, QueryMode& mode)
+void panel(Registry& registry, bool& resetClicked, QueryMode& mode)
 {
     using namespace UIWidgets;
 
-    openContainer(
-        {.width = UISizeSpec::grow(), .height = UISizeSpec::grow(), .padding = UIEdges(12.0f)}, {},
-        "physicsToolbar"
-    );
-    openContainer({.gap = 8.0f}, {}, "physicsToolbarRow");
+    PhysicsWorld& world = PhysicsManager::get().getWorld(registry);
+    Collisions::ResolveSettings& resolve = world.resolveSettings;
 
+    openWindow("Physics", {.windowLayout = {.width = UISizeSpec::fixed(320.0f)}});
+
+    openContainer({.gap = 8.0f}, {}, "physicsActions");
     resetClicked = button("Reset Scene", {.key = "physicsReset"}).isReleased;
-
     int selected = static_cast<int>(mode);
     dropdown(QUERY_NAMES, selected, {.key = "queryMode"});
     mode = static_cast<QueryMode>(selected);
+    closeContainer();
 
-    closeContainer();
-    closeContainer();
+    if (openSection("World", {.openByDefault = true, .key = "physicsWorld"})) {
+        sliderFloat("Gravity X", world.gravity.x, -2000.0f, 2000.0f, {.key = "gravityX"});
+        sliderFloat("Gravity Y", world.gravity.y, -2000.0f, 2000.0f, {.key = "gravityY"});
+        sliderFloat("Slop", resolve.penetrationSlop, 0.0f, 5.0f, {.key = "slop"});
+        sliderFloat("Correction", resolve.correctionPercent, 0.0f, 1.0f, {.key = "correction"});
+        sliderFloat("Bounce Thr.", resolve.bounceThreshold, 0.0f, 200.0f, {.key = "bounceThr"});
+    }
+    closeSection();
+
+    if (openSection("Spawn", {.openByDefault = true, .key = "physicsSpawn"})) {
+        sliderFloat("Speed X", g_spawn.speedRange, 0.0f, 800.0f, {.key = "speedX"});
+        sliderFloat("Lift Min", g_spawn.liftMin, -800.0f, 800.0f, {.key = "liftMin"});
+        sliderFloat("Lift Max", g_spawn.liftMax, -800.0f, 800.0f, {.key = "liftMax"});
+        sliderFloat("Bounce Min", g_spawn.bouncinessMin, 0.0f, 1.0f, {.key = "bounceMin"});
+        sliderFloat("Bounce Max", g_spawn.bouncinessMax, 0.0f, 1.0f, {.key = "bounceMax"});
+        sliderFloat("Friction", g_spawn.friction, 0.0f, 1.0f, {.key = "friction"});
+    }
+    closeSection();
+
+    if (openSection("Triggers", {.openByDefault = true, .key = "physicsTriggers"})) {
+        text(
+            std::format(
+                "enters {}   exits {}   inside {}", g_triggerLog.enterCount, g_triggerLog.exitCount,
+                g_triggerLog.inside.size()
+            )
+        );
+        for (const std::string& line : g_triggerLog.lines) text(line);
+    }
+    closeSection();
+
+    closeWindow();
 }
 
 void drawMarker(Vec2 point, Color color)
@@ -361,6 +467,10 @@ int physics_test()
     world.gravity = Vec2(0.0f, -900.0f);
     world.resolveSettings.bounceThreshold = 40.0f;
 
+    g_triggerLog.registry = &registry;
+    world.onTriggerEnter.connect<&TriggerLog::onEnter>(&g_triggerLog);
+    world.onTriggerExit.connect<&TriggerLog::onExit>(&g_triggerLog);
+
     Entity platform = buildScene(registry);
 
     auto onFixedUpdate = [&](float dt) {
@@ -393,7 +503,7 @@ int physics_test()
 
         bool resetClicked = false;
         UIWidgets::clear();
-        toolbar(resetClicked, queryMode);
+        panel(registry, resetClicked, queryMode);
         UIManager::get().draw();
 
         if (resetClicked) platform = resetScene(registry);

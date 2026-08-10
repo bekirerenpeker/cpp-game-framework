@@ -47,6 +47,11 @@ void applyContextOptions()
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);   // Makes it easier to set breakpoints
     glDebugMessageCallback(glDebugOutput, nullptr);
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
+    // Drivers narrate every buffer upload and shader recompile at notification severity, which
+    // buries anything real. Filtered here rather than in the callback so it costs nothing.
+    glDebugMessageControl(
+        GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE
+    );
 
     glEnable(GL_BLEND);
     // Alpha needs its own factors: everything is drawn into a transparent-cleared
@@ -62,16 +67,12 @@ static void glDebugOutput(
     const char* message, const void* userParam
 )
 {
-    // Ignore non-significant error codes
-    // if (id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
-
     std::string msg = "[OpenGL] " + std::string(message);
 
     switch (severity) {
-    case GL_DEBUG_SEVERITY_HIGH        : LOG_ERROR(msg); break;
-    case GL_DEBUG_SEVERITY_MEDIUM      : LOG_WARNING(msg); break;
-    case GL_DEBUG_SEVERITY_LOW         : LOG_INFO(msg); break;
-    case GL_DEBUG_SEVERITY_NOTIFICATION: LOG_INFO(msg); break;
+    case GL_DEBUG_SEVERITY_HIGH  : LOG_ERROR(msg); break;
+    case GL_DEBUG_SEVERITY_MEDIUM: LOG_WARNING(msg); break;
+    case GL_DEBUG_SEVERITY_LOW   : LOG_INFO(msg); break;
     }
 }
 
