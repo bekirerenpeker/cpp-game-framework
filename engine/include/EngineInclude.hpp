@@ -8,3 +8,4 @@
 #include "graphics/GraphicsInclude.hpp"
 #include "components/ComponentsInclude.hpp"
 #include "ui/UiInclude.hpp"
+#include "physics/PhysicsInclude.hpp"

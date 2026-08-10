@@ -5,3 +5,5 @@
 #include "CameraComponent.hpp"
 #include "SpriteComponent.hpp"
 #include "TilemapComponent.hpp"
+#include "ColliderComponent.hpp"
+#include "RigidBodyComponent.hpp"
