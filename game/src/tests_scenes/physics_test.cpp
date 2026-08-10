@@ -38,6 +38,9 @@ int physics_test()
         Renderer::get().clearColor(Color(0.4, 0.1, 0.8));
 
         Renderer::get().beginScene();
+        Renderer::get().addLine(0, 100, COLOR_BLUE);
+        Renderer::get().addFrame(0, 100, COLOR_RED);
+        Renderer::get().addCircleFrame(0, 100, COLOR_GREEN);
         Renderer::get().endScene();
 
         UIWidgets::clear();

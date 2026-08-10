@@ -77,7 +77,7 @@ bool Vec3::operator==(const Vec3& other) const
 bool Vec3::operator!=(const Vec3& other) const { return !(*this == other); }
 
 float Vec3::magnitude() const { return Math::sqrt(x * x + y * y + z * z); }
-float Vec3::sqrMagnitude() const { return x * x + y * y; }
+float Vec3::sqrMagnitude() const { return x * x + y * y + z * z; }
 Vec3 Vec3::normalized() const { return *this / magnitude(); }
 void Vec3::normalize() { *this /= magnitude(); }
 
@@ -117,7 +117,7 @@ float Vec3::dotN(const Vec3& a, const Vec3& b) { return dot(a.normalized(), b.no
 
 Vec3 Vec3::cross(const Vec3& a, const Vec3& b)
 {
-    return Vec3(a.y * b.z - a.z * b.y, a.z - b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+    return Vec3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
 Vec3 Vec3::crossN(const Vec3& a, const Vec3& b) { return cross(a.normalized(), b.normalized()); }
 

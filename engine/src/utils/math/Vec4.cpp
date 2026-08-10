@@ -33,7 +33,7 @@ Vec4 Vec4::operator/(const Vec4& other) const
 }
 
 Vec4 Vec4::operator*(float other) const { return Vec4(x * other, y * other, z * other, w * other); }
-Vec4 Vec4::operator/(float other) const { return Vec4(x / other, y / other, z / other, w * other); }
+Vec4 Vec4::operator/(float other) const { return Vec4(x / other, y / other, z / other, w / other); }
 Vec4 operator*(float left, const Vec4& right)
 {
     return Vec4(left * right.x, left * right.y, left * right.z, left * right.w);

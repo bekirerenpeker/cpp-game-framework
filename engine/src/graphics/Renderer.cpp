@@ -13,6 +13,7 @@
 #include "glad/glad.h"
 #include "graphics/gl_wrappers/GlTexture.hpp"
 #include "utils/TypeAliases.hpp"
+#include "utils/math/MathFuncs.hpp"
 #include "utils/math/Vec2.hpp"
 #include <functional>
 #include <utility>
@@ -56,7 +57,10 @@ void Renderer::clearColor(Color color)
     clear();
 }
 
-void Renderer::setShader(GlShader* shader) { m_batch.setShader(shader); }
+void Renderer::setShader(GlShader* shader)
+{
+    m_batch.setShader(shader ? shader : getDefaultShader());
+}
 
 void Renderer::syncRenderContext()
 {
@@ -199,7 +203,7 @@ void Renderer::renderSprites(Registry& registry)
             currShader = shader;
         }
 
-        addQuad(pos, size, sprite.color, sprite.texture, uvMin, uvMax, transform.rotation);
+        addQuad(pos, size, sprite.color, sprite.texture, transform.rotation, uvMin, uvMax);
     }
 
     if (currShader != passShader) {
@@ -209,8 +213,9 @@ void Renderer::renderSprites(Registry& registry)
 }
 
 void Renderer::addQuad(
-    Vec2 pos, Vec2 size, Color color, const GlTexture* texture, Vec2 uvMin, Vec2 uvMax,
-    float angleRad
+    Vec2 pos, Vec2 size, Color color, const GlTexture* texture, float angleRad, Vec2 uvMin,
+    Vec2 uvMax
+
 )
 {
     const Vec2 corners[4] = {Vec2(-1, -1), Vec2(+1, -1), Vec2(+1, +1), Vec2(-1, +1)};
@@ -223,20 +228,16 @@ void Renderer::addQuad(
 
     BatchRenderer<VertexData>::Quad quad = m_batch.nextQuad(texture);
 
-    // remove this angle == 0 check if it leads to performance issues
-    bool rotated = angleRad != 0;
+    bool rotated = angleRad != 0;   // remove this check if it leads to performance issues
     for (int i = 0; i < 4; i++) {
-        Vec2 corner = rotated ? corners[i].rotatedAround(VEC2_ZERO, angleRad) : corners[i];
-        quad.verts[i] = {pos + corner * size / 2.f, uvs[i], color, quad.texIndex};
+        Vec2 corner = corners[i] * size / 2.f;
+        if (rotated) corner = corner.rotatedAround(VEC2_ZERO, angleRad);
+        quad.verts[i] = {pos + corner, uvs[i], color, quad.texIndex};
     }
 }
 
 void Renderer::addLine(Vec2 start, Vec2 end, Color color, float thickness)
 {
-    if (m_boundWindowId == INVALID_ID) return;
-    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
-    if (!context || !context->srcBuffer()) return;
-
     Vec2 direction = end - start;
     float length = direction.magnitude();
     if (length == 0) return;
@@ -244,43 +245,46 @@ void Renderer::addLine(Vec2 start, Vec2 end, Color color, float thickness)
     Vec2 center = (start + end) * 0.5f;
     float angle = std::atan2(direction.y, direction.x);
 
-    addQuad(
-        center, Vec2(length, thickness), color, context->srcBuffer()->getTexture(), VEC2_ZERO,
-        VEC2_ONE, angle
-    );
+    addQuad(center, Vec2(length, thickness), color, nullptr, angle);
 }
 
 void Renderer::addFrame(Vec2 pos, Vec2 size, Color color, float thickness)
 {
-    if (m_boundWindowId == INVALID_ID) return;
-    IRenderContext* context = WindowManager::get().getWindow(m_boundWindowId);
-    if (!context || !context->srcBuffer()) return;
-
-    GlTexture* texture = context->srcBuffer()->getTexture();
-
     // Top edge (full width)
-    addQuad(
-        pos + Vec2(size.x * 0.5f, thickness * 0.5f), Vec2(size.x, thickness), color, texture,
-        VEC2_ZERO, VEC2_ONE
-    );
+    addQuad(pos + Vec2(size.x * 0.5f, thickness * 0.5f), Vec2(size.x, thickness), color, nullptr);
 
     // Bottom edge (full width)
     addQuad(
         pos + Vec2(size.x * 0.5f, size.y - thickness * 0.5f), Vec2(size.x, thickness), color,
-        texture, VEC2_ZERO, VEC2_ONE
+        nullptr
     );
 
     // Left edge (excluding corners)
     addQuad(
         pos + Vec2(thickness * 0.5f, size.y * 0.5f), Vec2(thickness, size.y - 2 * thickness), color,
-        texture, VEC2_ZERO, VEC2_ONE
+        nullptr
     );
 
     // Right edge (excluding corners)
     addQuad(
         pos + Vec2(size.x - thickness * 0.5f, size.y * 0.5f),
-        Vec2(thickness, size.y - 2 * thickness), color, texture, VEC2_ZERO, VEC2_ONE
+        Vec2(thickness, size.y - 2 * thickness), color, nullptr
     );
+}
+
+void Renderer::addCircleFrame(
+    Vec2 pos, float radius, Color color, float thickness, float segmentDistance
+)
+{
+    int segments = radius * TAU / segmentDistance;
+
+    for (int i = 0; i < segments; i++) {
+        float currAngle = i / (float)(segments - 1) * TAU;
+        float nextAngle = ((i + 1) % segments) / (float)(segments - 1) * TAU;
+        Vec2 currPos = Vec2(Math::cos(currAngle), Math::sin(currAngle)) * radius;
+        Vec2 nextPos = Vec2(Math::cos(nextAngle), Math::sin(nextAngle)) * radius;
+        addLine(currPos, nextPos, color, thickness);
+    }
 }
 
 }   // namespace Engine

@@ -30,11 +30,9 @@ class Renderer : public Singleton<Renderer>
     BatchRenderer<VertexData> m_batch;
 
   public:
-    // A null shader takes the engine's own, which is what almost every caller wants;
-    // pass one only to render the batch through something else.
     void init(size_t maxQuadCount = 2000, GlShader* shader = nullptr);
 
-    void setShader(GlShader* shader);
+    void setShader(GlShader* shader = nullptr);
     GlShader* getDefaultShader();
     void releaseRenderContext();
 
@@ -51,11 +49,15 @@ class Renderer : public Singleton<Renderer>
     void renderSprites(Registry& registry);
 
     void addQuad(
-        Vec2 pos, Vec2 size, Color color, const GlTexture* texture, Vec2 uvMin = VEC2_ZERO,
-        Vec2 uvMax = VEC2_ONE, float angleRad = 0.0f
+        Vec2 pos, Vec2 size, Color color, const GlTexture* texture, float angleRad = 0.0f,
+        Vec2 uvMin = VEC2_ZERO, Vec2 uvMax = VEC2_ONE
     );
-    void addLine(Vec2 start, Vec2 end, Color color, float thickness = 1.0f);
-    void addFrame(Vec2 pos, Vec2 size, Color color, float thickness = 1.0f);
+
+    void addLine(Vec2 start, Vec2 end, Color color, float thickness = 1.5f);
+    void addFrame(Vec2 pos, Vec2 size, Color color, float thickness = 1.5f);
+    void addCircleFrame(
+        Vec2 pos, float radius, Color color, float thickness = 1.5f, float segmentDistance = 10.f
+    );
 
   private:
     void syncRenderContext();
