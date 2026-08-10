@@ -1,6 +1,7 @@
 #pragma once
 
 #include "components/ColliderComponent.hpp"
+#include "components/RigidBodyComponent.hpp"
 #include "components/TransformComponent.hpp"
 #include "ecs/registry/Entity.hpp"
 #include "utils/TypeAliases.hpp"
@@ -43,6 +44,15 @@ struct RayHit
     Entity entity = NULL_ENTITY;   // only set if testing against whole registery
 };
 
+struct ResolveSettings
+{
+    float penetrationSlop = 0.01f;
+    float correctionPercent = 0.8f;
+};
+
+Box toBox(const TransformComponent& t, const ColliderComponent& c);
+Circle toCircle(const TransformComponent& t, const ColliderComponent& c);
+
 bool testPointBox(const Vec2& point, const Box& box);
 bool testPointCircle(const Vec2& point, const Circle& circle);
 bool testPointCollider(const Vec2& point, const TransformComponent& t, const ColliderComponent& c);
@@ -57,6 +67,11 @@ Contact testBoxCircle(const Box& b, const Circle& c);
 Contact testColliders(
     const TransformComponent& t1, const ColliderComponent& c1, const TransformComponent& t2,
     const ColliderComponent& c2
+);
+
+void resolveContact(
+    TransformComponent& t1, RigidBodyComponent* body1, TransformComponent& t2,
+    RigidBodyComponent* body2, const Contact& contact, const ResolveSettings& settings = {}
 );
 
 }   // namespace Collisions

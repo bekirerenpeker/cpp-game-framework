@@ -1,5 +1,7 @@
 #include "physics/PhysicsManager.hpp"
 #include "ecs/registry/View.hpp"
+#include "components/RigidBodyComponent.hpp"
+#include "components/TransformComponent.hpp"
 
 namespace Engine {
 
@@ -89,7 +91,9 @@ void PhysicsManager::collideEntities(Registry& registry, PhysicsWorld& world)
                 world.triggerPairs.insert(PhysicsWorld::pairKey(a, b));
                 continue;
             }
-            resolve(transformA, bodyA, transformB, bodyB, contact);
+            Collisions::resolveContact(
+                transformA, bodyA, transformB, bodyB, contact, world.resolveSettings
+            );
         }
     }
 }

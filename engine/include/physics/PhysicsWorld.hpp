@@ -24,8 +24,7 @@ struct PhysicsWorld
 {
     Vec2 gravity = Vec2(0.0f, -9.81f);
 
-    float penetrationSlop = 0.01f;
-    float correctionPercent = 0.8f;
+    Collisions::ResolveSettings resolveSettings;
 
     std::vector<ContactRecord> contacts;
 

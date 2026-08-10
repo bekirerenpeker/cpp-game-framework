@@ -2,8 +2,6 @@
 
 #include "Collisions.hpp"
 #include "PhysicsWorld.hpp"
-#include "components/RigidBodyComponent.hpp"
-#include "components/TransformComponent.hpp"
 #include "ecs/registry/Registry.hpp"
 #include "utils/Singleton.hpp"
 #include <vector>
@@ -28,18 +26,13 @@ class PhysicsManager : public Singleton<PhysicsManager>
     std::vector<Collisions::RayHit> rayTestAll(Registry& registry, const Collisions::Ray& ray);
 
   private:
+    PhysicsManager() = default;
+    ~PhysicsManager() = default;
+
     void beginStep(PhysicsWorld& world);
     void integrate(Registry& registry, PhysicsWorld& world, float dt);
     void collideEntities(Registry& registry, PhysicsWorld& world);
     void dispatchTriggerEvents(PhysicsWorld& world);
-
-    void resolve(
-        TransformComponent& t1, RigidBodyComponent* body1, TransformComponent& t2,
-        RigidBodyComponent* body2, const Collisions::Contact& contact
-    );
-
-    PhysicsManager() = default;
-    ~PhysicsManager() = default;
 };
 
 }   // namespace Engine
