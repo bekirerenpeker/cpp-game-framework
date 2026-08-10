@@ -50,11 +50,15 @@ void resolveContact(
     // together again would make bodies stick.
     if (alongNormal > 0) return;
 
-    float restitution = Math::min(
-        body1 ? body1->restitution : 0.0f,   //
-        body2 ? body2->restitution : 0.0f
+    float bounciness = Math::max(
+        body1 ? body1->bounciness : 0.0f,   //
+        body2 ? body2->bounciness : 0.0f
     );
-    float normalImpulse = -(1.0f + restitution) * alongNormal / inverseMassSum;
+    // Gravity feeds a body a little approach speed every step, so a bouncy one resting on the
+    // floor would micro-hop forever without a floor under which a contact counts as a rest.
+    if (-alongNormal < settings.bounceThreshold) bounciness = 0.0f;
+
+    float normalImpulse = -(1.0f + bounciness) * alongNormal / inverseMassSum;
 
     addVelocity(body1, contact.normal * -normalImpulse, inverseMass1);
     addVelocity(body2, contact.normal * normalImpulse, inverseMass2);

@@ -48,6 +48,7 @@ struct ResolveSettings
 {
     float penetrationSlop = 0.01f;
     float correctionPercent = 0.8f;
+    float bounceThreshold = 1.0f;
 };
 
 Box toBox(const TransformComponent& t, const ColliderComponent& c);

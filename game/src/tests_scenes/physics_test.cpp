@@ -74,10 +74,12 @@ void drawContacts(Registry& registry)
     }
 }
 
-void toss(EntityHandle entity)
+void toss(EntityHandle entity, float bounciness)
 {
-    entity.get<RigidBodyComponent>().velocity =
-        Vec2(Random::rangeFloat(-280.0f, 280.0f), Random::rangeFloat(-200.0f, 320.0f));
+    RigidBodyComponent& body = entity.get<RigidBodyComponent>();
+    body.velocity = Vec2(Random::rangeFloat(-280.0f, 280.0f), Random::rangeFloat(-200.0f, 320.0f));
+    body.bounciness = bounciness;
+    body.friction = 0.3f;
 }
 
 Entity buildScene(Registry& registry)
@@ -92,14 +94,14 @@ Entity buildScene(Registry& registry)
 
     makeBox(registry, Vec2(250, -240), Vec2(70, 70), BodyType::Static, false, true);
 
-    toss(makeBox(registry, Vec2(-200, 200), Vec2(25, 25), BodyType::Dynamic));
-    toss(makeBox(registry, Vec2(-140, 340), Vec2(30, 18), BodyType::Dynamic));
-    toss(makeBox(registry, Vec2(40, 260), Vec2(20, 20), BodyType::Dynamic));
-    toss(makeBox(registry, Vec2(300, 300), Vec2(35, 35), BodyType::Dynamic));
+    toss(makeBox(registry, Vec2(-200, 200), Vec2(25, 25), BodyType::Dynamic), 0.0f);
+    toss(makeBox(registry, Vec2(-140, 340), Vec2(30, 18), BodyType::Dynamic), 0.3f);
+    toss(makeBox(registry, Vec2(40, 260), Vec2(20, 20), BodyType::Dynamic), 0.6f);
+    toss(makeBox(registry, Vec2(300, 300), Vec2(35, 35), BodyType::Dynamic), 0.9f);
 
-    toss(makeCircle(registry, Vec2(-60, 380), 28.0f, BodyType::Dynamic));
-    toss(makeCircle(registry, Vec2(120, 180), 34.0f, BodyType::Dynamic));
-    toss(makeCircle(registry, Vec2(230, 420), 22.0f, BodyType::Dynamic));
+    toss(makeCircle(registry, Vec2(-60, 380), 28.0f, BodyType::Dynamic), 0.2f);
+    toss(makeCircle(registry, Vec2(120, 180), 34.0f, BodyType::Dynamic), 0.55f);
+    toss(makeCircle(registry, Vec2(230, 420), 22.0f, BodyType::Dynamic), 0.85f);
 
     return platform.getEntity();
 }
@@ -157,7 +159,9 @@ int physics_test()
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
     Input::get().addAxis("Zoom", {KeyCode::E, KeyCode::Q});
 
-    registry.getContext<PhysicsWorld>().gravity = Vec2(0.0f, -900.0f);
+    PhysicsWorld& world = registry.getContext<PhysicsWorld>();
+    world.gravity = Vec2(0.0f, -900.0f);
+    world.resolveSettings.bounceThreshold = 40.0f;
 
     Entity platform = buildScene(registry);
 
