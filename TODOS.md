@@ -23,8 +23,8 @@ path; everything else is polish on things that already work.
 
 ## Gameplay systems — none of this exists yet
 
-- [ ] **Collision + physics** — fixed step, colliders as components, MTV resolution, tilemap as a spatial query. Stepwise plan in [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md). The blocker for any movement at all.
-- [ ] **Character controller** — grounded/airborne states, coyote time, jump buffering.
+- [ ] **Tilemap collisions** — solidity on the tileset, a per-chunk solid bitmask, AABB→tile query and axis-separated movement. Next step in [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md); the last piece before anything can walk on the world.
+- [ ] **Character controller** — a controllable body in `physics_test` first, then grounded/airborne states, coyote time, jump buffering. Forces the `onFixedUpdate`-before-`Input::update` decision.
 - [ ] **World save/load** — ECS + tilemap through `JsonFile`/`BinaryFile`; chunked so a big world streams.
 - [ ] **2D lighting** — tile flood-fill into a light texture sampled by the tile and sprite shaders. Terraria's signature look.
 - [ ] **Sprite animation** — frame ranges over a `TextureAtlas`, plus a small state machine component.
@@ -34,7 +34,6 @@ path; everything else is polish on things that already work.
 
 ## Engine core
 
-- [ ] **Fixed timestep** — accumulator on `Time`, drained in `Application::run`; step 1 of [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md).
 - [ ] **Scene abstraction** — `onEnter`/`onExit`/`update`/`render`, replacing the hand-written test functions and the `main.cpp` switch.
 - [ ] **Named input actions** — actions over `InputAxis`, rebindable and serialized.
 - [ ] **Settings file** — resolution, volume, keybinds, through `JsonFile`.
@@ -94,6 +93,14 @@ path; everything else is polish on things that already work.
 ## Done
 
 ### Physics
+
+- [x] **Fixed timestep** — accumulator and step count on `Time`, drained by
+  `Application::onFixedUpdate`. Per frame, not per window. A dt clamp, a step cap and a discarded
+  remainder are what keep one stall from becoming a death spiral.
+
+- [x] **Collision and resolution** — collider and rigidbody components, all three narrowphase pairs
+  behind one `Contact`, MTV resolution with bounciness and friction, contacts exposed as output,
+  and deferred trigger enter/exit events. Remaining work is in [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md).
 
 - [x] **Scene queries and shape casts** — point/box/circle overlap, ray, and circle/box casts on
   `PhysicsManager`, each in closest and `*All` form, defined in `PhysicsQueries.cpp`. A cast is a

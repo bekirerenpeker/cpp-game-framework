@@ -10,15 +10,17 @@ to the code; this file is the order of work.
 does not:
 
 ```cpp
-struct Contact { Vec2 normal; float depth; Vec2 point; };   // normal points A -> B
-
-bool testBoxBox(const Box&, const Box&, Contact& out);
-bool testCircleCircle(const Circle&, const Circle&, Contact& out);
-bool testBoxCircle(const Box&, const Circle&, Contact& out);
+struct Contact
+{
+    bool isTouching = false;
+    Vec2 point, normal;       // normal points A -> B
+    float depth;
+    Entity entity = NULL_ENTITY;   // only set when testing against the whole registry
+};
 ```
 
 `Box`/`Circle` are plain structs built from `(TransformComponent, ColliderComponent)`
-by a small adapter — the test functions never see a component or an `Entity`. That is
+by `toBox`/`toCircle` — the test functions never see a component or an `Entity`. That is
 what keeps the resolver shape-blind, keeps the tilemap from needing its own tests, and
 makes rotated colliders a later addition rather than a rewrite.
 
@@ -26,129 +28,48 @@ The tilemap is **not** a fourth shape. It is a query: *given a world AABB, yield
 solid tile boxes it overlaps.* Its collisions run through `testBoxBox` and
 `testBoxCircle` like everything else. Three tests, not six.
 
+Shape casts follow from the same idea: a sweep is a ray against the target grown by the
+moving shape, so `testRayRoundedBox` covers every cast and nothing steps.
+
 ---
 
-## Steps
+## Done
 
-### 1. Fixed timestep on `Time`
+- **Fixed timestep** — accumulator and step count on `Time`, with a dt clamp, a step cap
+  and a discarded remainder so a stall cannot death-spiral. Drained by
+  `Application::onFixedUpdate`, per frame rather than per window.
+- **Components** — `ColliderComponent` (one component, `shape` picks which size field is
+  read; `TransformComponent::scale` multiplies the extents) and `RigidBodyComponent`
+  (`mass` rather than inverse mass; `bounciness`, `friction`, `gravityScale`, `BodyType`).
+  No rigidbody at all = static.
+- **`PhysicsManager` + `PhysicsWorld`** — stateless singleton over
+  `registry.getContext<PhysicsWorld>()`. `step` runs beginStep → integrate →
+  collideEntities → dispatchTriggerEvents. Broadphase is still the naive double loop.
+- **All three narrowphase pairs** — box/box, circle/circle, box/circle, each returning a
+  `Contact`; the dispatch canonicalises pair order and negates the normal on the one flip.
+- **Resolution** — slop-adjusted positional correction split by inverse mass, then a
+  normal impulse with `max` bounciness and a rest threshold, then Coulomb-clamped friction.
+- **Contacts as output** — `getContacts(registry)` and a per-entity overload that
+  reorients the normal away from the queried entity. `impactSpeed` is sampled before the
+  solver zeroes it.
+- **Trigger events** — detect, record, skip the solve; packed `uint64_t` pair keys diffed
+  against the previous step and fired through `Signal` *after* the pair loop, so an enter
+  is knowable and a listener cannot invalidate the view it is iterating.
+- **Scene queries and shape casts** — point/box/circle overlap, ray, and circle/box casts
+  in closest and `*All` forms on `PhysicsManager`, all closed-form.
+- **`physics_test` scene** — every body type, a kinematic platform, a trigger box, debug
+  draw local to the scene, a UI window driving world and spawn settings live, a query-mode
+  selector, and a trigger enter/exit counter proving the diffing fires once per crossing.
 
-Accumulator in `Time`, drained by the caller:
+Layout: `Collisions.hpp` declares the namespace; `engine/src/physics/collisions/` holds
+`CollisionTests`, `CollisionQueries`, `CollisionResolve` and `ShapeCasts`;
+`PhysicsManager.cpp` is the step loop and `PhysicsQueries.cpp` the query members.
 
-```cpp
-float fixedDeltaTime() const;      // 1/60 default, settable
-bool  consumeFixedStep();          // decrements the accumulator; false when drained
-```
+---
 
-Clamp to ~5 steps per frame — an unclamped accumulator turns one stall into a death
-spiral. `consumeFixedStep` rather than `isFixedUpdateFrame`: a bool can never say
-"three steps this frame", and a long frame would silently run physics slow.
+## Next
 
-### 2. `Application::onFixedUpdate`
-
-New `Delegate<void(float)> m_onFixedUpdate`, run as
-`while (Time::get().consumeFixedStep()) { physics step; m_onFixedUpdate(fixedDt); }`.
-
-`Delegate` is single-bind, so `Application` calls the physics step itself and the
-delegate is the scene's slot, not physics'.
-
-**Open:** where in the loop. Today `onFrame` runs *before* `Input::update` (input is
-per-window, inside the window loop). Physics does not care, but a character controller
-in `onFixedUpdate` would read one-frame-stale input. Decide when the controller lands.
-
-### 3. Debug draw for colliders — *before any collision code*
-
-Wireframe boxes and circles over the existing `addLine`/`addFrame`, plus contact
-normals once there are contacts. Already on TODOS.md as "Debug draw channel". Every
-step after this is debugged by looking at it; without it the whole roadmap is blind.
-
-### 4. `ColliderComponent`
-
-One component, not one per shape — the physics loop stays a single view, and "does this
-entity collide at all" stays one pool lookup.
-
-```cpp
-enum class ColliderShape : uint8_t { Box, Circle, Tilemap };
-
-struct ColliderComponent
-{
-    ColliderShape shape = ColliderShape::Box;
-    Vec2 halfExtents = VEC2_ONE * 0.5f;   // Box
-    float radius = 0.5f;                  // Circle
-    Vec2 offset = VEC2_ZERO;
-    bool isTrigger = false;
-};
-```
-
-Two size fields rather than an overloaded one: four wasted bytes buys a field name that
-means what it says. `shape` decides which is read.
-
-`Tilemap` reads the sibling `TilemapComponent` on the same entity instead of carrying
-geometry — one component type still answers "is this collidable".
-
-**Decide:** does `TransformComponent::scale` multiply the extents? Recommended yes (box
-by `abs(scale)`, circle by its max component), so a scaled sprite's collider follows it.
-Physics uses `position.xy` only and never writes `z`.
-
-### 5. `RigidBodyComponent`
-
-```cpp
-enum class BodyType : uint8_t { Static, Kinematic, Dynamic };
-
-struct RigidBodyComponent
-{
-    Vec2 velocity = VEC2_ZERO;
-    float inverseMass = 1.0f, restitution = 0.0f, friction = 0.0f, gravityScale = 1.0f;
-    BodyType type = BodyType::Dynamic;
-};
-```
-
-This replaces a "skip resolution" flag. **No rigidbody at all = static** — it blocks,
-it is never moved, it is never integrated. Kinematic moves and pushes but is never
-pushed back (moving platforms). Static-vs-static is never tested, which is also why
-tilemap-vs-tilemap needs no opt-out field.
-
-"Trigger" and "static" are different axes and belong on different components: trigger
-is what a contact *means*, body type is how the entity *responds*.
-
-### 6. `PhysicsManager` skeleton + `physics_test` scene
-
-Stateless singleton in the house style — `PhysicsManager::get().step(registry, dt)` —
-with its persistent state in `registry.getContext<PhysicsWorld>()`, so nothing leaks
-between scenes and two registries work without the manager knowing.
-
-Four phases from the start, even while three are empty:
-
-```
-integrate -> broadphase pairs -> narrowphase contacts -> solve
-```
-
-Broadphase is a naive double loop behind a `pairs()` call. The grid in step 10 replaces
-the body of that one function and nothing else.
-
-Ship `game/src/tests_scenes/physics_test.cpp` in this step — it is the harness for
-everything below, and a new `.cpp` needs a CMake *configure*, not just a build.
-
-### 7. Box/box, detection **and** resolution
-
-The whole solve path, once, on the easiest shape:
-
-- MTV: overlap per axis, push out along the axis of least penetration.
-- Split the correction by inverse mass; dynamic-vs-static moves only the dynamic one.
-- Zero the velocity along the contact normal. Restitution/friction optional, `e = 0`
-  default.
-- **Emit contacts as output.** Grounded checks, wall slides and coyote time are all
-  `normal.y > 0.7` on that list. Bolted on later it is always worse.
-- Trigger colliders: detect, record, skip the solve. Cheap here, and it lets detection
-  be tested without resolution muddying it.
-
-Ignore `transform.rotation` — see step 12. Rest of the shapes are additions to this;
-this is the step that has to be right.
-
-### 8. Circle/circle and box/circle
-
-Detection only. Both return a `Contact`, so the solver from step 7 is untouched.
-
-### 9. Tilemap collisions
+### 1. Tilemap collisions
 
 Two halves.
 
@@ -165,41 +86,52 @@ without this catches on seams — walking across a flat floor, least-penetration
 boundary comes out horizontal and shoves you sideways. Clamping per-step displacement to
 under half a tile kills most tunneling too, and is far simpler than swept AABBs.
 
----
+`ColliderShape::Tilemap` already exists and every test skips it, so this is additive.
 
-## Further out
+### 2. Playable character in the test scene
 
-### 10. Grid broadphase
+A controllable body dropped into the existing scene — the ball pit. This is the step that
+actually exercises everything above, because a controller is the one thing that notices
+when contacts are subtly wrong.
+
+- Grounded / wall-touching from the contact list (`normal.y > 0.7`), not a separate raycast.
+- A capsule is the usual answer; a box plus a circle-cast for the feet is the cheap one,
+  and the casts are already there.
+- Dynamic body so the pit shoves it around, with high friction, zero bounciness and
+  direct velocity control on the horizontal axis.
+- **Resolves the open question from the fixed-step work:** `onFixedUpdate` runs before
+  `Input::update` (input is per-window, inside the window loop), so a controller reading
+  input there gets it one frame stale. Either the controller latches input in `onFrame`
+  and consumes it in `onFixedUpdate`, or the loop order changes. Decide here, with
+  something on screen to feel the difference.
+
+### 3. Grid broadphase
 
 Uniform spatial hash sized to a few tiles, rebuilt each step; test against the current
-cell and its neighbours. Swaps in behind `pairs()` from step 6. No threading — in a
-Terraria-like the dominant cost is entity-vs-tilemap, which has no pair loop at all.
-The phase split leaves the door open if profiling ever disagrees.
+cell and its neighbours. Replaces the body of the pair loop and nothing else — the scene
+queries in `PhysicsQueries.cpp` should route through it at the same time, since they are
+all full-registry scans today. No threading: in a Terraria-like the dominant cost is
+entity-vs-tilemap, which has no pair loop at all.
 
-### 11. Hardening pass
+### 4. Hardening pass
 
 The named failure modes, not a vague "fix bugs":
 
-- resting jitter — a body oscillating on a floor; needs a small penetration slop.
+- resting jitter — a body oscillating on a floor; the penetration slop exists, tune it.
 - resolution order dependence — sparse-set iteration order changes the outcome.
 - corner cases where two axes tie on penetration depth.
 - fast movers vs thin colliders that the half-tile clamp does not cover.
 - one-way platforms: up-moving, and standing on the edge.
-- triggers overlapping without ever resolving.
+- initial overlap in a shape cast, which currently reports distance 0 with a zero normal.
 
-### 12. Trigger events
-
-Enter/stay/exit, not just "overlapping". Packed pair keys (`uint64_t` from two entity
-ids) in `PhysicsWorld`, current diffed against previous each step, fired through the
-existing `Signal`/`Sink`. The `isTrigger` bool and the contact list land back in step 7;
-only the event diffing is here.
-
-### 13. Optional rotated colliders
+### 5. Optional rotated colliders
 
 Opt-in per collider. Adds `testObbObb` + `testObbCircle` and one branch in the dispatch;
 because the tests take `Box`/`Circle` structs and not components, nothing else changes.
-Deliberately not first — OBBs mean SAT, real manifolds and eventually angular velocity
-and inertia, for a game whose colliders are all upright.
+The analytic shape casts do **not** survive this — Minkowski sums of OBBs are not OBBs, so
+a rotated cast needs conservative advancement. Deliberately last: OBBs mean SAT, real
+manifolds and eventually angular velocity, torque and inertia, for a game whose colliders
+are all upright.
 
 ### Not scheduled
 
