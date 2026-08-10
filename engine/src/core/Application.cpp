@@ -6,7 +6,6 @@
 #include "core/window_management/ViewContext.hpp"
 #include "core/window_management/Window.hpp"
 #include "core/window_management/WindowManager.hpp"
-#include "ecs/registry/Registry.hpp"
 
 namespace Engine {
 
@@ -19,6 +18,12 @@ void Application::run()
 
         if (m_onFrame.isBound()) m_onFrame(dt);
 
+        if (m_onFixedUpdate.isBound()) {
+            for (int i = 0; i < Time::get().getFixedTimeStepsInFrame(); i++) {
+                m_onFixedUpdate(Time::get().getFixedDeltaTime());
+            }
+        }
+
         for (auto& [windowId, window] : WindowManager::get().getAllWindows()) {
             ViewContext::get().setActiveWindow(windowId);
             Input::get().update();
@@ -28,8 +33,6 @@ void Application::run()
             bool escapeClosed = m_closeOnEscape && Input::get().keyPressed(KeyCode::Escape);
             if (!window->isOpen() || escapeClosed) m_windowsToClose.push_back(windowId);
 
-            // Camera transforms are final only after onWindowUpdate, so the
-            // view-proj matrix is baked here rather than before it.
             ViewContext::get().updateCamera(m_registry);
             if (m_onWindowRender.isBound()) m_onWindowRender(windowId, dt);
 

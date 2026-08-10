@@ -8,13 +8,6 @@ namespace Engine {
 
 class Registry;
 
-// Owns the per-frame/per-window bookkeeping that every windowed scene repeats
-// verbatim: the anyWindowOpen loop, Time::update, per-window
-// ViewContext::setActiveWindow + Input::update, close-window collection,
-// ViewContext::updateCamera (called once camera transforms for the window are
-// final, before rendering), swapBuffers, and GlfwContext::pollEvents. The
-// render body itself -- shaders, passes, draw calls -- stays scene-owned in
-// the bound callbacks. Each phase is optional; an unbound one is skipped.
 class Application
 {
   private:
@@ -23,6 +16,7 @@ class Application
     std::vector<IdType> m_windowsToClose;
 
     Delegate<void(float)> m_onFrame;
+    Delegate<void(float)> m_onFixedUpdate;
     Delegate<void(IdType, float)> m_onWindowUpdate;
     Delegate<void(IdType, float)> m_onWindowRender;
 
@@ -30,6 +24,7 @@ class Application
     explicit Application(Registry& registry) : m_registry(registry) {}
 
     Delegate<void(float)>& onFrame() { return m_onFrame; }
+    Delegate<void(float)>& onFixedUpdate() { return m_onFixedUpdate; }
     Delegate<void(IdType, float)>& onWindowUpdate() { return m_onWindowUpdate; }
     Delegate<void(IdType, float)>& onWindowRender() { return m_onWindowRender; }
 

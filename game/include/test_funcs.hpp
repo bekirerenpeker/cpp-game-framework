@@ -7,3 +7,4 @@ int batch_renderer_test();
 int tilemap_test();
 int text_rendering_test();
 int ui_test();
+int physics_test();
