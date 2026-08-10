@@ -89,7 +89,7 @@ void TilemapRenderer::render(TilemapComponent& tilemap)
         }
     }
 
-    const float time = Time::get().currTime();
+    const float time = Time::get().getCurrTime();
     for (auto& [key, chunk] : tilemap.m_chunks) {
         if (!chunkVisible(chunk)) continue;
         for (const AnimatedTileInstance& a : chunk.animatedTiles) {

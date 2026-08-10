@@ -99,7 +99,7 @@ int batch_renderer_test()
     int churnLayer = LAYERS_PER_STACK / 2;
 
     auto onFrame = [&](float dt) {
-        float time = Time::get().currTime();
+        float time = Time::get().getCurrTime();
 
         if (churn) {
             EntityHandle victim(stackSprites[churnLayer], registry);

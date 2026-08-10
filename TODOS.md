@@ -22,10 +22,8 @@ path; everything else is polish on things that already work.
 
 ## Gameplay systems — none of this exists yet
 
-- [ ] **AABB collision** — broadphase over the ECS plus swept AABB, so a fast mover cannot tunnel.
-- [ ] **Tile collision** — sweep against `TilemapManager` rather than per-tile entities. The blocker for any movement at all.
+- [ ] **Collision + physics** — fixed step, colliders as components, MTV resolution, tilemap as a spatial query. Stepwise plan in [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md). The blocker for any movement at all.
 - [ ] **Character controller** — grounded/airborne states, coyote time, jump buffering.
-- [ ] **Tile break/place** — a tilemap edit API that re-bakes only the touched chunk.
 - [ ] **World save/load** — ECS + tilemap through `JsonFile`/`BinaryFile`; chunked so a big world streams.
 - [ ] **2D lighting** — tile flood-fill into a light texture sampled by the tile and sprite shaders. Terraria's signature look.
 - [ ] **Sprite animation** — frame ranges over a `TextureAtlas`, plus a small state machine component.
@@ -35,7 +33,7 @@ path; everything else is polish on things that already work.
 
 ## Engine core
 
-- [ ] **Fixed timestep** — accumulator in `Application::run`; physics cannot be deterministic on a variable dt.
+- [ ] **Fixed timestep** — accumulator on `Time`, drained in `Application::run`; step 1 of [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md).
 - [ ] **Scene abstraction** — `onEnter`/`onExit`/`update`/`render`, replacing the hand-written test functions and the `main.cpp` switch.
 - [ ] **Named input actions** — actions over `InputAxis`, rebindable and serialized.
 - [ ] **Settings file** — resolution, volume, keybinds, through `JsonFile`.

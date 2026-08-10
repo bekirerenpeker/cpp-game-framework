@@ -33,14 +33,22 @@ class Time : public Singleton<Time>
     double m_lastFrameTime;
     uint64_t m_frameCount;
 
+    double m_fixedDeltaTime;
+    double m_accumulator;
+    int m_fixedTimeStepsInFrame;
+
   public:
     void update();
 
-    float deltaTime() const;
-    float currTime() const;
+    float getDeltaTime() const;
+    float getCurrTime() const;
     uint64_t getFrameCount() const { return m_frameCount; }
 
     DateTime getCurrentDateTime() const;
+
+    void setFixedDeltaTime(float dt);
+    float getFixedDeltaTime() const;
+    int getFixedTimeStepsInFrame() const;
 
   private:
     Time();

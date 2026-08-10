@@ -709,7 +709,7 @@ EditFrame runField(
         // Any edit restarts the blink, so the caret is never invisible at the moment the
         // user is looking for it.
         if (frame.result.isChanged || field.isPressed)
-            store.value(field.persistentKey, "caretBlinkStart") = Time::get().currTime();
+            store.value(field.persistentKey, "caretBlinkStart") = Time::get().getCurrTime();
     }
 
     // What gets remembered is whether focus is still held *after* this frame's keys, not
@@ -823,7 +823,7 @@ EditFrame runField(
 
     if (frame.keepsFocus) {
         float blinkStart = store.value(field.persistentKey, "caretBlinkStart");
-        float phase = Time::get().currTime() - blinkStart;
+        float phase = Time::get().getCurrTime() - blinkStart;
         bool visible = Math::mod(phase, CARET_BLINK_SECONDS * 2.0f) < CARET_BLINK_SECONDS;
 
         if (visible) {

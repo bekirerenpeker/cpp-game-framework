@@ -15,7 +15,7 @@ void Application::run()
     while (WindowManager::get().anyWindowOpen()) {
         m_windowsToClose.clear();
         Time::get().update();
-        float dt = Time::get().deltaTime();
+        float dt = Time::get().getDeltaTime();
 
         if (m_onFrame.isBound()) m_onFrame(dt);
 

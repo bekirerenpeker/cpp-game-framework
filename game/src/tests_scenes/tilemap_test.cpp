@@ -52,7 +52,7 @@ int tilemap_test()
     bool wireframe = false;
 
     auto onFrame = [&](float dt) {
-        float z = Time::get().currTime() * scrollSpeed;
+        float z = Time::get().getCurrTime() * scrollSpeed;
         TilemapComponent& tilemap = tilemapEntity.get<TilemapComponent>();
         for (int y = 0; y < mapHeight; y++) {
             for (int x = 0; x < mapWidth; x++) {

@@ -335,7 +335,7 @@ void UIManager::capturePress(const UILayoutNode& node, Vec2 mouse)
     // centre-anchored Y-up draw space.
     m_pressGrabOffset = Vec2(centerDelta.x + half.x, half.y - centerDelta.y);
 
-    float now = Time::get().currTime();
+    float now = Time::get().getCurrTime();
     m_isDoubleClick =
         node.persistentKey == m_lastClickKey && now - m_lastClickTime <= DOUBLE_CLICK_SECONDS;
 
