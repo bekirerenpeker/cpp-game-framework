@@ -276,13 +276,14 @@ void Renderer::addCircleFrame(
     Vec2 pos, float radius, Color color, float thickness, float segmentDistance
 )
 {
-    int segments = radius * TAU / segmentDistance;
+    int segments = static_cast<int>(radius * TAU / segmentDistance);
+    if (segments < 3) segments = 3;
 
     for (int i = 0; i < segments; i++) {
-        float currAngle = i / (float)(segments - 1) * TAU;
-        float nextAngle = ((i + 1) % segments) / (float)(segments - 1) * TAU;
-        Vec2 currPos = Vec2(Math::cos(currAngle), Math::sin(currAngle)) * radius;
-        Vec2 nextPos = Vec2(Math::cos(nextAngle), Math::sin(nextAngle)) * radius;
+        float currAngle = i / (float)segments * TAU;
+        float nextAngle = (i + 1) / (float)segments * TAU;
+        Vec2 currPos = pos + Vec2(Math::cos(currAngle), Math::sin(currAngle)) * radius;
+        Vec2 nextPos = pos + Vec2(Math::cos(nextAngle), Math::sin(nextAngle)) * radius;
         addLine(currPos, nextPos, color, thickness);
     }
 }
