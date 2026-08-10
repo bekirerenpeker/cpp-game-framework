@@ -20,10 +20,19 @@ class PhysicsManager : public Singleton<PhysicsManager>
     std::vector<ContactRecord> getContacts(Registry& registry, Entity entity);
 
     std::vector<Entity> pointTest(Registry& registry, const Vec2& point);
-    std::vector<Entity> circleTest(Registry& registry, const Collisions::Circle& circle);
-    std::vector<Entity> boxTest(Registry& registry, const Collisions::Box& box);
+    std::vector<Collisions::Contact>
+    circleTest(Registry& registry, const Collisions::Circle& circle);
+    std::vector<Collisions::Contact> boxTest(Registry& registry, const Collisions::Box& box);
     Collisions::RayHit rayTest(Registry& registry, const Collisions::Ray& ray);
     std::vector<Collisions::RayHit> rayTestAll(Registry& registry, const Collisions::Ray& ray);
+
+    Collisions::RayHit circleCast(Registry& registry, const Collisions::Ray& path, float radius);
+    std::vector<Collisions::RayHit>
+    circleCastAll(Registry& registry, const Collisions::Ray& path, float radius);
+    Collisions::RayHit
+    boxCast(Registry& registry, const Collisions::Ray& path, const Vec2& halfExtents);
+    std::vector<Collisions::RayHit>
+    boxCastAll(Registry& registry, const Collisions::Ray& path, const Vec2& halfExtents);
 
   private:
     PhysicsManager() = default;

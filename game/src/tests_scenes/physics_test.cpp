@@ -122,7 +122,33 @@ Entity resetScene(Registry& registry)
     return buildScene(registry);
 }
 
-void resetButton(bool& wasClicked)
+enum class QueryMode
+{
+    Off,
+    Point,
+    Box,
+    Circle,
+    Ray,
+    RayAll,
+    CircleCast,
+    CircleCastAll,
+    BoxCast,
+    BoxCastAll
+};
+
+const std::vector<std::string> QUERY_NAMES = {
+    "Off",         "Point",           "Box",      "Circle",      "Ray", "Ray All",
+    "Circle Cast", "Circle Cast All", "Box Cast", "Box Cast All"
+};
+
+const Color QUERY_SHAPE(0.6f, 0.8f, 1.0f);
+const Color QUERY_SWEPT(0.35f, 0.5f, 0.75f);
+const Color QUERY_HIT(1.0f, 0.45f, 0.2f);
+
+const float CAST_RADIUS = 40.0f;
+const Vec2 CAST_HALF_EXTENTS(50.0f, 32.0f);
+
+void toolbar(bool& resetClicked, QueryMode& mode)
 {
     using namespace UIWidgets;
 
@@ -130,8 +156,180 @@ void resetButton(bool& wasClicked)
         {.width = UISizeSpec::grow(), .height = UISizeSpec::grow(), .padding = UIEdges(12.0f)}, {},
         "physicsToolbar"
     );
-    wasClicked = button("Reset Scene", {.key = "physicsReset"}).isReleased;
+    openContainer({.gap = 8.0f}, {}, "physicsToolbarRow");
+
+    resetClicked = button("Reset Scene", {.key = "physicsReset"}).isReleased;
+
+    int selected = static_cast<int>(mode);
+    dropdown(QUERY_NAMES, selected, {.key = "queryMode"});
+    mode = static_cast<QueryMode>(selected);
+
     closeContainer();
+    closeContainer();
+}
+
+void drawMarker(Vec2 point, Color color)
+{
+    Renderer::get().addCircleFrame(point, 6.0f, color, 2.0f);
+}
+
+void drawContact(const Collisions::Contact& contact)
+{
+    drawMarker(contact.point, QUERY_HIT);
+    Renderer::get().addLine(
+        contact.point, contact.point + contact.normal * contact.depth, QUERY_HIT, 2.0f
+    );
+}
+
+void drawHit(const Collisions::RayHit& hit)
+{
+    drawMarker(hit.point, QUERY_HIT);
+    Renderer::get().addLine(hit.point, hit.point + hit.normal * 30.0f, QUERY_HIT, 2.0f);
+}
+
+void outlineEntity(Registry& registry, Entity entity)
+{
+    if (entity == NULL_ENTITY) return;
+
+    SparseSet<ColliderComponent>& colliders = registry.getPool<ColliderComponent>();
+    if (!colliders.contains(entity)) return;
+
+    TransformComponent& transform = registry.getPool<TransformComponent>().get(entity);
+    ColliderComponent& collider = colliders.get(entity);
+
+    if (collider.shape == ColliderShape::Circle) {
+        Collisions::Circle circle = Collisions::toCircle(transform, collider);
+        Renderer::get().addCircleFrame(circle.center, circle.radius + 6.0f, QUERY_HIT, 3.0f);
+        return;
+    }
+
+    Collisions::Box box = Collisions::toBox(transform, collider);
+    Vec2 padded = box.halfExtents + Vec2(6.0f, 6.0f);
+    Renderer::get().addFrame(box.center - padded, padded * 2, QUERY_HIT, 3.0f);
+}
+
+Vec2 castStop(const Collisions::Ray& path, float distance)
+{
+    return path.start + (path.end - path.start).normalized() * distance;
+}
+
+void drawCircleCastHit(
+    Registry& registry, const Collisions::Ray& path, const Collisions::RayHit& hit
+)
+{
+    Renderer::get().addCircleFrame(castStop(path, hit.distance), CAST_RADIUS, QUERY_HIT, 2.0f);
+    outlineEntity(registry, hit.entity);
+    drawHit(hit);
+}
+
+void drawBoxCastHit(Registry& registry, const Collisions::Ray& path, const Collisions::RayHit& hit)
+{
+    Renderer::get().addFrame(
+        castStop(path, hit.distance) - CAST_HALF_EXTENTS, CAST_HALF_EXTENTS * 2, QUERY_HIT, 2.0f
+    );
+    outlineEntity(registry, hit.entity);
+    drawHit(hit);
+}
+
+void runQuery(Registry& registry, QueryMode mode, Vec2 mouse)
+{
+    PhysicsManager& physics = PhysicsManager::get();
+
+    switch (mode) {
+    case QueryMode::Off: return;
+
+    case QueryMode::Point: {
+        drawMarker(mouse, QUERY_SHAPE);
+        for (Entity entity : physics.pointTest(registry, mouse)) outlineEntity(registry, entity);
+        return;
+    }
+
+    case QueryMode::Box: {
+        Collisions::Box box {.center = mouse, .halfExtents = Vec2(60.0f, 40.0f)};
+        Renderer::get().addFrame(
+            box.center - box.halfExtents, box.halfExtents * 2, QUERY_SHAPE, 2.0f
+        );
+        for (const Collisions::Contact& contact : physics.boxTest(registry, box)) {
+            outlineEntity(registry, contact.entity);
+            drawContact(contact);
+        }
+        return;
+    }
+
+    case QueryMode::Circle: {
+        Collisions::Circle circle {.center = mouse, .radius = 50.0f};
+        Renderer::get().addCircleFrame(circle.center, circle.radius, QUERY_SHAPE, 2.0f);
+        for (const Collisions::Contact& contact : physics.circleTest(registry, circle)) {
+            outlineEntity(registry, contact.entity);
+            drawContact(contact);
+        }
+        return;
+    }
+
+    case QueryMode::Ray: {
+        Collisions::Ray ray {.start = VEC2_ZERO, .end = mouse};
+        Renderer::get().addLine(ray.start, ray.end, QUERY_SHAPE, 2.0f);
+
+        Collisions::RayHit hit = physics.rayTest(registry, ray);
+        if (hit.isHit) {
+            outlineEntity(registry, hit.entity);
+            drawHit(hit);
+        }
+        return;
+    }
+
+    case QueryMode::RayAll: {
+        Collisions::Ray ray {.start = VEC2_ZERO, .end = mouse};
+        Renderer::get().addLine(ray.start, ray.end, QUERY_SHAPE, 2.0f);
+
+        for (const Collisions::RayHit& hit : physics.rayTestAll(registry, ray)) {
+            outlineEntity(registry, hit.entity);
+            drawHit(hit);
+        }
+        return;
+    }
+
+    case QueryMode::CircleCast:
+    case QueryMode::CircleCastAll: {
+        Collisions::Ray path {.start = VEC2_ZERO, .end = mouse};
+        Renderer::get().addLine(path.start, path.end, QUERY_SHAPE, 2.0f);
+        Renderer::get().addCircleFrame(path.start, CAST_RADIUS, QUERY_SHAPE, 2.0f);
+        Renderer::get().addCircleFrame(path.end, CAST_RADIUS, QUERY_SWEPT, 1.0f);
+
+        if (mode == QueryMode::CircleCast) {
+            Collisions::RayHit hit = physics.circleCast(registry, path, CAST_RADIUS);
+            if (hit.isHit) drawCircleCastHit(registry, path, hit);
+            return;
+        }
+        for (const Collisions::RayHit& hit : physics.circleCastAll(registry, path, CAST_RADIUS)) {
+            drawCircleCastHit(registry, path, hit);
+        }
+        return;
+    }
+
+    case QueryMode::BoxCast:
+    case QueryMode::BoxCastAll: {
+        Collisions::Ray path {.start = VEC2_ZERO, .end = mouse};
+        Renderer::get().addLine(path.start, path.end, QUERY_SHAPE, 2.0f);
+        Renderer::get().addFrame(
+            path.start - CAST_HALF_EXTENTS, CAST_HALF_EXTENTS * 2, QUERY_SHAPE, 2.0f
+        );
+        Renderer::get().addFrame(
+            path.end - CAST_HALF_EXTENTS, CAST_HALF_EXTENTS * 2, QUERY_SWEPT, 1.0f
+        );
+
+        if (mode == QueryMode::BoxCast) {
+            Collisions::RayHit hit = physics.boxCast(registry, path, CAST_HALF_EXTENTS);
+            if (hit.isHit) drawBoxCastHit(registry, path, hit);
+            return;
+        }
+        for (const Collisions::RayHit& hit :
+             physics.boxCastAll(registry, path, CAST_HALF_EXTENTS)) {
+            drawBoxCastHit(registry, path, hit);
+        }
+        return;
+    }
+    }
 }
 
 }   // namespace
@@ -182,17 +380,20 @@ int physics_test()
         cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
     };
 
+    QueryMode queryMode = QueryMode::Off;
+
     auto onWindowRender = [&](IdType winId, float dt) {
         Renderer::get().clearColor(Color(0.09f, 0.09f, 0.13f));
 
         Renderer::get().beginScene();
         drawColliders(registry);
         drawContacts(registry);
+        runQuery(registry, queryMode, ViewContext::get().getMouseWorldPos());
         Renderer::get().endScene();
 
         bool resetClicked = false;
         UIWidgets::clear();
-        resetButton(resetClicked);
+        toolbar(resetClicked, queryMode);
         UIManager::get().draw();
 
         if (resetClicked) platform = resetScene(registry);

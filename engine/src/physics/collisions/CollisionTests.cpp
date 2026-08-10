@@ -105,26 +105,40 @@ Contact testBoxCircle(const Box& b, const Circle& c)
     return contact;
 }
 
-// The only place that knows box/circle is asymmetric: a circle-first pair is tested flipped
-// and the normal turned back around, so every caller reads it as running c1 -> c2.
+Contact testBoxCollider(const Box& b, const TransformComponent& t, const ColliderComponent& c)
+{
+    switch (c.shape) {
+    case ColliderShape::Box   : return testBoxBox(b, toBox(t, c));
+    case ColliderShape::Circle: return testBoxCircle(b, toCircle(t, c));
+    default                   : return {};
+    }
+}
+
+Contact
+testCircleCollider(const Circle& circle, const TransformComponent& t, const ColliderComponent& c)
+{
+    switch (c.shape) {
+    case ColliderShape::Circle: return testCircleCircle(circle, toCircle(t, c));
+    case ColliderShape::Box   : {
+        // Only box/circle is asymmetric, so this is the one place a normal is turned back around.
+        Contact contact = testBoxCircle(toBox(t, c), circle);
+        contact.normal = -contact.normal;
+        return contact;
+    }
+    default: return {};
+    }
+}
+
 Contact testColliders(
     const TransformComponent& t1, const ColliderComponent& c1, const TransformComponent& t2,
     const ColliderComponent& c2
 )
 {
-    if (c1.shape == ColliderShape::Tilemap || c2.shape == ColliderShape::Tilemap) return {};
-
-    if (c1.shape == ColliderShape::Box && c2.shape == ColliderShape::Box) {
-        return testBoxBox(toBox(t1, c1), toBox(t2, c2));
+    switch (c1.shape) {
+    case ColliderShape::Box   : return testBoxCollider(toBox(t1, c1), t2, c2);
+    case ColliderShape::Circle: return testCircleCollider(toCircle(t1, c1), t2, c2);
+    default                   : return {};
     }
-    if (c1.shape == ColliderShape::Circle && c2.shape == ColliderShape::Circle) {
-        return testCircleCircle(toCircle(t1, c1), toCircle(t2, c2));
-    }
-    if (c1.shape == ColliderShape::Box) { return testBoxCircle(toBox(t1, c1), toCircle(t2, c2)); }
-
-    Contact contact = testBoxCircle(toBox(t2, c2), toCircle(t1, c1));
-    contact.normal = -contact.normal;
-    return contact;
 }
 
 }   // namespace Collisions

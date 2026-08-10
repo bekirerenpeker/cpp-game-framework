@@ -2,6 +2,7 @@
 #include "ecs/registry/View.hpp"
 #include "components/RigidBodyComponent.hpp"
 #include "components/TransformComponent.hpp"
+#include "physics/Collisions.hpp"
 
 namespace Engine {
 

@@ -93,6 +93,13 @@ path; everything else is polish on things that already work.
 
 ## Done
 
+### Physics
+
+- [x] **Scene queries and shape casts** — point/box/circle overlap, ray, and circle/box casts on
+  `PhysicsManager`, each in closest and `*All` form, defined in `PhysicsQueries.cpp`. A cast is a
+  ray against the target grown by the moving shape, so nothing steps: two boxes sum to a box,
+  anything with a circle sums to a rounded box and shares one `testRayRoundedBox`.
+
 ### UI
 
 - [x] **UI input capture** — `UIManager::isMouseUsed()`/`isKeyboardUsed()` (hover-or-capture, and whether anything holds focus) pushed into `Input::setUiCapture` each frame; every key and button query answers "nothing happened" while captured, so gameplay needs no guard and axes go quiet on their own. The UI reads between the clear and the set, so it never filters itself out.
