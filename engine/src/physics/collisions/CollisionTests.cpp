@@ -105,42 +105,6 @@ Contact testBoxCircle(const Box& b, const Circle& c)
     return contact;
 }
 
-Contact testBoxCollider(const Box& b, const TransformComponent& t, const ColliderComponent& c)
-{
-    switch (c.shape) {
-    case ColliderShape::Box   : return testBoxBox(b, toBox(t, c));
-    case ColliderShape::Circle: return testBoxCircle(b, toCircle(t, c));
-    default                   : return {};
-    }
-}
-
-Contact
-testCircleCollider(const Circle& circle, const TransformComponent& t, const ColliderComponent& c)
-{
-    switch (c.shape) {
-    case ColliderShape::Circle: return testCircleCircle(circle, toCircle(t, c));
-    case ColliderShape::Box   : {
-        // Only box/circle is asymmetric, so this is the one place a normal is turned back around.
-        Contact contact = testBoxCircle(toBox(t, c), circle);
-        contact.normal = -contact.normal;
-        return contact;
-    }
-    default: return {};
-    }
-}
-
-Contact testColliders(
-    const TransformComponent& t1, const ColliderComponent& c1, const TransformComponent& t2,
-    const ColliderComponent& c2
-)
-{
-    switch (c1.shape) {
-    case ColliderShape::Box   : return testBoxCollider(toBox(t1, c1), t2, c2);
-    case ColliderShape::Circle: return testCircleCollider(toCircle(t1, c1), t2, c2);
-    default                   : return {};
-    }
-}
-
 }   // namespace Collisions
 
 }   // namespace Engine

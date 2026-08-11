@@ -72,4 +72,12 @@ void TilemapManager::setTileset(TilemapComponent& tilemap, Tileset* tileset)
     tilemap.m_tileset = tileset;
 }
 
+Tileset* TilemapManager::getTileset(const TilemapComponent& tilemap) { return tilemap.m_tileset; }
+
+bool TilemapManager::isSolidAt(const TilemapComponent& tilemap, int x, int y)
+{
+    if (!tilemap.m_tileset) return false;
+    return tilemap.m_tileset->isTileSolid(getAt(tilemap, x, y).textureId);
+}
+
 }   // namespace Engine

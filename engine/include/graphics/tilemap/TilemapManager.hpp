@@ -19,6 +19,9 @@ class TilemapManager : public Singleton<TilemapManager>
     void invalidateChunk(TilemapComponent& tilemap, int cx, int cy);
 
     void setTileset(TilemapComponent& tilemap, Tileset* tileset);
+    Tileset* getTileset(const TilemapComponent& tilemap);
+
+    bool isSolidAt(const TilemapComponent& tilemap, int x, int y);
 
   private:
     TilemapManager() = default;

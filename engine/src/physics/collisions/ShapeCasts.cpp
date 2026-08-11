@@ -51,17 +51,6 @@ RayHit testCircleCastCircle(const Ray& path, float radius, const Circle& circle)
     return hit;
 }
 
-RayHit testCircleCastCollider(
-    const Ray& path, float radius, const TransformComponent& t, const ColliderComponent& c
-)
-{
-    switch (c.shape) {
-    case ColliderShape::Box   : return testCircleCastBox(path, radius, toBox(t, c));
-    case ColliderShape::Circle: return testCircleCastCircle(path, radius, toCircle(t, c));
-    default                   : return {};
-    }
-}
-
 RayHit testBoxCastBox(const Ray& path, const Vec2& halfExtents, const Box& box)
 {
     RayHit hit =
@@ -82,18 +71,6 @@ RayHit testBoxCastCircle(const Ray& path, const Vec2& halfExtents, const Circle&
     );
     if (hit.isHit) hit.point = circle.center + hit.normal * circle.radius;
     return hit;
-}
-
-RayHit testBoxCastCollider(
-    const Ray& path, const Vec2& halfExtents, const TransformComponent& t,
-    const ColliderComponent& c
-)
-{
-    switch (c.shape) {
-    case ColliderShape::Box   : return testBoxCastBox(path, halfExtents, toBox(t, c));
-    case ColliderShape::Circle: return testBoxCastCircle(path, halfExtents, toCircle(t, c));
-    default                   : return {};
-    }
 }
 
 }   // namespace Collisions

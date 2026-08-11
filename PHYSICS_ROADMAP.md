@@ -19,10 +19,17 @@ struct Contact
 };
 ```
 
-`Box`/`Circle` are plain structs built from `(TransformComponent, ColliderComponent)`
-by `toBox`/`toCircle` — the test functions never see a component or an `Entity`. That is
-what keeps the resolver shape-blind, keeps the tilemap from needing its own tests, and
-makes rotated colliders a later addition rather than a rewrite.
+`Box`/`Circle` are plain structs built by `toBox`/`toCircle` — the shape tests never see a
+component or an `Entity`. That is what keeps the resolver shape-blind and makes rotated
+colliders a later addition rather than a rewrite.
+
+Above them sits one entity-facing layer: `testPointEntity`, `testRayEntity`,
+`testBoxEntity`, `testCircleEntity`, `testCircleCastEntity`, `testBoxCastEntity`,
+`testEntities` and `resolveContact`, each taking an `EntityHandle` and pulling what it
+needs. They all run through one internal `dispatch` helper that answers "which shape is
+this, can it be built, what runs against it", so adding a shape is one more callback rather
+than a switch in every function. A missing component answers "no contact" rather than
+asserting.
 
 The tilemap is **not** a fourth shape. It is a query: *given a world AABB, yield the
 solid tile boxes it overlaps.* Its collisions run through `testBoxBox` and
@@ -71,22 +78,28 @@ Layout: `Collisions.hpp` declares the namespace; `engine/src/physics/collisions/
 
 ### 1. Tilemap collisions
 
-Two halves.
+**Landed:** `TileDefinition::isSolid` plus `Tileset::setTileSolid`/`isTileSolid` and
+`TilemapManager::isSolidAt`, and the six tests in `TilemapCollisions.cpp` — point, ray,
+box, circle and both casts. A tile is one world unit at integer coordinates, matching what
+`TilemapRenderer` draws, so the tilemap entity's transform is not read. The ray uses grid
+traversal; box/circle/cast tests walk the tiles overlapping the query's AABB and reuse the
+existing shape tests, so the tilemap is still a query rather than a fourth shape.
 
-**Tilemap side.** Solidity is authoring data and belongs on `Tileset::TileDefinition`
-(`None | Full | OneWay | Custom(min,max)`), looked up by tile id through a flat vector.
-`TileData` stays 2 bytes. Cache a **solid bitmask per chunk** next to the mesh — 32
-`uint32_t` rows, 128 bytes — rebuilt wherever `isDirty` is already handled, so a query
-is bit ops instead of per-tile map lookups. One-way platforms are much cheaper designed
-in now than retrofitted.
+**Still open, and why the step is not done:**
 
-**Physics side.** The AABB→tile-range query, plus **axis-separated movement**: apply
-`velocity.x`, resolve horizontally, apply `velocity.y`, resolve vertically. Per-tile MTV
-without this catches on seams — walking across a flat floor, least-penetration at a tile
-boundary comes out horizontal and shoves you sideways. Clamping per-step displacement to
-under half a tile kills most tunneling too, and is far simpler than swept AABBs.
-
-`ColliderShape::Tilemap` already exists and every test skips it, so this is additive.
+- **Axis-separated movement.** Apply `velocity.x`, resolve horizontally, apply
+  `velocity.y`, resolve vertically. A single MTV push catches on seams — walking across a
+  flat floor, least-penetration at a tile boundary comes out horizontal and shoves you
+  sideways. Until this exists `collideEntities` deliberately skips tilemap entities, and
+  `testBoxTilemap`/`testCircleTilemap` return only the *deepest* of the overlapping tiles,
+  which is all one `Contact` can say. Clamping per-step displacement to under half a tile
+  kills most tunneling too, and is far simpler than swept AABBs.
+- **One-way and custom-bounds tiles.** `isSolid` is a bool; the roadmap shape is
+  `None | Full | OneWay | Custom(min,max)`. One-way platforms are much cheaper designed in
+  now than retrofitted.
+- **Per-chunk solid bitmask** next to the mesh — 32 `uint32_t` rows, 128 bytes — rebuilt
+  wherever `isDirty` is already handled, so a query is bit ops rather than a per-tile
+  lookup through the tileset.
 
 ### 2. Playable character in the test scene
 

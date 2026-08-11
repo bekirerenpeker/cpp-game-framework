@@ -23,15 +23,6 @@ bool testPointCircle(const Vec2& point, const Circle& circle)
 {
     return (point - circle.center).sqrMagnitude() <= circle.radius * circle.radius;
 }
-bool testPointCollider(const Vec2& point, const TransformComponent& t, const ColliderComponent& c)
-{
-    switch (c.shape) {
-    case ColliderShape::Box    : return testPointBox(point, toBox(t, c));
-    case ColliderShape::Circle : return testPointCircle(point, toCircle(t, c));
-    case ColliderShape::Tilemap:
-    default                    : return false;
-    }
-}
 
 // Slab method: clip the ray against each axis' pair of faces in turn and keep the latest entry
 // and earliest exit. They cross over each other the moment the ray misses.
@@ -115,16 +106,6 @@ RayHit testRayCircle(const Ray& ray, const Circle& circle)
     hit.normal = (hit.point - circle.center).normalized();
 
     return hit;
-}
-
-RayHit testRayCollider(const Ray& ray, const TransformComponent& t, const ColliderComponent& c)
-{
-    switch (c.shape) {
-    case ColliderShape::Box    : return testRayBox(ray, toBox(t, c));
-    case ColliderShape::Circle : return testRayCircle(ray, toCircle(t, c));
-    case ColliderShape::Tilemap:
-    default                    : return {};
-    }
 }
 
 }   // namespace Collisions

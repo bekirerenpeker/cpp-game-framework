@@ -33,6 +33,7 @@ class Tileset : public IResource
         uint16_t id = 0;
         TileType type = TileType::Normal;
         Vec2 uvMin = VEC2_ZERO, uvMax = VEC2_ONE;
+        bool isSolid = false;
     };
 
   private:
@@ -68,6 +69,11 @@ class Tileset : public IResource
 
     const TileDefinition* getTile(uint16_t id) const;
     uint16_t getTileId(const std::string& name) const;
+
+    void setTileSolid(uint16_t id, bool isSolid);
+    void setTileSolid(const std::string& name, bool isSolid);
+    bool isTileSolid(uint16_t id) const;
+
     TextureAtlas::Region getTileUV(uint16_t id, float time, Vec2 tilePos = VEC2_ZERO) const;
 
     uint16_t createTile(const std::string& regionName);

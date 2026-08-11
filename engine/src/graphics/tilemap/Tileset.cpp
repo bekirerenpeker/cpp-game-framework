@@ -17,6 +17,29 @@ uint16_t Tileset::getTileId(const std::string& name) const
     return it == m_tiles.end() ? 0 : it->second.id;
 }
 
+void Tileset::setTileSolid(uint16_t id, bool isSolid)
+{
+    if (id == 0 || id >= m_tilesById.size()) return;
+    m_tilesById[id].isSolid = isSolid;
+
+    // m_tiles holds copies keyed by name, so both have to move together or a later
+    // lookup by name would read the stale one.
+    for (auto& [name, def] : m_tiles) {
+        if (def.id == id) def.isSolid = isSolid;
+    }
+}
+
+void Tileset::setTileSolid(const std::string& name, bool isSolid)
+{
+    setTileSolid(getTileId(name), isSolid);
+}
+
+bool Tileset::isTileSolid(uint16_t id) const
+{
+    const TileDefinition* def = getTile(id);
+    return def && def->isSolid;
+}
+
 TextureAtlas::Region Tileset::getTileUV(uint16_t id, float time, Vec2 tilePos) const
 {
     auto anim = m_animations.find(id);

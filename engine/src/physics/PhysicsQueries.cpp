@@ -1,4 +1,3 @@
-#include "components/TransformComponent.hpp"
 #include "ecs/registry/View.hpp"
 #include "physics/Collisions.hpp"
 #include "physics/PhysicsManager.hpp"
@@ -12,10 +11,11 @@ template<typename TestFn>
 std::vector<Collisions::RayHit> gatherHits(Registry& registry, TestFn test)
 {
     std::vector<Collisions::RayHit> hits;
-    View<TransformComponent, ColliderComponent> colliderView(registry);
-    colliderView.each([&](Entity entity, TransformComponent& t, ColliderComponent& c) {
-        Collisions::RayHit hit = test(t, c);
+    View<ColliderComponent> colliderView(registry);
+    colliderView.each([&](Entity entity, ColliderComponent&) {
+        Collisions::RayHit hit = test(EntityHandle(entity, registry));
         if (!hit.isHit) return;
+
         hit.entity = entity;
         hits.push_back(hit);
     });
@@ -31,9 +31,9 @@ std::vector<Collisions::RayHit> gatherHits(Registry& registry, TestFn test)
 template<typename TestFn> Collisions::RayHit closestHit(Registry& registry, TestFn test)
 {
     Collisions::RayHit closest;
-    View<TransformComponent, ColliderComponent> colliderView(registry);
-    colliderView.each([&](Entity entity, TransformComponent& t, ColliderComponent& c) {
-        Collisions::RayHit hit = test(t, c);
+    View<ColliderComponent> colliderView(registry);
+    colliderView.each([&](Entity entity, ColliderComponent&) {
+        Collisions::RayHit hit = test(EntityHandle(entity, registry));
         if (!hit.isHit) return;
         if (closest.isHit && hit.distance >= closest.distance) return;
 
@@ -43,14 +43,31 @@ template<typename TestFn> Collisions::RayHit closestHit(Registry& registry, Test
     return closest;
 }
 
+template<typename TestFn>
+std::vector<Collisions::Contact> gatherContacts(Registry& registry, TestFn test)
+{
+    std::vector<Collisions::Contact> contacts;
+    View<ColliderComponent> colliderView(registry);
+    colliderView.each([&](Entity entity, ColliderComponent&) {
+        Collisions::Contact contact = test(EntityHandle(entity, registry));
+        if (!contact.isTouching) return;
+
+        contact.entity = entity;
+        contacts.push_back(contact);
+    });
+    return contacts;
+}
+
 }   // namespace
 
 std::vector<Entity> PhysicsManager::pointTest(Registry& registry, const Vec2& point)
 {
     std::vector<Entity> entities;
-    View<TransformComponent, ColliderComponent> colliderView(registry);
-    colliderView.each([&](Entity entity, TransformComponent& t, ColliderComponent& c) {
-        if (Collisions::testPointCollider(point, t, c)) entities.push_back(entity);
+    View<ColliderComponent> colliderView(registry);
+    colliderView.each([&](Entity entity, ColliderComponent&) {
+        if (Collisions::testPointEntity(point, EntityHandle(entity, registry))) {
+            entities.push_back(entity);
+        }
     });
     return entities;
 }
@@ -58,73 +75,63 @@ std::vector<Entity> PhysicsManager::pointTest(Registry& registry, const Vec2& po
 std::vector<Collisions::Contact>
 PhysicsManager::circleTest(Registry& registry, const Collisions::Circle& circle)
 {
-    std::vector<Collisions::Contact> contacts;
-    View<TransformComponent, ColliderComponent> colliderView(registry);
-    colliderView.each([&](Entity entity, TransformComponent& t, ColliderComponent& c) {
-        Collisions::Contact contact = Collisions::testCircleCollider(circle, t, c);
-        contact.entity = entity;
-        if (contact.isTouching) contacts.push_back(contact);
+    return gatherContacts(registry, [&](EntityHandle entity) {
+        return Collisions::testCircleEntity(circle, entity);
     });
-    return contacts;
 }
 
 std::vector<Collisions::Contact>
 PhysicsManager::boxTest(Registry& registry, const Collisions::Box& box)
 {
-    std::vector<Collisions::Contact> contacts;
-    View<TransformComponent, ColliderComponent> colliderView(registry);
-    colliderView.each([&](Entity entity, TransformComponent& t, ColliderComponent& c) {
-        Collisions::Contact contact = Collisions::testBoxCollider(box, t, c);
-        contact.entity = entity;
-        if (contact.isTouching) contacts.push_back(contact);
+    return gatherContacts(registry, [&](EntityHandle entity) {
+        return Collisions::testBoxEntity(box, entity);
     });
-    return contacts;
 }
 
 Collisions::RayHit PhysicsManager::rayTest(Registry& registry, const Collisions::Ray& ray)
 {
-    return closestHit(registry, [&](TransformComponent& t, ColliderComponent& c) {
-        return Collisions::testRayCollider(ray, t, c);
+    return closestHit(registry, [&](EntityHandle entity) {
+        return Collisions::testRayEntity(ray, entity);
     });
 }
 
 std::vector<Collisions::RayHit>
 PhysicsManager::rayTestAll(Registry& registry, const Collisions::Ray& ray)
 {
-    return gatherHits(registry, [&](TransformComponent& t, ColliderComponent& c) {
-        return Collisions::testRayCollider(ray, t, c);
+    return gatherHits(registry, [&](EntityHandle entity) {
+        return Collisions::testRayEntity(ray, entity);
     });
 }
 
 Collisions::RayHit
 PhysicsManager::circleCast(Registry& registry, const Collisions::Ray& path, float radius)
 {
-    return closestHit(registry, [&](TransformComponent& t, ColliderComponent& c) {
-        return Collisions::testCircleCastCollider(path, radius, t, c);
+    return closestHit(registry, [&](EntityHandle entity) {
+        return Collisions::testCircleCastEntity(path, radius, entity);
     });
 }
 
 std::vector<Collisions::RayHit>
 PhysicsManager::circleCastAll(Registry& registry, const Collisions::Ray& path, float radius)
 {
-    return gatherHits(registry, [&](TransformComponent& t, ColliderComponent& c) {
-        return Collisions::testCircleCastCollider(path, radius, t, c);
+    return gatherHits(registry, [&](EntityHandle entity) {
+        return Collisions::testCircleCastEntity(path, radius, entity);
     });
 }
 
 Collisions::RayHit
 PhysicsManager::boxCast(Registry& registry, const Collisions::Ray& path, const Vec2& halfExtents)
 {
-    return closestHit(registry, [&](TransformComponent& t, ColliderComponent& c) {
-        return Collisions::testBoxCastCollider(path, halfExtents, t, c);
+    return closestHit(registry, [&](EntityHandle entity) {
+        return Collisions::testBoxCastEntity(path, halfExtents, entity);
     });
 }
 
 std::vector<Collisions::RayHit>
 PhysicsManager::boxCastAll(Registry& registry, const Collisions::Ray& path, const Vec2& halfExtents)
 {
-    return gatherHits(registry, [&](TransformComponent& t, ColliderComponent& c) {
-        return Collisions::testBoxCastCollider(path, halfExtents, t, c);
+    return gatherHits(registry, [&](EntityHandle entity) {
+        return Collisions::testBoxCastEntity(path, halfExtents, entity);
     });
 }
 

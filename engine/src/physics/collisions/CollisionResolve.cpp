@@ -21,15 +21,28 @@ void addVelocity(RigidBodyComponent* body, const Vec2& impulse, float inverseMas
     if (body) body->velocity += impulse * inverseMass;
 }
 
+void movePosition(TransformComponent* transform, const Vec2& push)
+{
+    if (!transform) return;
+    transform->position.x += push.x;
+    transform->position.y += push.y;
+}
+
 }   // namespace
 
 void resolveContact(
-    TransformComponent& t1, RigidBodyComponent* body1, TransformComponent& t2,
-    RigidBodyComponent* body2, const Contact& contact, const ResolveSettings& settings
+    EntityHandle a, EntityHandle b, const Contact& contact, const ResolveSettings& settings
 )
 {
-    float inverseMass1 = inverseMassOf(body1);
-    float inverseMass2 = inverseMassOf(body2);
+    TransformComponent* t1 = a.tryGet<TransformComponent>();
+    TransformComponent* t2 = b.tryGet<TransformComponent>();
+    RigidBodyComponent* body1 = a.tryGet<RigidBodyComponent>();
+    RigidBodyComponent* body2 = b.tryGet<RigidBodyComponent>();
+
+    // Something with no transform cannot be moved at all, which is how a tilemap absorbs none
+    // of the correction without needing a case of its own.
+    float inverseMass1 = t1 ? inverseMassOf(body1) : 0.0f;
+    float inverseMass2 = t2 ? inverseMassOf(body2) : 0.0f;
     float inverseMassSum = inverseMass1 + inverseMass2;
     if (inverseMassSum <= 0) return;
 
@@ -39,10 +52,8 @@ void resolveContact(
                        settings.correctionPercent / inverseMassSum;
     Vec2 push = contact.normal * correction;
 
-    t1.position.x -= push.x * inverseMass1;
-    t1.position.y -= push.y * inverseMass1;
-    t2.position.x += push.x * inverseMass2;
-    t2.position.y += push.y * inverseMass2;
+    movePosition(t1, push * -inverseMass1);
+    movePosition(t2, push * inverseMass2);
 
     Vec2 relativeVelocity = velocityOf(body2) - velocityOf(body1);
     float alongNormal = Vec2::dot(relativeVelocity, contact.normal);

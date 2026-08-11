@@ -47,14 +47,15 @@ void PhysicsManager::integrate(Registry& registry, PhysicsWorld& world, float dt
 void PhysicsManager::collideEntities(Registry& registry, PhysicsWorld& world)
 {
     std::vector<Entity> entities;
-    View<TransformComponent, ColliderComponent> colliderView(registry);
-    colliderView.each([&](Entity entity, TransformComponent&, ColliderComponent& collider) {
-        // Tilemaps hold no geometry testColliders can reach; they get their own phase.
+    View<ColliderComponent> colliderView(registry);
+    colliderView.each([&](Entity entity, ColliderComponent& collider) {
+        // The tilemap tests exist, but a body wedged between tiles needs axis-separated
+        // movement rather than one MTV push, so tilemaps stay out of the pair loop until
+        // that lands.
         if (collider.shape == ColliderShape::Tilemap) return;
         entities.push_back(entity);
     });
 
-    SparseSet<TransformComponent>& transforms = registry.getPool<TransformComponent>();
     SparseSet<ColliderComponent>& colliders = registry.getPool<ColliderComponent>();
     SparseSet<RigidBodyComponent>& bodies = registry.getPool<RigidBodyComponent>();
 
@@ -66,20 +67,16 @@ void PhysicsManager::collideEntities(Registry& registry, PhysicsWorld& world)
             RigidBodyComponent* bodyB = bodies.contains(b) ? &bodies.get(b) : nullptr;
             if (isStatic(bodyA) && isStatic(bodyB)) continue;
 
-            TransformComponent& transformA = transforms.get(a);
-            TransformComponent& transformB = transforms.get(b);
-            ColliderComponent& colliderA = colliders.get(a);
-            ColliderComponent& colliderB = colliders.get(b);
+            EntityHandle handleA(a, registry), handleB(b, registry);
 
-            Collisions::Contact contact =
-                Collisions::testColliders(transformA, colliderA, transformB, colliderB);
+            Collisions::Contact contact = Collisions::testEntities(handleA, handleB);
             if (!contact.isTouching) continue;
 
             ContactRecord record;
             record.a = a;
             record.b = b;
             record.contact = contact;
-            record.isTrigger = colliderA.isTrigger || colliderB.isTrigger;
+            record.isTrigger = colliders.get(a).isTrigger || colliders.get(b).isTrigger;
 
             // Sampled before resolve zeroes the velocity along the normal, and negated so an
             // approach reads positive; the normal runs a -> b.
@@ -92,9 +89,7 @@ void PhysicsManager::collideEntities(Registry& registry, PhysicsWorld& world)
                 world.triggerPairs.insert(PhysicsWorld::pairKey(a, b));
                 continue;
             }
-            Collisions::resolveContact(
-                transformA, bodyA, transformB, bodyB, contact, world.resolveSettings
-            );
+            Collisions::resolveContact(handleA, handleB, contact, world.resolveSettings);
         }
     }
 }
