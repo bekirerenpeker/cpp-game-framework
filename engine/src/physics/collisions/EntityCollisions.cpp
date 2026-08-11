@@ -16,13 +16,13 @@ R dispatch(EntityHandle entity, BoxFn onBox, CircleFn onCircle, TilemapFn onTile
     ColliderComponent* collider = entity.tryGet<ColliderComponent>();
     if (!collider) return R {};
 
-    if (collider->shape == ColliderShape::Tilemap) {
-        TilemapComponent* tilemap = entity.tryGet<TilemapComponent>();
-        return tilemap ? onTilemap(*tilemap) : R {};
-    }
-
     TransformComponent* transform = entity.tryGet<TransformComponent>();
     if (!transform) return R {};
+
+    if (collider->shape == ColliderShape::Tilemap) {
+        TilemapComponent* tilemap = entity.tryGet<TilemapComponent>();
+        return tilemap ? onTilemap(*tilemap, TileGrid::fromTransform(*transform)) : R {};
+    }
 
     if (collider->shape == ColliderShape::Circle) return onCircle(toCircle(*transform, *collider));
     return onBox(toBox(*transform, *collider));
@@ -58,7 +58,9 @@ bool testPointEntity(const Vec2& point, EntityHandle entity)
         entity,   //
         [&](const Box& box) { return testPointBox(point, box); },
         [&](const Circle& circle) { return testPointCircle(point, circle); },
-        [&](const TilemapComponent& tilemap) { return testPointTilemap(point, tilemap); }
+        [&](const TilemapComponent& tilemap, const TileGrid& grid) {
+            return testPointTilemap(point, tilemap, grid);
+        }
     );
 }
 
@@ -68,7 +70,9 @@ RayHit testRayEntity(const Ray& ray, EntityHandle entity)
         entity,   //
         [&](const Box& box) { return testRayBox(ray, box); },
         [&](const Circle& circle) { return testRayCircle(ray, circle); },
-        [&](const TilemapComponent& tilemap) { return testRayTilemap(ray, tilemap); }
+        [&](const TilemapComponent& tilemap, const TileGrid& grid) {
+            return testRayTilemap(ray, tilemap, grid);
+        }
     );
 }
 
@@ -78,7 +82,9 @@ Contact testBoxEntity(const Box& box, EntityHandle entity)
         entity,   //
         [&](const Box& other) { return testBoxBox(box, other); },
         [&](const Circle& other) { return testBoxCircle(box, other); },
-        [&](const TilemapComponent& tilemap) { return testBoxTilemap(box, tilemap); }
+        [&](const TilemapComponent& tilemap, const TileGrid& grid) {
+            return testBoxTilemap(box, tilemap, grid);
+        }
     );
 }
 
@@ -93,7 +99,9 @@ Contact testCircleEntity(const Circle& circle, EntityHandle entity)
             return contact;
         },
         [&](const Circle& other) { return testCircleCircle(circle, other); },
-        [&](const TilemapComponent& tilemap) { return testCircleTilemap(circle, tilemap); }
+        [&](const TilemapComponent& tilemap, const TileGrid& grid) {
+            return testCircleTilemap(circle, tilemap, grid);
+        }
     );
 }
 
@@ -103,8 +111,8 @@ RayHit testCircleCastEntity(const Ray& path, float radius, EntityHandle entity)
         entity,   //
         [&](const Box& box) { return testCircleCastBox(path, radius, box); },
         [&](const Circle& circle) { return testCircleCastCircle(path, radius, circle); },
-        [&](const TilemapComponent& tilemap) {
-            return testCircleCastTilemap(path, radius, tilemap);
+        [&](const TilemapComponent& tilemap, const TileGrid& grid) {
+            return testCircleCastTilemap(path, radius, tilemap, grid);
         }
     );
 }
@@ -115,8 +123,8 @@ RayHit testBoxCastEntity(const Ray& path, const Vec2& halfExtents, EntityHandle 
         entity,   //
         [&](const Box& box) { return testBoxCastBox(path, halfExtents, box); },
         [&](const Circle& circle) { return testBoxCastCircle(path, halfExtents, circle); },
-        [&](const TilemapComponent& tilemap) {
-            return testBoxCastTilemap(path, halfExtents, tilemap);
+        [&](const TilemapComponent& tilemap, const TileGrid& grid) {
+            return testBoxCastTilemap(path, halfExtents, tilemap, grid);
         }
     );
 }
@@ -127,7 +135,7 @@ Contact testEntities(EntityHandle a, EntityHandle b)
         a,   //
         [&](const Box& box) { return testBoxEntity(box, b); },
         [&](const Circle& circle) { return testCircleEntity(circle, b); },
-        [&](const TilemapComponent&) {
+        [&](const TilemapComponent&, const TileGrid&) {
             // A tilemap is only ever the thing being tested against, so swap the pair and turn
             // the normal back around. Two tilemaps have nothing to say to each other.
             if (isTilemap(b)) return Contact {};

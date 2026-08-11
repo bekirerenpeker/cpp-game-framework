@@ -3,81 +3,80 @@
 
 namespace Engine {
 
-void TilemapManager::setAt(TilemapComponent& tilemap, int x, int y, const TileData& tile)
+void TilemapManager::setAt(TilemapComponent& tilemap, int x, int y, const TileData& tile) const
 {
     constexpr int S = TilemapChunk::CHUNK_SIZE;
 
-    int cx = gridToChunkCoord(x);
-    int cy = gridToChunkCoord(y);
+    int chunkX = toChunkCoord(x), chunkY = toChunkCoord(y);
+    uint64_t key = chunkKey(chunkX, chunkY);
 
-    int localX = x - (cx * S);
-    int localY = y - (cy * S);
+    auto it = tilemap.chunks.find(key);
+    if (it == tilemap.chunks.end()) {
+        // A chunk that does not exist already reads back as empty, so materialising one to
+        // store the empty tile would cost ~150KB to say nothing.
+        if (tile.tileId == 0) return;
 
-    uint64_t key = TilemapComponent::getChunkKey(cx, cy);
-    TilemapChunk& chunk = tilemap.m_chunks[key];
-
-    if (chunk.chunkX != cx || chunk.chunkY != cy) {
-        chunk.chunkX = cx;
-        chunk.chunkY = cy;
+        it = tilemap.chunks.try_emplace(key).first;
+        it->second.chunkX = chunkX;
+        it->second.chunkY = chunkY;
     }
 
-    int index = localY * S + localX;
-    if (chunk.tiles[index].textureId != tile.textureId) {
-        chunk.tiles[index] = tile;
-        chunk.isDirty = true;
+    TilemapChunk& chunk = it->second;
+    int index = toLocalIndex(x, y);
+    if (chunk.tiles[index].tileId == tile.tileId) return;
 
-        // A tile on a chunk edge changes its neighbor chunk's rule-tile baking; a
-        // tile on a corner reaches diagonally too, since rule tiles sample all 8
-        // neighbors, so the corner-adjacent chunk needs invalidating as well.
-        if (localX == 0) invalidateChunk(tilemap, cx - 1, cy);
-        if (localX == S - 1) invalidateChunk(tilemap, cx + 1, cy);
-        if (localY == 0) invalidateChunk(tilemap, cx, cy - 1);
-        if (localY == S - 1) invalidateChunk(tilemap, cx, cy + 1);
-        if (localX == 0 && localY == 0) invalidateChunk(tilemap, cx - 1, cy - 1);
-        if (localX == 0 && localY == S - 1) invalidateChunk(tilemap, cx - 1, cy + 1);
-        if (localX == S - 1 && localY == 0) invalidateChunk(tilemap, cx + 1, cy - 1);
-        if (localX == S - 1 && localY == S - 1) invalidateChunk(tilemap, cx + 1, cy + 1);
-    }
+    chunk.tiles[index] = tile;
+    chunk.isDirty = true;
+
+    // A tile on a chunk edge changes its neighbor chunk's rule-tile baking; a
+    // tile on a corner reaches diagonally too, since rule tiles sample all 8
+    // neighbors, so the corner-adjacent chunk needs invalidating as well.
+    int localX = toLocalCoord(x), localY = toLocalCoord(y);
+    if (localX == 0) invalidateChunk(tilemap, chunkX - 1, chunkY);
+    if (localX == S - 1) invalidateChunk(tilemap, chunkX + 1, chunkY);
+    if (localY == 0) invalidateChunk(tilemap, chunkX, chunkY - 1);
+    if (localY == S - 1) invalidateChunk(tilemap, chunkX, chunkY + 1);
+    if (localX == 0 && localY == 0) invalidateChunk(tilemap, chunkX - 1, chunkY - 1);
+    if (localX == 0 && localY == S - 1) invalidateChunk(tilemap, chunkX - 1, chunkY + 1);
+    if (localX == S - 1 && localY == 0) invalidateChunk(tilemap, chunkX + 1, chunkY - 1);
+    if (localX == S - 1 && localY == S - 1) invalidateChunk(tilemap, chunkX + 1, chunkY + 1);
 }
 
-TileData TilemapManager::getAt(const TilemapComponent& tilemap, int x, int y)
+TileData TilemapManager::getAt(const TilemapComponent& tilemap, int x, int y) const
 {
-    constexpr int S = TilemapChunk::CHUNK_SIZE;
+    auto it = tilemap.chunks.find(chunkKey(toChunkCoord(x), toChunkCoord(y)));
+    if (it == tilemap.chunks.end()) return TileData {};
 
-    int cx = gridToChunkCoord(x);
-    int cy = gridToChunkCoord(y);
-
-    uint64_t key = TilemapComponent::getChunkKey(cx, cy);
-
-    auto it = tilemap.m_chunks.find(key);
-    if (it == tilemap.m_chunks.end()) return TileData {};
-
-    int localX = x - (cx * S);
-    int localY = y - (cy * S);
-
-    return it->second.tiles[localY * S + localX];
+    return it->second.tiles[toLocalIndex(x, y)];
 }
 
-void TilemapManager::clear(TilemapComponent& tilemap) { tilemap.m_chunks.clear(); }
+void TilemapManager::clear(TilemapComponent& tilemap) const { tilemap.chunks.clear(); }
 
-void TilemapManager::invalidateChunk(TilemapComponent& tilemap, int cx, int cy)
+void TilemapManager::invalidateChunk(TilemapComponent& tilemap, int chunkX, int chunkY) const
 {
-    uint64_t key = TilemapComponent::getChunkKey(cx, cy);
-    auto it = tilemap.m_chunks.find(key);
-    if (it != tilemap.m_chunks.end()) it->second.isDirty = true;
+    auto it = tilemap.chunks.find(chunkKey(chunkX, chunkY));
+    if (it != tilemap.chunks.end()) it->second.isDirty = true;
 }
 
-void TilemapManager::setTileset(TilemapComponent& tilemap, Tileset* tileset)
+void TilemapManager::setTileset(TilemapComponent& tilemap, Tileset* tileset) const
 {
-    tilemap.m_tileset = tileset;
+    tilemap.tileset = tileset;
 }
 
-Tileset* TilemapManager::getTileset(const TilemapComponent& tilemap) { return tilemap.m_tileset; }
-
-bool TilemapManager::isSolidAt(const TilemapComponent& tilemap, int x, int y)
+Tileset* TilemapManager::getTileset(const TilemapComponent& tilemap) const
 {
-    if (!tilemap.m_tileset) return false;
-    return tilemap.m_tileset->isTileSolid(getAt(tilemap, x, y).textureId);
+    return tilemap.tileset;
+}
+
+bool TilemapManager::isSolidAt(const TilemapComponent& tilemap, int x, int y) const
+{
+    if (!tilemap.tileset) return false;
+    return tilemap.tileset->isTileSolid(getAt(tilemap, x, y).tileId);
+}
+
+bool TilemapManager::isSolidAt(const TilemapComponent& tilemap, TileCoord tile) const
+{
+    return isSolidAt(tilemap, tile.x, tile.y);
 }
 
 }   // namespace Engine

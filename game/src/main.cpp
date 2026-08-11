@@ -5,6 +5,7 @@ using namespace Engine;
 
 int main()
 {
+    FileManager::get().setGameAssetRoot(GAME_ASSET_DIR);
     Logger::get().addSink<FileSink>("game/output/log.txt");
-    return physics_test();
+    return tilemap_test();
 }

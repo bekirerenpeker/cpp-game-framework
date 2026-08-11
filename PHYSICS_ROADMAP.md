@@ -80,10 +80,17 @@ Layout: `Collisions.hpp` declares the namespace; `engine/src/physics/collisions/
 
 **Landed:** `TileDefinition::isSolid` plus `Tileset::setTileSolid`/`isTileSolid` and
 `TilemapManager::isSolidAt`, and the six tests in `TilemapCollisions.cpp` — point, ray,
-box, circle and both casts. A tile is one world unit at integer coordinates, matching what
-`TilemapRenderer` draws, so the tilemap entity's transform is not read. The ray uses grid
-traversal; box/circle/cast tests walk the tiles overlapping the query's AABB and reuse the
-existing shape tests, so the tilemap is still a query rather than a fourth shape.
+box, circle and both casts. The ray uses grid traversal; box/circle/cast tests walk the
+tiles overlapping the query's AABB and reuse the existing shape tests, so the tilemap is
+still a query rather than a fourth shape.
+
+A tilemap is placed and sized by its own transform: `position` is the corner of tile (0,0)
+and `scale` is the tile size, both honoured identically by `TilemapRenderer` and by every
+test. Rotation is ignored, for the same reason rotated colliders are out of scope. The
+adapter is `TileGrid::fromTransform`, which parallels `toBox`/`toCircle` — it is what keeps
+`scale.abs()`, the rotation decision and the zero-scale guard in one place instead of seven.
+`ColliderComponent::offset` is deliberately not applied: the renderer cannot see it, so
+honouring it would put the collision grid somewhere other than the visible tiles.
 
 **Still open, and why the step is not done:**
 

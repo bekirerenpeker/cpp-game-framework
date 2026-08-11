@@ -1,6 +1,7 @@
 #pragma once
 
-#include "RuleTileTemplates.hpp"
-#include "TilemapManager.hpp"
-#include "TilemapRenderer.hpp"
-#include "Tileset.hpp"
+#include "components/TilemapComponent.hpp"
+#include "graphics/tilemap/RuleTileTemplates.hpp"
+#include "graphics/tilemap/TilemapManager.hpp"
+#include "graphics/tilemap/TilemapRenderer.hpp"
+#include "graphics/tilemap/Tileset.hpp"

@@ -12,26 +12,39 @@ class TilemapManager : public Singleton<TilemapManager>
     friend class Singleton<TilemapManager>;
 
   public:
-    void setAt(TilemapComponent& tilemap, int x, int y, const TileData& tile);
-    TileData getAt(const TilemapComponent& tilemap, int x, int y);
-    void clear(TilemapComponent& tilemap);
+    static constexpr int toChunkCoord(int gridValue)
+    {
+        return gridValue >> TilemapChunk::CHUNK_SHIFT;
+    }
+    static constexpr int toLocalCoord(int gridValue)
+    {
+        return gridValue & TilemapChunk::CHUNK_MASK;
+    }
+    static constexpr int toLocalIndex(int gridX, int gridY)
+    {
+        return toLocalCoord(gridY) * TilemapChunk::CHUNK_SIZE + toLocalCoord(gridX);
+    }
+    static constexpr uint64_t chunkKey(int chunkX, int chunkY)
+    {
+        return (static_cast<uint64_t>(static_cast<uint32_t>(chunkX)) << 32) |
+               static_cast<uint64_t>(static_cast<uint32_t>(chunkY));
+    }
 
-    void invalidateChunk(TilemapComponent& tilemap, int cx, int cy);
+    void setAt(TilemapComponent& tilemap, int x, int y, const TileData& tile) const;
+    TileData getAt(const TilemapComponent& tilemap, int x, int y) const;
+    void clear(TilemapComponent& tilemap) const;
 
-    void setTileset(TilemapComponent& tilemap, Tileset* tileset);
-    Tileset* getTileset(const TilemapComponent& tilemap);
+    void invalidateChunk(TilemapComponent& tilemap, int chunkX, int chunkY) const;
 
-    bool isSolidAt(const TilemapComponent& tilemap, int x, int y);
+    void setTileset(TilemapComponent& tilemap, Tileset* tileset) const;
+    Tileset* getTileset(const TilemapComponent& tilemap) const;
+
+    bool isSolidAt(const TilemapComponent& tilemap, int x, int y) const;
+    bool isSolidAt(const TilemapComponent& tilemap, TileCoord tile) const;
 
   private:
     TilemapManager() = default;
     ~TilemapManager() = default;
-
-    static inline int gridToChunkCoord(int value)
-    {
-        if (value >= 0) return value / TilemapChunk::CHUNK_SIZE;
-        else return (value - TilemapChunk::CHUNK_SIZE + 1) / TilemapChunk::CHUNK_SIZE;
-    }
 };
 
 }   // namespace Engine

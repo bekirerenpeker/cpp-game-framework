@@ -10,7 +10,7 @@ int piano_demo()
     KeyCode keyCodes[13] = {KeyCode::A, KeyCode::W, KeyCode::S, KeyCode::D, KeyCode::R,
                             KeyCode::F, KeyCode::T, KeyCode::G, KeyCode::H, KeyCode::U,
                             KeyCode::J, KeyCode::I, KeyCode::K};
-    fs::path dir = "game/assets/audio/piano_notes";
+    fs::path dir = FileManager::get().gameAsset("audio/piano_notes");
     fs::path files[13] = {"a1.wav", "a1s.wav", "b1.wav",  "c1.wav", "c1s.wav", "d1.wav", "d1s.wav",
                           "e1.wav", "f1.wav",  "f1s.wav", "g1.wav", "g1s.wav", "c2.wav"};
     AudioBuffer* resources[13] = {nullptr};

@@ -22,6 +22,7 @@ class FileManager : public Singleton<FileManager>
 
   private:
     fs::path m_engineAssetRoot;
+    fs::path m_gameAssetRoot;
 
   public:
     bool doesPathExist(const fs::path& path);
@@ -35,11 +36,13 @@ class FileManager : public Singleton<FileManager>
 
     fs::path getCurrentFolder();
 
-    // Anchored at the engine folder, never the working directory, so an engine
-    // resource resolves the same wherever the executable was launched from.
     void setEngineAssetRoot(const fs::path& root);
     const fs::path& getEngineAssetRoot() const;
     fs::path engineAsset(const fs::path& relativePath) const;
+
+    void setGameAssetRoot(const fs::path& root);
+    const fs::path& getGameAssetRoot() const;
+    fs::path gameAsset(const fs::path& relativePath) const;
 
   private:
     FileManager();

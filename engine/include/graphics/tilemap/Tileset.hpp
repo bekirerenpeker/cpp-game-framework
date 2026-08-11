@@ -52,8 +52,8 @@ class Tileset : public IResource
     };
 
     TextureAtlas m_atlas;
-    std::unordered_map<std::string, TileDefinition> m_tiles;
-    std::vector<TileDefinition> m_tilesById {TileDefinition {}};
+    std::unordered_map<std::string, uint16_t> m_tileIds;
+    std::vector<TileDefinition> m_tiles {TileDefinition {}};
     std::unordered_map<uint16_t, TileAnimation> m_animations;
     std::unordered_map<uint16_t, std::vector<TextureAtlas::Region>> m_variations;
     std::unordered_map<uint16_t, TileRule> m_rules;

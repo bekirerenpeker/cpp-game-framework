@@ -7,31 +7,33 @@ Tileset::Tileset(const fs::path& tilesetImage) : m_atlas(tilesetImage) {}
 
 const Tileset::TileDefinition* Tileset::getTile(uint16_t id) const
 {
-    if (id == 0 || id >= m_tilesById.size()) return nullptr;
-    return &m_tilesById[id];
+    if (id == 0 || id >= m_tiles.size()) return nullptr;
+    return &m_tiles[id];
 }
 
 uint16_t Tileset::getTileId(const std::string& name) const
 {
-    auto it = m_tiles.find(name);
-    return it == m_tiles.end() ? 0 : it->second.id;
+    auto it = m_tileIds.find(name);
+    return it == m_tileIds.end() ? 0 : it->second;
 }
 
 void Tileset::setTileSolid(uint16_t id, bool isSolid)
 {
-    if (id == 0 || id >= m_tilesById.size()) return;
-    m_tilesById[id].isSolid = isSolid;
-
-    // m_tiles holds copies keyed by name, so both have to move together or a later
-    // lookup by name would read the stale one.
-    for (auto& [name, def] : m_tiles) {
-        if (def.id == id) def.isSolid = isSolid;
+    if (id == 0 || id >= m_tiles.size()) {
+        LOG_ERROR("setTileSolid({}): no such tile id", id);
+        return;
     }
+    m_tiles[id].isSolid = isSolid;
 }
 
 void Tileset::setTileSolid(const std::string& name, bool isSolid)
 {
-    setTileSolid(getTileId(name), isSolid);
+    uint16_t id = getTileId(name);
+    if (id == 0) {
+        LOG_ERROR("setTileSolid('{}'): no such tile", name);
+        return;
+    }
+    setTileSolid(id, isSolid);
 }
 
 bool Tileset::isTileSolid(uint16_t id) const
@@ -60,7 +62,10 @@ TextureAtlas::Region Tileset::getTileUV(uint16_t id, float time, Vec2 tilePos) c
 uint16_t Tileset::createTile(const std::string& regionName)
 {
     const TextureAtlas::Region* region = m_atlas.getRegion(regionName);
-    if (!region) return 0;
+    if (!region) {
+        LOG_ERROR("createTile('{}'): no such atlas region; tile not created", regionName);
+        return 0;
+    }
     return registerTile(regionName, *region, TileType::Normal);
 }
 
@@ -145,15 +150,33 @@ Tileset::gatherRegions(const std::string& prefix, int minIndex, int maxIndex) co
 uint16_t
 Tileset::registerTile(const std::string& name, const TextureAtlas::Region& region, TileType type)
 {
-    TileDefinition def;
-    def.id = static_cast<uint16_t>(m_tilesById.size());
+    if (m_tiles.size() > UINT16_MAX) {
+        LOG_ERROR("registerTile('{}'): tileset is full at {} tiles", name, m_tiles.size());
+        return 0;
+    }
+
+    auto [it, inserted] = m_tileIds.try_emplace(name, static_cast<uint16_t>(m_tiles.size()));
+    uint16_t id = it->second;
+
+    if (inserted) {
+        m_tiles.emplace_back();
+    } else {
+        // Redefining a name reuses its id, so the old type's side tables have to go with it:
+        // getTileUV checks animations and variations before the static rect, and a leftover
+        // would keep winning.
+        LOG_WARNING("tile '{}' redefined; replacing its definition", name);
+        m_animations.erase(id);
+        m_variations.erase(id);
+        m_rules.erase(id);
+    }
+
+    TileDefinition& def = m_tiles[id];
+    def = TileDefinition {};
+    def.id = id;
     def.type = type;
     def.uvMin = region.uvMin;
     def.uvMax = region.uvMax;
-
-    m_tiles[name] = def;
-    m_tilesById.push_back(def);
-    return def.id;
+    return id;
 }
 
 uint16_t Tileset::registerAnimatedTile(const std::string& name, const TileAnimation& anim)
@@ -193,13 +216,8 @@ uint16_t Tileset::registerRuleTile(const std::string& name, const TileRule& rule
 
     // The template only references region indices up to some maximum; warn if the
     // variant list can't cover them (out-of-range indices fall back to variant 0).
-    int needed = 0;
-    if (rule.table) {
-        for (const RuleTileMapping& m : *rule.table) {
-            if (m.regionIndex >= needed) needed = m.regionIndex + 1;
-        }
-    }
-    if (needed > 0 && static_cast<int>(rule.variants.size()) < needed) {
+    int needed = rule.table ? RuleTileTemplateManager::templateRegionCount(*rule.table) : 0;
+    if (static_cast<int>(rule.variants.size()) < needed) {
         LOG_WARNING(
             "createRuleTile('{}'): got {} regions, template references up to {}", name,
             rule.variants.size(), needed

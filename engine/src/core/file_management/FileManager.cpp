@@ -20,6 +20,14 @@ fs::path FileManager::engineAsset(const fs::path& relativePath) const
     return m_engineAssetRoot / relativePath;
 }
 
+void FileManager::setGameAssetRoot(const fs::path& root) { m_gameAssetRoot = root; }
+const fs::path& FileManager::getGameAssetRoot() const { return m_gameAssetRoot; }
+
+fs::path FileManager::gameAsset(const fs::path& relativePath) const
+{
+    return m_gameAssetRoot / relativePath;
+}
+
 bool FileManager::doesPathExist(const fs::path& path) { return fs::exists(path); }
 bool FileManager::isDirectory(const fs::path& path) { return fs::is_directory(path); }
 

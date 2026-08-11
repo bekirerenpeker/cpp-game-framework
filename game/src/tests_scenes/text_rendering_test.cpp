@@ -7,19 +7,19 @@ namespace {
 
 // Any .ttf/.otf dropped in here is picked up; the system font is only a fallback
 // so the scene still runs on a fresh clone with no font asset committed.
-const char* FONT_FOLDER = "game/assets/fonts";
 const char* FALLBACK_FONT = "C:/Windows/Fonts/segoeui.ttf";
 
 fs::path findFontFile()
 {
-    if (FileManager::get().doesPathExist(FONT_FOLDER)) {
-        for (const auto& entry : fs::directory_iterator(FONT_FOLDER)) {
+    fs::path fontFolder = FileManager::get().gameAsset("fonts");
+    if (FileManager::get().doesPathExist(fontFolder)) {
+        for (const auto& entry : fs::directory_iterator(fontFolder)) {
             std::string ext = entry.path().extension().string();
             if (ext == ".ttf" || ext == ".otf") return entry.path();
         }
     }
 
-    LOG_WARNING("no .ttf/.otf found in {}; falling back to {}", FONT_FOLDER, FALLBACK_FONT);
+    LOG_WARNING("no .ttf/.otf found in {}; falling back to {}", fontFolder, FALLBACK_FONT);
     return FALLBACK_FONT;
 }
 
@@ -144,7 +144,7 @@ int text_rendering_test()
     );
     Font bitmapFont(fontPath, {.atlasType = FontAtlasType::Bitmap, .emPixelSize = 16});
 
-    GlShader atlasShader("game/assets/shaders/AtlasDebugShader.glsl");
+    GlShader atlasShader(FileManager::get().gameAsset("shaders/AtlasDebugShader.glsl"));
     // Plain pass-through for the final blit instead of PostProcessingShader, whose
     // UV gradient would tint everything and make the styled colours unverifiable.
     GlShader* blitShader = Renderer::get().getDefaultShader();

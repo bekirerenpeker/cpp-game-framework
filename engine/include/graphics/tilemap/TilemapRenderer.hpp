@@ -27,6 +27,7 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
     void init(GlShader* shader = nullptr, size_t maxQuadCount = 20000);
     void setShader(GlShader* shader);
     void render(TilemapComponent& tilemap);
+    void render(TilemapComponent& tilemap, const TileGrid& grid);
     void render(Registry& registry);
 
   private:
@@ -34,11 +35,12 @@ class TilemapRenderer : public Singleton<TilemapRenderer>
     ~TilemapRenderer() = default;
 
     void buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk, Tileset& tileset);
+    void emitQuad(TilemapChunk& chunk, Vec2 min, Vec2 max, const std::array<Vec2, 4>& uv);
     static uint8_t computeNeighborMask(
         TilemapComponent& tilemap, Tileset& tileset, uint16_t selfId, int gx, int gy
     );
     static std::array<Vec2, 4> rotatedUVCorners(const TextureAtlas::Region& region, int rotation);
-    static bool chunkVisible(const TilemapChunk& chunk);
+    static bool chunkVisible(const TilemapChunk& chunk, const TileGrid& grid);
 };
 
 }   // namespace Engine

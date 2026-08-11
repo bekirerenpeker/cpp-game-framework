@@ -35,6 +35,7 @@ class RuleTileTemplateManager : public Singleton<RuleTileTemplateManager>
     void createTemplate(const std::string& name, const std::vector<RuleTileRule>& rules);
     const std::array<RuleTileMapping, 256>& getTemplate(const std::string& name);
     int templateRegionCount(const std::string& name);
+    static int templateRegionCount(const std::array<RuleTileMapping, 256>& table);
 
   private:
     RuleTileTemplateManager() = default;

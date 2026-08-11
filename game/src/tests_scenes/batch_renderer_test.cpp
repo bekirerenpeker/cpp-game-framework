@@ -31,16 +31,16 @@ int batch_renderer_test()
     camera2.emplace<CameraComponent>().windowId = windowId2;
     camera2.get<CameraComponent>().orthoSize = 40;
 
-    GlTexture marioTex("game/assets/images/mario.png");
-    TextureAtlas tileAtlas("game/assets/images/TilesetFloorB.png");
+    GlTexture marioTex(FileManager::get().gameAsset("images/mario.png"));
+    TextureAtlas tileAtlas(FileManager::get().gameAsset("images/TilesetFloorB.png"));
     std::vector<std::string> tileKeys = tileAtlas.fromCellSize("tile", 32, 32);
     if (tileKeys.empty()) {
         LOG_ERROR("atlas produced no regions (is TilesetFloorB.png present?)");
         return 1;
     }
 
-    GlShader grayShader("game/assets/shaders/GrayscaleQuadShader.glsl");
-    GlShader ppShader("game/assets/shaders/PostProcessingShader.glsl");
+    GlShader grayShader(FileManager::get().gameAsset("shaders/GrayscaleQuadShader.glsl"));
+    GlShader ppShader(FileManager::get().gameAsset("shaders/PostProcessingShader.glsl"));
     Renderer::get().init(10000);
     GlShader* shader = Renderer::get().getDefaultShader();
 

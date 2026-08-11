@@ -75,15 +75,19 @@ RayHit testCircleCastCircle(const Ray& path, float radius, const Circle& circle)
 RayHit testBoxCastBox(const Ray& path, const Vec2& halfExtents, const Box& box);
 RayHit testBoxCastCircle(const Ray& path, const Vec2& halfExtents, const Circle& circle);
 
-// A tile is one world unit at integer coordinates, matching what TilemapRenderer draws; the
-// tilemap entity's transform is not read, because the renderer does not read it either.
-bool testPointTilemap(const Vec2& point, const TilemapComponent& tilemap);
-RayHit testRayTilemap(const Ray& ray, const TilemapComponent& tilemap);
-Contact testBoxTilemap(const Box& box, const TilemapComponent& tilemap);
-Contact testCircleTilemap(const Circle& circle, const TilemapComponent& tilemap);
-RayHit testCircleCastTilemap(const Ray& path, float radius, const TilemapComponent& tilemap);
-RayHit
-testBoxCastTilemap(const Ray& path, const Vec2& halfExtents, const TilemapComponent& tilemap);
+// A tilemap is placed and sized by its transform -- position is the corner of tile (0,0) and
+// scale is the tile size -- exactly as TilemapRenderer draws it. Rotation is ignored.
+bool testPointTilemap(const Vec2& point, const TilemapComponent& tilemap, const TileGrid& grid);
+RayHit testRayTilemap(const Ray& ray, const TilemapComponent& tilemap, const TileGrid& grid);
+Contact testBoxTilemap(const Box& box, const TilemapComponent& tilemap, const TileGrid& grid);
+Contact
+testCircleTilemap(const Circle& circle, const TilemapComponent& tilemap, const TileGrid& grid);
+RayHit testCircleCastTilemap(
+    const Ray& path, float radius, const TilemapComponent& tilemap, const TileGrid& grid
+);
+RayHit testBoxCastTilemap(
+    const Ray& path, const Vec2& halfExtents, const TilemapComponent& tilemap, const TileGrid& grid
+);
 
 bool testPointEntity(const Vec2& point, EntityHandle entity);
 RayHit testRayEntity(const Ray& ray, EntityHandle entity);

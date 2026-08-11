@@ -54,7 +54,11 @@ RuleTileTemplateManager::getTemplate(const std::string& name)
 
 int RuleTileTemplateManager::templateRegionCount(const std::string& name)
 {
-    const std::array<RuleTileMapping, 256>& table = getTemplate(name);
+    return templateRegionCount(getTemplate(name));
+}
+
+int RuleTileTemplateManager::templateRegionCount(const std::array<RuleTileMapping, 256>& table)
+{
     int maxIndex = 0;
     for (const RuleTileMapping& m : table) {
         if (m.regionIndex > maxIndex) maxIndex = m.regionIndex;

@@ -92,6 +92,20 @@ path; everything else is polish on things that already work.
 
 ## Done
 
+### Tilemap
+
+- [x] **Transform-driven placement** — a tilemap's tile size and world offset come from its
+  `TransformComponent` (`scale` and `position`; rotation ignored), shared by the renderer and
+  the collision tests through `TileGrid`. Chunk meshes stay baked in tile units and the
+  transform rides in the MVP, so moving or resizing never invalidates a chunk.
+
+- [x] **Tilemap cleanup** — `Tileset` stored every definition twice and only ever read `.id`
+  from the second copy; collapsed to one id-indexed vector plus a name→id map, which also
+  fixed duplicate names orphaning an id and the unchecked `uint16_t` narrowing. `setAt` no
+  longer allocates a 150KB chunk to store an empty tile. Coordinate math lives on
+  `TilemapManager` and `TileGrid` instead of six copies across three files, and
+  `TilemapComponent` is plain public data rather than two `friend` classes.
+
 ### Physics
 
 - [x] **Fixed timestep** — accumulator and step count on `Time`, drained by

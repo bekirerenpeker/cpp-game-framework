@@ -6,7 +6,8 @@ using namespace Engine;
 
 // Draws a rule-tile map re-sampled from 3D Perlin noise every frame (time on the z
 // axis), so TilemapRenderer keeps re-resolving each tile's region/rotation from its
-// live 8-neighbor connectivity. WASD/QE pan and zoom; V toggles wireframe.
+// live 8-neighbor connectivity. The map's tile size and world offset come from its
+// transform. WASD/QE pan and zoom; IJKL move and resize the map; V toggles wireframe.
 int tilemap_test()
 {
     LOG_INFO("================= TILEMAP RENDER TEST =================");
@@ -18,16 +19,16 @@ int tilemap_test()
     EntityHandle camera = registry.create();
     camera.emplace<TransformComponent>();
     camera.emplace<CameraComponent>().windowId = windowId;
-    camera.get<CameraComponent>().orthoSize = 48;
+    camera.get<CameraComponent>().orthoSize = 1536;
 
     // Partitioning lives on the atlas. Slice the whole sheet into 8x8 regions
     // "tile0", "tile1", ... (transparent cells are skipped); the count is the
     // number of regions produced.
-    Tileset tileset("game/assets/images/ruletile-47-kingspigs-tileset.png");
+    Tileset tileset(FileManager::get().gameAsset("images/ruletile-47-kingspigs-tileset.png"));
     int tileCount = static_cast<int>(tileset.getAtlas().fromCellSize("tile", 32, 32).size());
 
     if (tileCount < 1) {
-        LOG_ERROR("      ERROR: tileset produced too few tiles (is TilesetFloorB.png present?)");
+        LOG_ERROR("tileset produced no tiles; is ruletile-47-kingspigs-tileset.png present?");
         return 1;
     }
 
@@ -35,6 +36,9 @@ int tilemap_test()
     uint16_t ruleTileId = tileset.createRuleTile("ruleTile", "tile", 0, tileCount, "47-tile");
 
     EntityHandle tilemapEntity = registry.create();
+    TransformComponent& tilemapTransform = tilemapEntity.emplace<TransformComponent>();
+    tilemapTransform.scale = Vec2(32.0f, 32.0f);
+    tilemapTransform.position = Vec3(24.0f, -40.0f, 0.0f);
     TilemapManager::get().setTileset(tilemapEntity.emplace<TilemapComponent>(), &tileset);
 
     int mapWidth = 250;
@@ -71,6 +75,12 @@ int tilemap_test()
             trans.position.y += Input::get().getAxis("Vertical") * dt * cam.orthoSize;
             cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
         }
+        TransformComponent& mapTransform = tilemapEntity.get<TransformComponent>();
+        if (Input::get().keyHeld(KeyCode::J)) mapTransform.position.x -= dt * 200.0f;
+        if (Input::get().keyHeld(KeyCode::L)) mapTransform.position.x += dt * 200.0f;
+        if (Input::get().keyHeld(KeyCode::K)) mapTransform.scale *= 1.0f - dt;
+        if (Input::get().keyHeld(KeyCode::I)) mapTransform.scale *= 1.0f + dt;
+
         if (Input::get().keyPressed(KeyCode::V)) wireframe = !wireframe;
     };
 

@@ -9,11 +9,14 @@
 #include "graphics/Color.hpp"
 #include "graphics/tilemap/TilemapManager.hpp"
 #include "graphics/tilemap/Tileset.hpp"
+#include "utils/math/Mat4.hpp"
 
 namespace Engine {
 
 void TilemapRenderer::init(GlShader* shader, size_t maxQuadCount)
 {
+    if (m_initialized) return;
+
     if (!shader) {
         m_defaultShaderId = ResourceManager::get().addResource<GlShader>(
             FileManager::get().engineAsset("shaders/TilemapShader.glsl")
@@ -38,20 +41,25 @@ void TilemapRenderer::setShader(GlShader* shader) { m_batch.setShader(shader); }
 
 void TilemapRenderer::render(Registry& registry)
 {
-    View<TilemapComponent> view(registry);
-    for (const auto& [entity, tilemap] : view) render(tilemap);
+    View<TransformComponent, TilemapComponent> view(registry);
+    for (const auto& [entity, transform, tilemap] : view) {
+        render(tilemap, TileGrid::fromTransform(transform));
+    }
 }
 
-void TilemapRenderer::render(TilemapComponent& tilemap)
+void TilemapRenderer::render(TilemapComponent& tilemap) { render(tilemap, TileGrid {}); }
+
+void TilemapRenderer::render(TilemapComponent& tilemap, const TileGrid& grid)
 {
     if (!m_initialized) {
         LOG_WARNING("TilemapRenderer::render() called before init(); skipping");
         return;
     }
-    if (!tilemap.m_tileset) {
+    if (!tilemap.tileset) {
         LOG_WARNING("render() called on a TilemapComponent with no tileset; skipping");
         return;
     }
+    if (!grid.isValid()) return;
 
     Window* context = ViewContext::get().getActiveWindow();
     if (!context) {
@@ -59,11 +67,7 @@ void TilemapRenderer::render(TilemapComponent& tilemap)
         return;
     }
 
-    Tileset& tileset = *tilemap.m_tileset;
-
-    for (auto& [key, chunk] : tilemap.m_chunks) {
-        if (chunk.isDirty && chunkVisible(chunk)) buildChunk(tilemap, chunk, tileset);
-    }
+    Tileset& tileset = *tilemap.tileset;
 
     // VAOs are not shared across GL contexts, so use this context's own VAO,
     // created and configured the first time we draw into this window.
@@ -74,12 +78,18 @@ void TilemapRenderer::render(TilemapComponent& tilemap)
     }
     m_batch.setVao(vao);
 
-    m_batch.setViewProjMat(ViewContext::get().getViewProjMat());
+    // Chunk meshes are baked in tile units, so where the tilemap sits rides in the matrix and
+    // moving or resizing it never invalidates a chunk.
+    Mat4 model = Mat4::translateMat(grid.origin) * Mat4::scaleMat(grid.tileSize);
+    m_batch.setViewProjMat(ViewContext::get().getViewProjMat() * model);
 
     const GlTexture* texture = &tileset.getTexture();
+    const float time = Time::get().getCurrTime();
 
-    for (auto& [key, chunk] : tilemap.m_chunks) {
-        if (!chunkVisible(chunk)) continue;
+    for (auto& [key, chunk] : tilemap.chunks) {
+        if (!chunkVisible(chunk, grid)) continue;
+        if (chunk.isDirty) buildChunk(tilemap, chunk, tileset);
+
         for (size_t i = 0; i + 4 <= chunk.mesh.size(); i += 4) {
             BatchRenderer<TileVertex>::Quad quad = m_batch.nextQuad(texture);
             for (int v = 0; v < 4; v++) {
@@ -87,27 +97,19 @@ void TilemapRenderer::render(TilemapComponent& tilemap)
                 quad.verts[v].texIndex = quad.texIndex;
             }
         }
-    }
 
-    const float time = Time::get().getCurrTime();
-    for (auto& [key, chunk] : tilemap.m_chunks) {
-        if (!chunkVisible(chunk)) continue;
         for (const AnimatedTileInstance& a : chunk.animatedTiles) {
-            TextureAtlas::Region uv = tileset.getTileUV(a.tileId, time, Vec2(a.x, a.y));
-            const float x1 = a.x + 1.0f, y1 = a.y + 1.0f;
+            TextureAtlas::Region uv = tileset.getTileUV(a.tileId, time, a.pos);
+            const Vec2 max = a.pos + VEC2_ONE;
 
             BatchRenderer<TileVertex>::Quad quad = m_batch.nextQuad(texture);
-            quad.verts[0] = {
-                Vec2(a.x, a.y), Vec2(uv.uvMin.x, uv.uvMin.y), COLOR_WHITE, quad.texIndex
-            };
+            quad.verts[0] = {a.pos, Vec2(uv.uvMin.x, uv.uvMin.y), COLOR_WHITE, quad.texIndex};
             quad.verts[1] = {
-                Vec2(x1, a.y), Vec2(uv.uvMax.x, uv.uvMin.y), COLOR_WHITE, quad.texIndex
+                Vec2(max.x, a.pos.y), Vec2(uv.uvMax.x, uv.uvMin.y), COLOR_WHITE, quad.texIndex
             };
-            quad.verts[2] = {
-                Vec2(x1, y1), Vec2(uv.uvMax.x, uv.uvMax.y), COLOR_WHITE, quad.texIndex
-            };
+            quad.verts[2] = {max, Vec2(uv.uvMax.x, uv.uvMax.y), COLOR_WHITE, quad.texIndex};
             quad.verts[3] = {
-                Vec2(a.x, y1), Vec2(uv.uvMin.x, uv.uvMax.y), COLOR_WHITE, quad.texIndex
+                Vec2(a.pos.x, max.y), Vec2(uv.uvMin.x, uv.uvMax.y), COLOR_WHITE, quad.texIndex
             };
         }
     }
@@ -129,50 +131,51 @@ void TilemapRenderer::buildChunk(TilemapComponent& tilemap, TilemapChunk& chunk,
     for (int ly = 0; ly < S; ly++) {
         for (int lx = 0; lx < S; lx++) {
             const TileData& tile = chunk.tiles[ly * S + lx];
-            if (tile.textureId == 0) continue;
+            if (tile.tileId == 0) continue;
 
-            const Tileset::TileDefinition* def = tileset.getTile(tile.textureId);
+            const Tileset::TileDefinition* def = tileset.getTile(tile.tileId);
             if (!def) continue;
 
-            const float x0 = static_cast<float>(baseX + lx);
-            const float y0 = static_cast<float>(baseY + ly);
+            const Vec2 min(static_cast<float>(baseX + lx), static_cast<float>(baseY + ly));
 
             // Animated tiles change UVs every frame, so they're kept out of the
             // static mesh and re-emitted at draw time instead.
             if (def->type == TileType::Animated) {
-                chunk.animatedTiles.push_back({x0, y0, tile.textureId});
+                chunk.animatedTiles.push_back({min, tile.tileId});
                 continue;
             }
 
-            const float x1 = x0 + 1.0f;
-            const float y1 = y0 + 1.0f;
+            const Vec2 max = min + VEC2_ONE;
 
             // Rule tiles resolve region + rotation from a live 8-neighbor bitmask
             // here at bake time, so it costs nothing per frame.
             if (def->type == TileType::Rule) {
                 uint8_t mask =
-                    computeNeighborMask(tilemap, tileset, tile.textureId, baseX + lx, baseY + ly);
-                Tileset::RuleTileUV ruv = tileset.getRuleTileUV(tile.textureId, mask);
-                std::array<Vec2, 4> uv = rotatedUVCorners(ruv.region, ruv.rotation);
-
-                chunk.mesh.push_back({Vec2(x0, y0), uv[0], COLOR_WHITE, 0});
-                chunk.mesh.push_back({Vec2(x1, y0), uv[1], COLOR_WHITE, 0});
-                chunk.mesh.push_back({Vec2(x1, y1), uv[2], COLOR_WHITE, 0});
-                chunk.mesh.push_back({Vec2(x0, y1), uv[3], COLOR_WHITE, 0});
+                    computeNeighborMask(tilemap, tileset, tile.tileId, baseX + lx, baseY + ly);
+                Tileset::RuleTileUV ruv = tileset.getRuleTileUV(tile.tileId, mask);
+                emitQuad(chunk, min, max, rotatedUVCorners(ruv.region, ruv.rotation));
                 continue;
             }
 
-            const TextureAtlas::Region uv = tileset.getTileUV(tile.textureId, 0.0f, Vec2(x0, y0));
-            const Vec2 uvMin = uv.uvMin, uvMax = uv.uvMax;
-
-            chunk.mesh.push_back({Vec2(x0, y0), Vec2(uvMin.x, uvMin.y), COLOR_WHITE, 0});
-            chunk.mesh.push_back({Vec2(x1, y0), Vec2(uvMax.x, uvMin.y), COLOR_WHITE, 0});
-            chunk.mesh.push_back({Vec2(x1, y1), Vec2(uvMax.x, uvMax.y), COLOR_WHITE, 0});
-            chunk.mesh.push_back({Vec2(x0, y1), Vec2(uvMin.x, uvMax.y), COLOR_WHITE, 0});
+            const TextureAtlas::Region uv = tileset.getTileUV(tile.tileId, 0.0f, min);
+            emitQuad(
+                chunk, min, max,
+                {uv.uvMin, Vec2(uv.uvMax.x, uv.uvMin.y), uv.uvMax, Vec2(uv.uvMin.x, uv.uvMax.y)}
+            );
         }
     }
 
     chunk.isDirty = false;
+}
+
+void TilemapRenderer::emitQuad(
+    TilemapChunk& chunk, Vec2 min, Vec2 max, const std::array<Vec2, 4>& uv
+)
+{
+    chunk.mesh.push_back({min, uv[0], COLOR_WHITE, 0});
+    chunk.mesh.push_back({Vec2(max.x, min.y), uv[1], COLOR_WHITE, 0});
+    chunk.mesh.push_back({max, uv[2], COLOR_WHITE, 0});
+    chunk.mesh.push_back({Vec2(min.x, max.y), uv[3], COLOR_WHITE, 0});
 }
 
 uint8_t TilemapRenderer::computeNeighborMask(
@@ -186,7 +189,7 @@ uint8_t TilemapRenderer::computeNeighborMask(
     uint8_t mask = 0;
     for (int i = 0; i < 8; i++) {
         TileData neighbor = TilemapManager::get().getAt(tilemap, gx + dx[i], gy + dy[i]);
-        if (tileset.tilesConnect(selfId, neighbor.textureId)) mask |= static_cast<uint8_t>(1 << i);
+        if (tileset.tilesConnect(selfId, neighbor.tileId)) mask |= static_cast<uint8_t>(1 << i);
     }
     return mask;
 }
@@ -210,14 +213,12 @@ TilemapRenderer::rotatedUVCorners(const TextureAtlas::Region& region, int rotati
     return out;
 }
 
-bool TilemapRenderer::chunkVisible(const TilemapChunk& chunk)
+bool TilemapRenderer::chunkVisible(const TilemapChunk& chunk, const TileGrid& grid)
 {
-    constexpr float HALF = TilemapChunk::CHUNK_SIZE * 0.5f;
-    const Vec2 center(
-        chunk.chunkX * TilemapChunk::CHUNK_SIZE + HALF,
-        chunk.chunkY * TilemapChunk::CHUNK_SIZE + HALF
-    );
-    return ViewContext::get().isVisible(center, Vec2(HALF, HALF));
+    constexpr int S = TilemapChunk::CHUNK_SIZE;
+    const Vec2 halfExtents = grid.tileSize * (S * 0.5f);
+    const Vec2 min = grid.tileMin(chunk.chunkX * S, chunk.chunkY * S);
+    return ViewContext::get().isVisible(min + halfExtents, halfExtents);
 }
 
 }   // namespace Engine
