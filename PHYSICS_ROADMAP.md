@@ -32,8 +32,13 @@ collideEntities → depenetrateTilemaps. Broadphase is still the naive double lo
 
 **Components.** `ColliderComponent` — one component, `shape` picks which size field is read,
 `TransformComponent::scale` multiplies the extents. `RigidBodyComponent` — `mass` rather
-than inverse mass, plus `bounciness`, `friction`, `gravityScale`, `BodyType`. No rigidbody
-at all = static.
+than inverse mass, plus `gravityScale` and `BodyType`. No rigidbody at all = static.
+
+**Surface materials.** `PhysicsSurfaceOptions` (bounciness, friction) sits on the *collider*,
+not the body, so a rigidbody-less wall has friction and a single tile can be ice. Resolved by
+`surfaceOf(entity, tile)`: a tile's own override first, then the collider's. This is why
+`Contact`/`RayHit` carry a `TileCoord` alongside the `Entity` — the impulse needs to know
+which tile it hit, not just which tilemap.
 
 **Shapes and resolution.** Box/box, circle/circle, box/circle, each returning a `Contact`;
 the dispatch canonicalises pair order and negates the normal on the one asymmetric pair.
@@ -43,9 +48,16 @@ can take the velocity half alone.
 
 **Tilemap collisions.** `TileGrid::fromTransform` is the adapter — `position` is the corner
 of tile (0,0), `scale` is the tile size, honoured identically by `TilemapRenderer` and every
-test. Solidity is `TileDefinition::isSolid` through `TilemapManager::isSolidAt`. Six tests in
-`TilemapCollisions.cpp`: point, ray, box, circle and both casts, the ray by grid traversal
-and the rest by walking the tiles in the query's AABB.
+test. Six tests in `TilemapCollisions.cpp`: point, ray, box, circle and both casts, the ray by
+grid traversal and the rest by walking the tiles in the query's AABB.
+
+**Tile collision modes.** `TileCollision { None, Full, OneWay, Custom }` on `TileDefinition`,
+Custom narrowing the box to relative 0..1 bounds. One-way is judged against motion wherever
+there is motion to judge — casts compare the entry normal to the sweep direction. Overlap has
+none, and the contact normal is *not* a substitute: it flips the moment the mover's centre
+passes the tile's, which pops a body halfway up through a platform. Overlap therefore asks
+whether the mover's lower edge is still on the top face, and resolves straight up regardless
+of the least-overlap axis.
 
 **Axis-separated movement.** `integrate` sweeps X then Y instead of moving outright, so a
 tile grid's fake interior faces can never push a body sideways along a flat floor. Falls out
@@ -63,9 +75,10 @@ invalidate the view it is iterating.
 `*All` forms on `PhysicsManager`, all closed-form.
 
 **`physics_test` scene.** A tiled room with a resizable wall/ceiling perimeter and generated
-ledges, every body type, a kinematic platform, a trigger box, scene-local debug draw, a UI
-window driving room, world and spawn settings live, a query-mode selector, and a trigger
-enter/exit counter proving the diffing fires once per crossing.
+ledges cycling through every tile type — solid, one-way, ice, bouncy, half-height slab — plus
+every body type, a kinematic platform, a trigger box, scene-local debug draw including the
+tile collision boxes, a UI window driving room, world and spawn settings live, a query-mode
+selector, and a trigger enter/exit counter proving the diffing fires once per crossing.
 
 Layout: `Collisions.hpp` declares the namespace; `engine/src/physics/collisions/` holds
 `CollisionTests`, `CollisionQueries`, `CollisionResolve`, `ShapeCasts`, `TilemapCollisions`
@@ -76,25 +89,7 @@ query members.
 
 ## Next
 
-### 1. Surface materials
-
-Friction and bounciness live on `RigidBodyComponent`, and the combination rules are
-`max(b1, b2)` and `sqrt(f1 * f2)`. Anything without a rigidbody — a static box, a tilemap —
-reads as zero on its side, so **bounciness survives but friction collapses to nothing**
-against every static surface in the engine today. That is a real hole, not a tilemap quirk.
-
-Move the material fields onto `ColliderComponent`, and add a per-tile pair on
-`TileDefinition` so ice and mud are authoring data. Decide at the same time whether a
-missing material means "frictionless" or "use the other side's".
-
-### 2. One-way and custom-bounds tiles
-
-`TileDefinition::isSolid` is a bool; the shape it wants is `None | Full | OneWay |
-Custom(min,max)`. One-way platforms need the sweep to ignore a tile whose surface the body is
-moving *away* from, which is a small change in `forEachSolidTile` and nowhere else — but
-only while the callers still go through it, so it is much cheaper now than retrofitted.
-
-### 3. Forces and impulses
+### 1. Forces and impulses
 
 Gameplay can only write `velocity` directly today, which means every caller re-derives
 `impulse / mass` and nothing can accumulate several pushes in one step. Wants
@@ -102,7 +97,7 @@ Gameplay can only write `velocity` directly today, which means every caller re-d
 built on the existing `circleTest` — explosions and knockback are the two things every game
 needs and neither is expressible right now.
 
-### 4. Playable character in the test scene
+### 2. Playable character in the test scene
 
 A controllable body dropped into the existing scene — the ball pit. This is the step that
 actually exercises everything above, because a controller is the one thing that notices
@@ -119,7 +114,7 @@ when contacts are subtly wrong.
   and consumes it in `onFixedUpdate`, or the loop order changes. Decide here, with
   something on screen to feel the difference.
 
-### 5. Layers and masks
+### 3. Layers and masks
 
 Everything tests against everything. A real game needs the player to pass through pickups,
 enemies to ignore each other, a bullet to hit terrain but not its shooter, and a query to ask
@@ -130,14 +125,14 @@ Was parked as "not designed yet" pending a broader layer component shared with r
 That is still the nicer shape, but the physics side is blocking real gameplay and the two can
 be reconciled later. It also cuts the pair count, so it pays for itself twice.
 
-### 6. Render interpolation
+### 4. Render interpolation
 
 Physics runs at a fixed rate and rendering does not, so motion currently beats visibly
 against the display refresh. Store `prevPosition` at the top of `update`, lerp by the
 leftover accumulator at render time. Cheap, and every fixed-step engine needs it — the
 reason it reads as "polish" is that the test scenes are all short.
 
-### 7. Hardening pass
+### 5. Hardening pass
 
 The named failure modes, not a vague "fix bugs":
 
@@ -150,22 +145,24 @@ The named failure modes, not a vague "fix bugs":
 - a kinematic body that reaches a tile stops dead — `applyImpulse` early-returns on zero
   inverse mass, so it keeps its velocity and never makes progress. Anything driven by
   position thresholds wedges.
-- one-way platforms: moving up through them, and standing on the edge.
+- one-way platforms: a body pushed further than `ONE_WAY_SINK` into one drops through, and a
+  body standing on the very edge is still judged by its lower edge alone, not by how much of
+  it is actually over the tile.
 
-### 8. Continuous collision between entities
+### 6. Continuous collision between entities
 
 The tilemap path cannot tunnel because it sweeps, but entity-vs-entity still moves then
 pushes out, so a fast body passes straight through a thin one. Opt-in per body, since making
 it unconditional costs a cast per pair. `testEntityCastEntity` already exists — this is
 mostly deciding when to spend it.
 
-### 9. Joints and constraints
+### 7. Joints and constraints
 
 A distance constraint gets ropes, chains, swinging platforms and grappling hooks; a hinge
 gets doors and ragdolls. Wants a constraint list on `PhysicsWorld` solved after contacts,
 which is also the point at which iteration count starts to matter.
 
-### 10. Rotated colliders and angular motion
+### 8. Rotated colliders and angular motion
 
 Opt-in per collider. Adds `testObbObb` + `testObbCircle` and one branch in the dispatch;
 because the tests take `Box`/`Circle` structs and not components, nothing else changes.

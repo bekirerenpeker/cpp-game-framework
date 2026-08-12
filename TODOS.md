@@ -23,8 +23,7 @@ path; everything else is polish on things that already work.
 
 ## Gameplay systems — none of this exists yet
 
-- [ ] **Surface materials** — friction and bounciness live on the rigidbody, so anything without one reads as zero and friction collapses against *every* static surface. Move them to `ColliderComponent` and `TileDefinition`. Next step in [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md).
-- [ ] **Physics for actual gameplay** — one-way tiles, `addForce`/`addImpulse`/radial impulse, layers and masks, render interpolation. Steps 2-6 of [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md); none of it is expressible today.
+- [ ] **Physics for actual gameplay** — `addForce`/`addImpulse`/radial impulse, layers and masks, render interpolation. Steps 1-4 of [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md); none of it is expressible today.
 - [ ] **Character controller** — a controllable body in `physics_test` first, then grounded/airborne states, coyote time, jump buffering. Forces the `onFixedUpdate`-before-`Input::update` decision.
 - [ ] **World save/load** — ECS + tilemap through `JsonFile`/`BinaryFile`; chunked so a big world streams.
 - [ ] **2D lighting** — tile flood-fill into a light texture sampled by the tile and sprite shaders.
@@ -117,6 +116,11 @@ path; everything else is polish on things that already work.
 - [x] **Collision and resolution** — collider and rigidbody components, all three narrowphase pairs
   behind one `Contact`, MTV resolution with bounciness and friction, contacts exposed as output,
   and deferred trigger enter/exit events. Remaining work is in [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md).
+
+- [x] **Surface materials and tile collision modes** — `PhysicsSurfaceOptions` moved off the
+  rigidbody onto the collider, so a wall without a body finally has friction, and
+  `TileDefinition` carries an optional override plus `None/Full/OneWay/Custom`. `Contact` and
+  `RayHit` gained a `TileCoord` because the impulse has to know which *tile* it hit.
 
 - [x] **Tilemap collisions** — tile solidity, six tilemap tests, and axis-separated swept movement
   in `integrate`: X then Y, each clipped by a shape cast, so a tile grid's fake interior faces can

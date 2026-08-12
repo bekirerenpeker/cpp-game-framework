@@ -15,6 +15,8 @@ constexpr int MAX_RAY_STEPS = 2 * MAX_TILE_SPAN;
 constexpr float PARALLEL_EPSILON = 1e-6f;
 constexpr float FAR_AWAY = 1e30f;
 constexpr float ONE_WAY_FACING = 0.5f;
+// How far a resting body may be pushed into a one-way tile before it drops through instead.
+constexpr float ONE_WAY_SINK = 0.5f;
 
 struct SolidTile
 {
@@ -49,6 +51,24 @@ bool oneWayBlocks(const Vec2& outward, const Vec2& motion)
 {
     if (outward.y < ONE_WAY_FACING) return false;
     return Vec2::dot(motion, outward) < 0.0f;
+}
+
+// Overlap carries no motion to judge by, and the contact normal is no substitute: it flips the
+// moment the mover's centre passes the tile's, which pops a body halfway up through a
+// platform. What matters is whether the mover is still standing on the top face.
+bool oneWaySupports(float moverBottom, const Box& tile)
+{
+    float top = tile.center.y + tile.halfExtents.y;
+    return moverBottom >= top - tile.halfExtents.y * ONE_WAY_SINK;
+}
+
+// However the least-overlap axis fell, a one-way tile can only ever push straight up.
+void makeOneWayContact(Contact& contact, float moverBottom, float moverX, const Box& tile)
+{
+    float top = tile.center.y + tile.halfExtents.y;
+    contact.normal = VEC2_DOWN;
+    contact.depth = top - moverBottom;
+    contact.point = Vec2(moverX, top);
 }
 
 template<typename Fn>
@@ -176,9 +196,13 @@ Contact testBoxTilemap(const Box& box, const TilemapComponent& tilemap, const Ti
         tilemap, grid, box.center - box.halfExtents, box.center + box.halfExtents,
         [&](const SolidTile& tile) {
             Contact contact = testBoxBox(box, tile.box);
-            // No motion to judge a one-way tile by, so the escape direction stands in: it can
-            // hold a body up, never shove it sideways or down out of itself.
-            if (tile.isOneWay && !oneWayBlocks(-contact.normal, contact.normal)) return;
+            if (!contact.isTouching) return;
+
+            float bottom = box.center.y - box.halfExtents.y;
+            if (tile.isOneWay) {
+                if (!oneWaySupports(bottom, tile.box)) return;
+                makeOneWayContact(contact, bottom, box.center.x, tile.box);
+            }
 
             contact.tile = tile.coord;
             keepDeepest(deepest, contact);
@@ -197,8 +221,14 @@ testCircleTilemap(const Circle& circle, const TilemapComponent& tilemap, const T
         tilemap, grid, circle.center - extent, circle.center + extent, [&](const SolidTile& tile) {
             // testBoxCircle runs tile -> circle; the caller asked for circle -> tile.
             Contact contact = testBoxCircle(tile.box, circle);
+            if (!contact.isTouching) return;
             contact.normal = -contact.normal;
-            if (tile.isOneWay && !oneWayBlocks(-contact.normal, contact.normal)) return;
+
+            float bottom = circle.center.y - circle.radius;
+            if (tile.isOneWay) {
+                if (!oneWaySupports(bottom, tile.box)) return;
+                makeOneWayContact(contact, bottom, circle.center.x, tile.box);
+            }
 
             contact.tile = tile.coord;
             keepDeepest(deepest, contact);
