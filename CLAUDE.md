@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-A 2D Terraria-style game in C++20, split into a reusable **engine** static library and a
+A 2D game engine in C++20, split into a reusable **engine** static library and a
 thin **game** executable that currently drives it through hand-written test scenes rather
 than a real gameplay loop.
 
