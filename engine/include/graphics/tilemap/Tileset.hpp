@@ -1,9 +1,11 @@
 #pragma once
 
+#include "components/ColliderComponent.hpp"
 #include "core/resource_management/IResource.hpp"
 #include "graphics/TextureAtlas.hpp"
 #include "graphics/tilemap/RuleTileTemplates.hpp"
 #include "utils/math/Vec2.hpp"
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -25,6 +27,14 @@ enum class AnimMode : uint8_t
     Once
 };
 
+enum class TileCollision : uint8_t
+{
+    None = 0,
+    Full,
+    OneWay,
+    Custom
+};
+
 class Tileset : public IResource
 {
   public:
@@ -33,7 +43,10 @@ class Tileset : public IResource
         uint16_t id = 0;
         TileType type = TileType::Normal;
         Vec2 uvMin = VEC2_ZERO, uvMax = VEC2_ONE;
-        bool isSolid = false;
+
+        TileCollision collision = TileCollision::None;
+        Vec2 collisionMin = VEC2_ZERO, collisionMax = VEC2_ONE;   // Custom only, relative 0..1
+        std::optional<PhysicsSurfaceOptions> surface;             // if unset then use the tilemap's
     };
 
   private:
@@ -70,9 +83,14 @@ class Tileset : public IResource
     const TileDefinition* getTile(uint16_t id) const;
     uint16_t getTileId(const std::string& name) const;
 
-    void setTileSolid(uint16_t id, bool isSolid);
-    void setTileSolid(const std::string& name, bool isSolid);
-    bool isTileSolid(uint16_t id) const;
+    void setTileCollision(uint16_t id, TileCollision collision);
+    void setTileCollision(const std::string& name, TileCollision collision);
+    void setTileCollisionBounds(uint16_t id, Vec2 relativeMin, Vec2 relativeMax);
+    void setTileCollisionBounds(const std::string& name, Vec2 relativeMin, Vec2 relativeMax);
+    void setTileSurface(uint16_t id, const PhysicsSurfaceOptions& surface);
+    void setTileSurface(const std::string& name, const PhysicsSurfaceOptions& surface);
+
+    TileCollision getTileCollision(uint16_t id) const;
 
     TextureAtlas::Region getTileUV(uint16_t id, float time, Vec2 tilePos = VEC2_ZERO) const;
 
@@ -106,6 +124,9 @@ class Tileset : public IResource
     bool tilesConnect(uint16_t a, uint16_t b) const;
 
   private:
+    TileDefinition* editTile(uint16_t id, const char* caller);
+    TileDefinition* editTile(const std::string& name, const char* caller);
+
     std::vector<TextureAtlas::Region> gatherRegions(const std::vector<std::string>& names) const;
     std::vector<TextureAtlas::Region>
     gatherRegions(const std::string& prefix, int minIndex, int maxIndex) const;

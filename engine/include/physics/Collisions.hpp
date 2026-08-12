@@ -22,12 +22,14 @@ struct Circle
     Vec2 center;
     float radius;
 };
+// entity is set by the registry-wide tests, tile additionally by the tilemap ones.
 struct Contact
 {
     bool isTouching = false;
     Vec2 point, normal;
     float depth;
-    Entity entity = NULL_ENTITY;   // only set if testing against whole registery
+    Entity entity = NULL_ENTITY;
+    TileCoord tile = INVALID_TILE;
 };
 
 struct Ray
@@ -44,7 +46,8 @@ struct RayHit
     bool isHit = false;
     Vec2 point, normal;
     float distance;
-    Entity entity = NULL_ENTITY;   // only set if testing against whole registery
+    Entity entity = NULL_ENTITY;
+    TileCoord tile = INVALID_TILE;
 };
 
 struct ResolveSettings
@@ -75,8 +78,6 @@ RayHit testCircleCastCircle(const Ray& path, float radius, const Circle& circle)
 RayHit testBoxCastBox(const Ray& path, const Vec2& halfExtents, const Box& box);
 RayHit testBoxCastCircle(const Ray& path, const Vec2& halfExtents, const Circle& circle);
 
-// A tilemap is placed and sized by its transform -- position is the corner of tile (0,0) and
-// scale is the tile size -- exactly as TilemapRenderer draws it. Rotation is ignored.
 bool testPointTilemap(const Vec2& point, const TilemapComponent& tilemap, const TileGrid& grid);
 RayHit testRayTilemap(const Ray& ray, const TilemapComponent& tilemap, const TileGrid& grid);
 Contact testBoxTilemap(const Box& box, const TilemapComponent& tilemap, const TileGrid& grid);
@@ -97,6 +98,8 @@ RayHit testCircleCastEntity(const Ray& path, float radius, EntityHandle entity);
 RayHit testBoxCastEntity(const Ray& path, const Vec2& halfExtents, EntityHandle entity);
 RayHit testEntityCastEntity(const Vec2& motion, EntityHandle mover, EntityHandle target);
 Contact testEntities(EntityHandle a, EntityHandle b);
+
+PhysicsSurfaceOptions surfaceOf(EntityHandle entity, TileCoord tile = INVALID_TILE);
 
 void correctPositions(
     EntityHandle a, EntityHandle b, const Contact& contact, const ResolveSettings& settings = {}

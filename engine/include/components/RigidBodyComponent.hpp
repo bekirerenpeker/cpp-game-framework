@@ -22,14 +22,11 @@ enum class BodyType : uint8_t
 //                 other body by mass.
 // mass is what the caller authors; the solver derives the inverse and treats every
 // non-dynamic body as infinite, so a dynamic body hitting one takes the whole correction.
-//
-// bounciness is a property of the pair, not of one body: a contact takes the larger of the
-// two, so one bouncy object bounces off anything. friction takes the geometric mean instead,
-// so one slippery surface is enough to slide on. Both are 0..1.
+// Bounciness and friction describe the surface, so they live on ColliderComponent.
 struct RigidBodyComponent
 {
     Vec2 velocity = VEC2_ZERO;
-    float mass = 1.0f, bounciness = 0.0f, friction = 0.0f, gravityScale = 1.0f;
+    float mass = 1.0f, gravityScale = 1.0f;
     BodyType type = BodyType::Dynamic;
 };
 

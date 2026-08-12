@@ -1,3 +1,4 @@
+#include "graphics/tilemap/TilemapManager.hpp"
 #include "physics/Collisions.hpp"
 #include "utils/math/MathFuncs.hpp"
 
@@ -29,6 +30,23 @@ void movePosition(TransformComponent* transform, const Vec2& push)
 }
 
 }   // namespace
+
+// Tile override first, then the collider's. `tile` is ignored unless the entity is a tilemap.
+PhysicsSurfaceOptions surfaceOf(EntityHandle entity, TileCoord tile)
+{
+    ColliderComponent* collider = entity.tryGet<ColliderComponent>();
+    if (!collider) return {};
+
+    if (collider->shape == ColliderShape::Tilemap && !(tile == INVALID_TILE)) {
+        TilemapComponent* tilemap = entity.tryGet<TilemapComponent>();
+        if (tilemap) {
+            const Tileset::TileDefinition* def =
+                TilemapManager::get().getDefinitionAt(*tilemap, tile);
+            if (def && def->surface) return *def->surface;
+        }
+    }
+    return collider->surface;
+}
 
 // Split from resolveContact because a swept mover has already been placed short of the surface
 // and only wants the velocity half; correcting its position again would drag it back in.
@@ -73,10 +91,10 @@ void applyImpulse(
     // together again would make bodies stick.
     if (alongNormal > 0) return;
 
-    float bounciness = Math::max(
-        body1 ? body1->bounciness : 0.0f,   //
-        body2 ? body2->bounciness : 0.0f
-    );
+    PhysicsSurfaceOptions surface1 = surfaceOf(a, contact.tile);
+    PhysicsSurfaceOptions surface2 = surfaceOf(b, contact.tile);
+
+    float bounciness = Math::max(surface1.bounciness, surface2.bounciness);
     // Gravity feeds a body a little approach speed every step, so a bouncy one resting on the
     // floor would micro-hop forever without a floor under which a contact counts as a rest.
     if (-alongNormal < settings.bounceThreshold) bounciness = 0.0f;
@@ -91,8 +109,7 @@ void applyImpulse(
     if (tangent.sqrMagnitude() <= 0) return;
     tangent = tangent.normalized();
 
-    float friction =
-        Math::sqrt((body1 ? body1->friction : 0.0f) * (body2 ? body2->friction : 0.0f));
+    float friction = Math::sqrt(surface1.friction * surface2.friction);
     // Coulomb: friction can slow the slide to a stop but never reverse it, and never exceeds
     // what the normal impulse pressed the surfaces together with.
     float tangentImpulse = -Vec2::dot(relativeVelocity, tangent) / inverseMassSum;

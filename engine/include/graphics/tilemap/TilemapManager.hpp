@@ -1,11 +1,10 @@
 #pragma once
 
 #include "components/TilemapComponent.hpp"
+#include "graphics/tilemap/Tileset.hpp"
 #include "utils/Singleton.hpp"
 
 namespace Engine {
-
-class Tileset;
 
 class TilemapManager : public Singleton<TilemapManager>
 {
@@ -38,6 +37,11 @@ class TilemapManager : public Singleton<TilemapManager>
 
     void setTileset(TilemapComponent& tilemap, Tileset* tileset) const;
     Tileset* getTileset(const TilemapComponent& tilemap) const;
+
+    const Tileset::TileDefinition*
+    getDefinitionAt(const TilemapComponent& tilemap, int x, int y) const;
+    const Tileset::TileDefinition*
+    getDefinitionAt(const TilemapComponent& tilemap, TileCoord tile) const;
 
     bool isSolidAt(const TilemapComponent& tilemap, int x, int y) const;
     bool isSolidAt(const TilemapComponent& tilemap, TileCoord tile) const;

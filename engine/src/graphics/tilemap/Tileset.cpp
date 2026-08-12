@@ -17,29 +17,69 @@ uint16_t Tileset::getTileId(const std::string& name) const
     return it == m_tileIds.end() ? 0 : it->second;
 }
 
-void Tileset::setTileSolid(uint16_t id, bool isSolid)
+Tileset::TileDefinition* Tileset::editTile(uint16_t id, const char* caller)
 {
     if (id == 0 || id >= m_tiles.size()) {
-        LOG_ERROR("setTileSolid({}): no such tile id", id);
-        return;
+        LOG_ERROR("{}({}): no such tile id", caller, id);
+        return nullptr;
     }
-    m_tiles[id].isSolid = isSolid;
+    return &m_tiles[id];
 }
 
-void Tileset::setTileSolid(const std::string& name, bool isSolid)
+Tileset::TileDefinition* Tileset::editTile(const std::string& name, const char* caller)
 {
     uint16_t id = getTileId(name);
     if (id == 0) {
-        LOG_ERROR("setTileSolid('{}'): no such tile", name);
-        return;
+        LOG_ERROR("{}('{}'): no such tile", caller, name);
+        return nullptr;
     }
-    setTileSolid(id, isSolid);
+    return editTile(id, caller);
 }
 
-bool Tileset::isTileSolid(uint16_t id) const
+void Tileset::setTileCollision(uint16_t id, TileCollision collision)
+{
+    if (TileDefinition* def = editTile(id, "setTileCollision")) def->collision = collision;
+}
+
+void Tileset::setTileCollision(const std::string& name, TileCollision collision)
+{
+    if (TileDefinition* def = editTile(name, "setTileCollision")) def->collision = collision;
+}
+
+void Tileset::setTileCollisionBounds(uint16_t id, Vec2 relativeMin, Vec2 relativeMax)
+{
+    TileDefinition* def = editTile(id, "setTileCollisionBounds");
+    if (!def) return;
+
+    def->collision = TileCollision::Custom;
+    def->collisionMin = Vec2::min(relativeMin, relativeMax);
+    def->collisionMax = Vec2::max(relativeMin, relativeMax);
+}
+
+void Tileset::setTileCollisionBounds(const std::string& name, Vec2 relativeMin, Vec2 relativeMax)
+{
+    uint16_t id = getTileId(name);
+    if (id == 0) {
+        LOG_ERROR("setTileCollisionBounds('{}'): no such tile", name);
+        return;
+    }
+    setTileCollisionBounds(id, relativeMin, relativeMax);
+}
+
+void Tileset::setTileSurface(uint16_t id, const PhysicsSurfaceOptions& surface)
+{
+    if (TileDefinition* def = editTile(id, "setTileSurface")) def->surface = surface;
+}
+
+void Tileset::setTileSurface(const std::string& name, const PhysicsSurfaceOptions& surface)
+{
+    if (TileDefinition* def = editTile(name, "setTileSurface")) def->surface = surface;
+}
+
+TileCollision Tileset::getTileCollision(uint16_t id) const
 {
     const TileDefinition* def = getTile(id);
-    return def && def->isSolid;
+    return def ? def->collision : TileCollision::None;
 }
 
 TextureAtlas::Region Tileset::getTileUV(uint16_t id, float time, Vec2 tilePos) const

@@ -12,6 +12,15 @@ enum class ColliderShape : uint8_t
     Tilemap
 };
 
+// Both are pair properties: a contact takes the larger bounciness and the geometric mean of
+// the frictions. On the collider rather than the body so a wall and a single tile have them
+// too. Both 0..1.
+struct PhysicsSurfaceOptions
+{
+    float bounciness = 0.0f;
+    float friction = 0.5f;
+};
+
 // Owning this is what makes an entity collidable; owning no RigidBodyComponent alongside it
 // makes that collider static. A Tilemap shape carries no geometry of its own and reads the
 // sibling TilemapComponent instead.
@@ -31,6 +40,9 @@ struct ColliderComponent
     Vec2 halfExtents = VEC2_ONE * 0.5f;   // Box
     float radius = 0.5f;                  // Circle
     Vec2 offset = VEC2_ZERO;
+
+    // A Tilemap uses this only where a tile does not override it.
+    PhysicsSurfaceOptions surface;
 
     bool isTrigger = false;
 };

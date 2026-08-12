@@ -5,6 +5,7 @@
 #include "utils/math/MathFuncs.hpp"
 #include "utils/math/Vec2.hpp"
 #include <bit>
+#include <climits>
 #include <cstdint>
 #include <unordered_map>
 #include <vector>
@@ -35,7 +36,12 @@ struct AnimatedTileInstance
 struct TileCoord
 {
     int x = 0, y = 0;
+
+    bool operator==(const TileCoord& other) const { return x == other.x && y == other.y; }
 };
+
+// Tile (0,0) is an ordinary tile, so "no tile" needs a coordinate no grid can reach.
+constexpr TileCoord INVALID_TILE {INT_MIN, INT_MIN};
 
 struct TileGrid
 {

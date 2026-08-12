@@ -68,10 +68,23 @@ Tileset* TilemapManager::getTileset(const TilemapComponent& tilemap) const
     return tilemap.tileset;
 }
 
+const Tileset::TileDefinition*
+TilemapManager::getDefinitionAt(const TilemapComponent& tilemap, int x, int y) const
+{
+    if (!tilemap.tileset) return nullptr;
+    return tilemap.tileset->getTile(getAt(tilemap, x, y).tileId);
+}
+
+const Tileset::TileDefinition*
+TilemapManager::getDefinitionAt(const TilemapComponent& tilemap, TileCoord tile) const
+{
+    return getDefinitionAt(tilemap, tile.x, tile.y);
+}
+
 bool TilemapManager::isSolidAt(const TilemapComponent& tilemap, int x, int y) const
 {
-    if (!tilemap.tileset) return false;
-    return tilemap.tileset->isTileSolid(getAt(tilemap, x, y).tileId);
+    const Tileset::TileDefinition* def = getDefinitionAt(tilemap, x, y);
+    return def && def->collision != TileCollision::None;
 }
 
 bool TilemapManager::isSolidAt(const TilemapComponent& tilemap, TileCoord tile) const

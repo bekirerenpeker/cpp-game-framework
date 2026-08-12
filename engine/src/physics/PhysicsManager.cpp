@@ -146,6 +146,8 @@ void PhysicsManager::integrate(Registry& registry, PhysicsWorld& world, float dt
         contact.point = hit.point;
         contact.normal = -hit.normal;
         contact.depth = 0.0f;
+        // Carried over so the impulse reads the tile's own surface, not just the tilemap's.
+        contact.tile = hit.tile;
 
         // The position is already handled by stopping short, so only the velocity half runs --
         // the same bounciness, rest threshold and friction every other collider goes through.

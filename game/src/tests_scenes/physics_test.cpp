@@ -27,6 +27,11 @@ struct RoomSettings
     int height = 24;
 };
 
+struct RoomTiles
+{
+    uint16_t solid = 0, oneWay = 0, ice = 0, bouncy = 0, slab = 0;
+};
+
 const float TILE_SIZE = 40.0f;
 constexpr int MAX_ROOM_TILES = 64 * 48;
 
@@ -54,6 +59,7 @@ SpawnSettings g_spawn;
 RoomSettings g_room;
 TriggerLog g_triggerLog;
 int g_substeps = 1;
+bool g_drawTileColliders = true;
 
 // The room is centred on the origin so resizing grows it in every direction at once.
 Vec2 roomOrigin() { return Vec2(g_room.width * TILE_SIZE, g_room.height * TILE_SIZE) * -0.5f; }
@@ -183,6 +189,45 @@ void drawColliders(Registry& registry)
     });
 }
 
+// Tiles draw with their texture, so the only way to see a one-way ledge or a half-height slab
+// is to draw the box the physics side actually built.
+Color tileColliderColor(const Tileset::TileDefinition& def)
+{
+    if (def.collision == TileCollision::OneWay) return Color(0.3f, 0.9f, 1.0f);
+    if (def.collision == TileCollision::Custom) return Color(1.0f, 0.6f, 0.15f);
+    if (def.surface) return Color(0.9f, 0.4f, 1.0f);
+    return Color(0.55f, 0.55f, 0.65f);
+}
+
+void drawTileColliders(Registry& registry)
+{
+    const TilemapManager& tiles = TilemapManager::get();
+
+    View<TransformComponent, TilemapComponent> view(registry);
+    view.each([&](Entity, TransformComponent& transform, TilemapComponent& tilemap) {
+        TileGrid grid = TileGrid::fromTransform(transform);
+        if (!grid.isValid()) return;
+
+        for (int y = 0; y < g_room.height; y++) {
+            for (int x = 0; x < g_room.width; x++) {
+                const Tileset::TileDefinition* def = tiles.getDefinitionAt(tilemap, x, y);
+                if (!def || def->collision == TileCollision::None) continue;
+
+                bool custom = def->collision == TileCollision::Custom;
+                Vec2 min = custom ? def->collisionMin : VEC2_ZERO;
+                Vec2 max = custom ? def->collisionMax : VEC2_ONE;
+
+                Vec2 cell = grid.tileMin(x, y);
+                Vec2 worldMin = cell + min * grid.tileSize;
+                Vec2 worldMax = cell + max * grid.tileSize;
+                Renderer::get().addFrame(
+                    worldMin, worldMax - worldMin, tileColliderColor(*def), 1.5f
+                );
+            }
+        }
+    });
+}
+
 void drawContacts(Registry& registry)
 {
     for (const ContactRecord& record : PhysicsManager::get().getContacts(registry)) {
@@ -200,13 +245,16 @@ void toss(EntityHandle entity)
         Random::rangeFloat(-g_spawn.speedRange, g_spawn.speedRange),
         Random::rangeFloat(g_spawn.liftMin, g_spawn.liftMax)
     );
-    body.bounciness = Random::rangeFloat(g_spawn.bouncinessMin, g_spawn.bouncinessMax);
-    body.friction = g_spawn.friction;
+
+    ColliderComponent& collider = entity.get<ColliderComponent>();
+    collider.surface.bounciness = Random::rangeFloat(g_spawn.bouncinessMin, g_spawn.bouncinessMax);
+    collider.surface.friction = g_spawn.friction;
 }
 
-// Walls, ceiling and a scatter of ledges, all as solid tiles -- the room the bodies live in is
-// the tilemap, so the swept axis-separated path in `integrate` is what holds everything up.
-void buildRoom(EntityHandle room, uint16_t tileId)
+// Walls, ceiling and a scatter of ledges -- the room the bodies live in is the tilemap, so the
+// swept axis-separated path in `integrate` is what holds everything up. The ledges cycle
+// through the tile types so every collision mode and surface is on screen at once.
+void buildRoom(EntityHandle room, const RoomTiles& tileIds)
 {
     Vec2 origin = roomOrigin();
     room.get<TransformComponent>().position = Vec3(origin.x, origin.y, 0.0f);
@@ -215,16 +263,16 @@ void buildRoom(EntityHandle room, uint16_t tileId)
     const TilemapManager& tiles = TilemapManager::get();
     tiles.clear(tilemap);
 
-    auto fill = [&](int x0, int y0, int x1, int y1) {
+    auto fill = [&](int x0, int y0, int x1, int y1, uint16_t id) {
         for (int y = y0; y <= y1; y++) {
-            for (int x = x0; x <= x1; x++) tiles.setAt(tilemap, x, y, {tileId});
+            for (int x = x0; x <= x1; x++) tiles.setAt(tilemap, x, y, {id});
         }
     };
 
-    fill(0, 0, g_room.width - 1, 0);
-    fill(0, g_room.height - 1, g_room.width - 1, g_room.height - 1);
-    fill(0, 0, 0, g_room.height - 1);
-    fill(g_room.width - 1, 0, g_room.width - 1, g_room.height - 1);
+    fill(0, 0, g_room.width - 1, 0, tileIds.solid);
+    fill(0, g_room.height - 1, g_room.width - 1, g_room.height - 1, tileIds.solid);
+    fill(0, 0, 0, g_room.height - 1, tileIds.solid);
+    fill(g_room.width - 1, 0, g_room.width - 1, g_room.height - 1, tileIds.solid);
 
     // A body spawned inside solid tiles has no contact normal to push out along and drops
     // straight through them, so nothing generates into the spawn band or the platform's lane.
@@ -236,7 +284,12 @@ void buildRoom(EntityHandle room, uint16_t tileId)
         return low >= PLATFORM_BAND_MAX || high <= PLATFORM_BAND_MIN;
     };
 
+    const uint16_t cycle[] = {tileIds.oneWay, tileIds.ice,   tileIds.bouncy,
+                              tileIds.slab,   tileIds.solid, tileIds.solid};
+    int placed = 0;
+
     int ledgeCount = g_room.width * g_room.height / 90;
+    if (ledgeCount < std::size(cycle)) ledgeCount = static_cast<int>(std::size(cycle));
     for (int i = 0; i < ledgeCount; i++) {
         int row = Random::rangeInt(2, g_room.height - 2);
         if (!rowIsClear(row)) continue;
@@ -244,13 +297,16 @@ void buildRoom(EntityHandle room, uint16_t tileId)
         int length = Random::rangeInt(3, 9);
         int startX = Random::rangeInt(1, g_room.width - 1);
         int endX = startX + length - 1;
-        fill(startX, row, endX < g_room.width - 1 ? endX : g_room.width - 2, row);
+        fill(
+            startX, row, endX < g_room.width - 1 ? endX : g_room.width - 2, row,
+            cycle[placed++ % std::size(cycle)]
+        );
     }
 
     for (int i = 0; i < ledgeCount / 2; i++) {
         int row = Random::rangeInt(2, g_room.height - 2);
         if (!rowIsClear(row)) continue;
-        tiles.setAt(tilemap, Random::rangeInt(1, g_room.width - 1), row, {tileId});
+        tiles.setAt(tilemap, Random::rangeInt(1, g_room.width - 1), row, {tileIds.solid});
     }
 }
 
@@ -344,6 +400,8 @@ void panel(Registry& registry, bool& resetClicked, bool& roomChanged, QueryMode&
     if (openSection("Room", {.openByDefault = true, .key = "physicsRoom"})) {
         roomChanged |= sliderInt("Width", g_room.width, 10, 65, {.key = "roomWidth"}).isReleased;
         roomChanged |= sliderInt("Height", g_room.height, 10, 49, {.key = "roomHeight"}).isReleased;
+        checkBox("Tile colliders", g_drawTileColliders, {.key = "tileColliders"});
+        text("cyan one-way   orange custom   purple surface");
     }
     closeSection();
 
@@ -578,8 +636,31 @@ int physics_test()
         return 1;
     }
 
-    uint16_t roomTileId = tileset.createRuleTile("room", "tile", 0, tileCount, "47-tile");
-    tileset.setTileSolid(roomTileId, true);
+    if (tileCount < 20) {
+        LOG_ERROR(
+            "tileset has only {} regions; the scene needs distinct tiles per type", tileCount
+        );
+        return 1;
+    }
+
+    RoomTiles tileIds;
+    tileIds.solid = tileset.createRuleTile("room", "tile", 0, tileCount, "47-tile");
+    tileIds.oneWay = tileset.createTile("tile3");
+    tileIds.ice = tileset.createTile("tile7");
+    tileIds.bouncy = tileset.createTile("tile11");
+    tileIds.slab = tileset.createTile("tile15");
+
+    tileset.setTileCollision(tileIds.solid, TileCollision::Full);
+    tileset.setTileCollision(tileIds.oneWay, TileCollision::OneWay);
+
+    tileset.setTileCollision(tileIds.ice, TileCollision::Full);
+    tileset.setTileSurface(tileIds.ice, {.bounciness = 0.0f, .friction = 0.02f});
+
+    tileset.setTileCollision(tileIds.bouncy, TileCollision::Full);
+    tileset.setTileSurface(tileIds.bouncy, {.bounciness = 0.9f, .friction = 0.4f});
+
+    // A half-height slab: the drawn tile is a full cell, the collision box is its bottom half.
+    tileset.setTileCollisionBounds(tileIds.slab, Vec2(0.0f, 0.0f), Vec2(1.0f, 0.5f));
 
     Input::get().addAxis("Horizontal", {KeyCode::D, KeyCode::A});
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
@@ -597,7 +678,7 @@ int physics_test()
     room.emplace<TransformComponent>().scale = Vec2(TILE_SIZE, TILE_SIZE);
     room.emplace<ColliderComponent>().shape = ColliderShape::Tilemap;
     TilemapManager::get().setTileset(room.emplace<TilemapComponent>(), &tileset);
-    buildRoom(room, roomTileId);
+    buildRoom(room, tileIds);
 
     Entity platform = buildScene(registry);
 
@@ -626,6 +707,7 @@ int physics_test()
 
         Renderer::get().beginScene();
         TilemapRenderer::get().render(registry);
+        if (g_drawTileColliders) drawTileColliders(registry);
         drawColliders(registry);
         drawContacts(registry);
         runQuery(registry, queryMode, ViewContext::get().getMouseWorldPos());
@@ -638,7 +720,7 @@ int physics_test()
 
         // Resizing moves the walls out from under whatever is resting on them, so the bodies
         // are respawned with them.
-        if (roomChanged) buildRoom(room, roomTileId);
+        if (roomChanged) buildRoom(room, tileIds);
         if (roomChanged || resetClicked) platform = resetScene(registry);
     };
 
