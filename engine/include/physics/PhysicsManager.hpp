@@ -13,7 +13,8 @@ class PhysicsManager : public Singleton<PhysicsManager>
     friend class Singleton<PhysicsManager>;
 
   public:
-    void step(Registry& registry, float dt);
+    void update(Registry& registry, float dt, int steps = 1);
+    void substep(Registry& registry, float dt);
 
     PhysicsWorld& getWorld(Registry& registry);
     const std::vector<ContactRecord>& getContacts(Registry& registry);

@@ -53,6 +53,7 @@ struct TriggerLog
 SpawnSettings g_spawn;
 RoomSettings g_room;
 TriggerLog g_triggerLog;
+int g_substeps = 1;
 
 // The room is centred on the origin so resizing grows it in every direction at once.
 Vec2 roomOrigin() { return Vec2(g_room.width * TILE_SIZE, g_room.height * TILE_SIZE) * -0.5f; }
@@ -74,7 +75,12 @@ float interiorHalfWidth() { return -roomOrigin().x - TILE_SIZE; }
 // The platform shrinks and turns around early enough to keep clear of the walls, whatever the
 // room is sized to -- a kinematic body that reaches one has its velocity zeroed and stays put.
 float platformHalfWidth() { return Math::min(110.0f, interiorHalfWidth() * 0.3f); }
-float platformRange() { return Math::max(interiorHalfWidth() - platformHalfWidth(), 0.0f); }
+// A tile of clearance, because turning around exactly at the wall never happens: the sweep
+// stops the platform on the boundary, so it never gets past it to trip the flip.
+float platformRange()
+{
+    return Math::max(interiorHalfWidth() - platformHalfWidth() - TILE_SIZE, 0.0f);
+}
 
 Entity triggerPartner(Registry& registry, const ContactRecord& record)
 {
@@ -342,6 +348,7 @@ void panel(Registry& registry, bool& resetClicked, bool& roomChanged, QueryMode&
     closeSection();
 
     if (openSection("World", {.openByDefault = true, .key = "physicsWorld"})) {
+        sliderInt("Substeps", g_substeps, 1, 13, {.key = "substeps"});
         sliderFloat("Gravity X", world.gravity.x, -2000.0f, 2000.0f, {.key = "gravityX"});
         sliderFloat("Gravity Y", world.gravity.y, -2000.0f, 2000.0f, {.key = "gravityY"});
         sliderFloat("Slop", resolve.penetrationSlop, 0.0f, 5.0f, {.key = "slop"});
@@ -601,7 +608,7 @@ int physics_test()
         if (platformX > range && platformBody.velocity.x > 0) platformBody.velocity.x *= -1;
         if (platformX < -range && platformBody.velocity.x < 0) platformBody.velocity.x *= -1;
 
-        PhysicsManager::get().step(registry, dt);
+        PhysicsManager::get().update(registry, dt, g_substeps);
     };
 
     auto onWindowUpdate = [&](IdType winId, float dt) {

@@ -21,19 +21,39 @@ Vec2 velocityOf(const RigidBodyComponent* body) { return body ? body->velocity :
 
 }   // namespace
 
-void PhysicsManager::step(Registry& registry, float dt)
+// Substepping is what lets a deep pile settle: each pass integrates a shorter distance, so the
+// overlaps the solver has to undo are smaller and it converges instead of squeezing bodies
+// through each other.
+void PhysicsManager::update(Registry& registry, float dt, int steps)
 {
+    if (steps < 1) steps = 1;
+
     PhysicsWorld& world = getWorld(registry);
     beginStep(world);
+
+    float substepDt = dt / static_cast<float>(steps);
+    for (int i = 0; i < steps; i++) substep(registry, substepDt);
+
+    dispatchTriggerEvents(world);
+}
+
+// Public so a caller can drive the pipeline itself, but note it neither rotates the trigger
+// pairs nor fires their events -- that is update's job, once per frame around the whole run.
+void PhysicsManager::substep(Registry& registry, float dt)
+{
+    PhysicsWorld& world = getWorld(registry);
+
+    // Only the last substep's contacts survive, so the list describes what is touching as the
+    // frame ends rather than everything brushed past inside it. Trigger pairs are left to
+    // accumulate, so a body that enters and leaves within one frame still reports both.
+    world.contacts.clear();
 
     integrate(registry, world, dt);
     collideEntities(registry, world);
     // Last, because the pair loop is what pushes bodies into tiles: it splits a separation by
-    // inverse mass with no idea one side is resting on a tilemap. Ending the step outside the
-    // tiles is what lets the next sweep start from a surface it can read a normal off.
+    // inverse mass with no idea one side is resting on a tilemap. Ending outside the tiles is
+    // what lets the next sweep start from a surface it can read a normal off.
     depenetrateTilemaps(registry);
-
-    dispatchTriggerEvents(world);
 }
 
 Collisions::RayHit
