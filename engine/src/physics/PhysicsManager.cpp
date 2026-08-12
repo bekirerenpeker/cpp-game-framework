@@ -11,6 +11,7 @@ namespace {
 // A sweep that lands exactly on a surface starts the next one already touching, where a cast
 // has no entry face to report a normal from.
 constexpr float SWEEP_SKIN = 0.01f;
+constexpr int DEPENETRATION_PASSES = 4;
 
 bool isStatic(const RigidBodyComponent* body)
 {
@@ -27,6 +28,10 @@ void PhysicsManager::step(Registry& registry, float dt)
 
     integrate(registry, world, dt);
     collideEntities(registry, world);
+    // Last, because the pair loop is what pushes bodies into tiles: it splits a separation by
+    // inverse mass with no idea one side is resting on a tilemap. Ending the step outside the
+    // tiles is what lets the next sweep start from a surface it can read a normal off.
+    depenetrateTilemaps(registry);
 
     dispatchTriggerEvents(world);
 }
@@ -50,6 +55,48 @@ PhysicsManager::sweepTilemaps(Registry& registry, Entity entity, const Vec2& mot
         nearest = hit;
     });
     return nearest;
+}
+
+void PhysicsManager::depenetrateTilemaps(Registry& registry)
+{
+    std::vector<Entity> tilemapEntities;
+    View<TilemapComponent> tilemapView(registry);
+    tilemapView.each([&](Entity entity, TilemapComponent&) { tilemapEntities.push_back(entity); });
+    if (tilemapEntities.empty()) return;
+
+    View<TransformComponent, RigidBodyComponent, ColliderComponent> view(registry);
+    view.each([&](Entity entity, TransformComponent& transform, RigidBodyComponent& body,
+                  ColliderComponent&) {
+        if (body.type != BodyType::Dynamic) return;
+
+        EntityHandle mover(entity, registry);
+
+        // One Contact only ever reports the deepest tile, so a body wedged into a corner takes
+        // more than one push to get clear.
+        for (int pass = 0; pass < DEPENETRATION_PASSES; pass++) {
+            bool pushed = false;
+
+            for (Entity tilemapEntity : tilemapEntities) {
+                Collisions::Contact contact =
+                    Collisions::testEntities(mover, EntityHandle(tilemapEntity, registry));
+                if (!contact.isTouching) continue;
+
+                // The normal runs body -> tile, and the whole correction lands on the body:
+                // nothing moves a tilemap.
+                Vec2 escape = contact.normal * -(contact.depth + SWEEP_SKIN);
+                transform.position.x += escape.x;
+                transform.position.y += escape.y;
+
+                // Whatever velocity drove it in would drive it straight back, and the sweep
+                // never got to run its impulse because the cast had no normal to report.
+                float into = Vec2::dot(body.velocity, contact.normal);
+                if (into > 0) body.velocity -= contact.normal * into;
+
+                pushed = true;
+            }
+            if (!pushed) break;
+        }
+    });
 }
 
 void PhysicsManager::integrate(Registry& registry, PhysicsWorld& world, float dt)

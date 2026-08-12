@@ -42,6 +42,7 @@ class PhysicsManager : public Singleton<PhysicsManager>
 
     void beginStep(PhysicsWorld& world);
     void integrate(Registry& registry, PhysicsWorld& world, float dt);
+    void depenetrateTilemaps(Registry& registry);
     void collideEntities(Registry& registry, PhysicsWorld& world);
     void dispatchTriggerEvents(PhysicsWorld& world);
 };
