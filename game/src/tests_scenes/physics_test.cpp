@@ -19,6 +19,13 @@ struct SpawnSettings
     float bouncinessMin = 0.0f;
     float bouncinessMax = 0.9f;
     float friction = 0.3f;
+    float damping = 0.0f;
+};
+
+struct BlastSettings
+{
+    float radius = 220.0f;
+    float strength = 900.0f;
 };
 
 struct RoomSettings
@@ -60,6 +67,10 @@ RoomSettings g_room;
 TriggerLog g_triggerLog;
 int g_substeps = 1;
 bool g_drawTileColliders = true;
+
+BlastSettings g_blast;
+Vec2 g_blastPos;
+float g_blastFade = 0.0f;
 
 // The room is centred on the origin so resizing grows it in every direction at once.
 Vec2 roomOrigin() { return Vec2(g_room.width * TILE_SIZE, g_room.height * TILE_SIZE) * -0.5f; }
@@ -246,9 +257,35 @@ void toss(EntityHandle entity)
         Random::rangeFloat(g_spawn.liftMin, g_spawn.liftMax)
     );
 
+    body.damping = g_spawn.damping;
+
     ColliderComponent& collider = entity.get<ColliderComponent>();
     collider.surface.bounciness = Random::rangeFloat(g_spawn.bouncinessMin, g_spawn.bouncinessMax);
     collider.surface.friction = g_spawn.friction;
+}
+
+// Radial impulse, scene-side on purpose: a real game wants its own falloff curve and damage
+// alongside it, so the engine supplies only circleTest and addImpulse.
+void explode(Registry& registry, const Vec2& center)
+{
+    SparseSet<RigidBodyComponent>& bodies = registry.getPool<RigidBodyComponent>();
+    SparseSet<TransformComponent>& transforms = registry.getPool<TransformComponent>();
+
+    Collisions::Circle blast {.center = center, .radius = g_blast.radius};
+    for (const Collisions::Contact& contact : PhysicsManager::get().circleTest(registry, blast)) {
+        if (!bodies.contains(contact.entity)) continue;
+
+        TransformComponent& transform = transforms.get(contact.entity);
+        Vec2 delta = Vec2(transform.position.x, transform.position.y) - center;
+        float distance = delta.magnitude();
+
+        Vec2 direction = distance > 0 ? delta / distance : VEC2_UP;
+        float falloff = 1.0f - Math::clamp(distance / g_blast.radius, 0.0f, 1.0f);
+        bodies.get(contact.entity).addImpulse(direction * (g_blast.strength * falloff));
+    }
+
+    g_blastPos = center;
+    g_blastFade = 1.0f;
 }
 
 // Walls, ceiling and a scatter of ledges -- the room the bodies live in is the tilemap, so the
@@ -423,6 +460,14 @@ void panel(Registry& registry, bool& resetClicked, bool& roomChanged, QueryMode&
         sliderFloat("Bounce Min", g_spawn.bouncinessMin, 0.0f, 1.0f, {.key = "bounceMin"});
         sliderFloat("Bounce Max", g_spawn.bouncinessMax, 0.0f, 1.0f, {.key = "bounceMax"});
         sliderFloat("Friction", g_spawn.friction, 0.0f, 1.0f, {.key = "friction"});
+        sliderFloat("Damping", g_spawn.damping, 0.0f, 5.0f, {.key = "damping"});
+    }
+    closeSection();
+
+    if (openSection("Blast", {.openByDefault = true, .key = "physicsBlast"})) {
+        sliderFloat("Radius", g_blast.radius, 40.0f, 800.0f, {.key = "blastRadius"});
+        sliderFloat("Strength", g_blast.strength, 0.0f, 4000.0f, {.key = "blastStrength"});
+        text("space at the cursor");
     }
     closeSection();
 
@@ -698,6 +743,11 @@ int physics_test()
         transform.position.x += Input::get().getAxis("Horizontal") * dt * cam.orthoSize;
         transform.position.y += Input::get().getAxis("Vertical") * dt * cam.orthoSize;
         cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
+
+        if (Input::get().keyPressed(KeyCode::Space)) {
+            explode(registry, ViewContext::get().getMouseWorldPos());
+        }
+        if (g_blastFade > 0.0f) g_blastFade -= dt * 3.0f;
     };
 
     QueryMode queryMode = QueryMode::Off;
@@ -710,6 +760,11 @@ int physics_test()
         if (g_drawTileColliders) drawTileColliders(registry);
         drawColliders(registry);
         drawContacts(registry);
+        if (g_blastFade > 0.0f) {
+            Renderer::get().addCircleFrame(
+                g_blastPos, g_blast.radius, Color(1.0f, 0.7f, 0.2f, g_blastFade), 3.0f
+            );
+        }
         runQuery(registry, queryMode, ViewContext::get().getMouseWorldPos());
         Renderer::get().endScene();
 

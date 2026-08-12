@@ -40,6 +40,13 @@ not the body, so a rigidbody-less wall has friction and a single tile can be ice
 `Contact`/`RayHit` carry a `TileCoord` alongside the `Entity` — the impulse needs to know
 which tile it hit, not just which tilemap.
 
+**Forces and impulses.** `addForce`/`addImpulse` on the body, plus mass-independent
+`addAcceleration`/`addVelocityChange`. Only forces accumulate: a force is a rate, so it needs
+a `dt` the call site does not know, and it is applied in every substep and cleared once at the
+end of `update` — total effect stays `force * dt` whatever the substep count. An impulse is
+already a velocity change, so it lands immediately at the call site and needs no accumulator.
+`damping` alongside them, as `velocity /= 1 + damping * dt`.
+
 **Shapes and resolution.** Box/box, circle/circle, box/circle, each returning a `Contact`;
 the dispatch canonicalises pair order and negates the normal on the one asymmetric pair.
 `resolveContact` splits into `correctPositions` (slop-adjusted, divided by inverse mass) and
@@ -89,15 +96,7 @@ query members.
 
 ## Next
 
-### 1. Forces and impulses
-
-Gameplay can only write `velocity` directly today, which means every caller re-derives
-`impulse / mass` and nothing can accumulate several pushes in one step. Wants
-`addForce` / `addImpulse` on the body plus an `applyRadialImpulse(centre, radius, strength)`
-built on the existing `circleTest` — explosions and knockback are the two things every game
-needs and neither is expressible right now.
-
-### 2. Playable character in the test scene
+### 1. Playable character in the test scene
 
 A controllable body dropped into the existing scene — the ball pit. This is the step that
 actually exercises everything above, because a controller is the one thing that notices
@@ -114,7 +113,7 @@ when contacts are subtly wrong.
   and consumes it in `onFixedUpdate`, or the loop order changes. Decide here, with
   something on screen to feel the difference.
 
-### 3. Layers and masks
+### 2. Layers and masks
 
 Everything tests against everything. A real game needs the player to pass through pickups,
 enemies to ignore each other, a bullet to hit terrain but not its shooter, and a query to ask
@@ -125,14 +124,14 @@ Was parked as "not designed yet" pending a broader layer component shared with r
 That is still the nicer shape, but the physics side is blocking real gameplay and the two can
 be reconciled later. It also cuts the pair count, so it pays for itself twice.
 
-### 4. Render interpolation
+### 3. Render interpolation
 
 Physics runs at a fixed rate and rendering does not, so motion currently beats visibly
 against the display refresh. Store `prevPosition` at the top of `update`, lerp by the
 leftover accumulator at render time. Cheap, and every fixed-step engine needs it — the
 reason it reads as "polish" is that the test scenes are all short.
 
-### 5. Hardening pass
+### 4. Hardening pass
 
 The named failure modes, not a vague "fix bugs":
 
@@ -149,20 +148,28 @@ The named failure modes, not a vague "fix bugs":
   body standing on the very edge is still judged by its lower edge alone, not by how much of
   it is actually over the tile.
 
-### 6. Continuous collision between entities
+### 5. Continuous collision between entities
 
 The tilemap path cannot tunnel because it sweeps, but entity-vs-entity still moves then
 pushes out, so a fast body passes straight through a thin one. Opt-in per body, since making
 it unconditional costs a cast per pair. `testEntityCastEntity` already exists — this is
 mostly deciding when to spend it.
 
-### 7. Joints and constraints
+### 6. Joints and constraints
 
 A distance constraint gets ropes, chains, swinging platforms and grappling hooks; a hinge
-gets doors and ragdolls. Wants a constraint list on `PhysicsWorld` solved after contacts,
-which is also the point at which iteration count starts to matter.
+gets doors and ragdolls. Wants a constraint list on `PhysicsWorld` solved after contacts.
 
-### 8. Rotated colliders and angular motion
+**This one is not free-standing.** A constraint solve is iterative by nature — solve a
+ten-link rope once per step and it propagates one link per step, which is the rope-made-of-
+jelly look. So it depends on Optimizations #5 (solver iterations separate from substeps), and
+probably #11 (warm starting) to settle. Doing joints without deciding that first means
+building the iteration loop by accident, at the moment you can least tell a constraint bug
+from a convergence one. It is also the most speculative entry here: layers, forces and a
+character are universal, ropes and ragdolls are genre-specific. Worth deciding against a real
+game rather than in advance.
+
+### 7. Rotated colliders and angular motion
 
 Opt-in per collider. Adds `testObbObb` + `testObbCircle` and one branch in the dispatch;
 because the tests take `Box`/`Circle` structs and not components, nothing else changes.

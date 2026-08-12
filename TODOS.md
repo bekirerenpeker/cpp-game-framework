@@ -23,7 +23,7 @@ path; everything else is polish on things that already work.
 
 ## Gameplay systems — none of this exists yet
 
-- [ ] **Physics for actual gameplay** — `addForce`/`addImpulse`/radial impulse, layers and masks, render interpolation. Steps 1-4 of [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md); none of it is expressible today.
+- [ ] **Physics for actual gameplay** — layers and masks, then render interpolation. Steps 2-3 of [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md); everything still collides with everything.
 - [ ] **Character controller** — a controllable body in `physics_test` first, then grounded/airborne states, coyote time, jump buffering. Forces the `onFixedUpdate`-before-`Input::update` decision.
 - [ ] **World save/load** — ECS + tilemap through `JsonFile`/`BinaryFile`; chunked so a big world streams.
 - [ ] **2D lighting** — tile flood-fill into a light texture sampled by the tile and sprite shaders.
@@ -116,6 +116,12 @@ path; everything else is polish on things that already work.
 - [x] **Collision and resolution** — collider and rigidbody components, all three narrowphase pairs
   behind one `Contact`, MTV resolution with bounciness and friction, contacts exposed as output,
   and deferred trigger enter/exit events. Remaining work is in [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md).
+
+- [x] **Forces, impulses and damping** — `addForce`/`addImpulse` plus mass-independent
+  `addAcceleration`/`addVelocityChange`. Only forces accumulate, because a force needs a `dt`
+  the call site does not know; an impulse is already a velocity change and lands immediately.
+  The accumulator is cleared per `update`, not per substep, so raising the substep count cannot
+  weaken a force.
 
 - [x] **Surface materials and tile collision modes** — `PhysicsSurfaceOptions` moved off the
   rigidbody onto the collider, so a wall without a body finally has friction, and

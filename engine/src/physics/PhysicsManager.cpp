@@ -34,6 +34,11 @@ void PhysicsManager::update(Registry& registry, float dt, int steps)
     float substepDt = dt / static_cast<float>(steps);
     for (int i = 0; i < steps; i++) substep(registry, substepDt);
 
+    // Held across the substeps so a force applied once still lands as force * dt in total,
+    // whatever the substep count. An impulse needs none of this and goes straight to velocity.
+    View<RigidBodyComponent> bodies(registry);
+    bodies.each([](Entity, RigidBodyComponent& body) { body.forceAccumulator = VEC2_ZERO; });
+
     dispatchTriggerEvents(world);
 }
 
@@ -165,6 +170,8 @@ void PhysicsManager::integrate(Registry& registry, PhysicsWorld& world, float dt
         // on them, which is what makes a moving platform hold its path.
         if (body.type == BodyType::Dynamic) {
             body.velocity += world.gravity * body.gravityScale * dt;
+            if (body.mass > 0) body.velocity += body.forceAccumulator * (dt / body.mass);
+            if (body.damping > 0) body.velocity /= 1.0f + body.damping * dt;
         }
 
         sweepAxis(entity, transform.position.x, body.velocity.x * dt, true);

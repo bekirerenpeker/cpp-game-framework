@@ -26,8 +26,27 @@ enum class BodyType : uint8_t
 struct RigidBodyComponent
 {
     Vec2 velocity = VEC2_ZERO;
-    float mass = 1.0f, gravityScale = 1.0f;
+    Vec2 forceAccumulator = VEC2_ZERO;
+    float mass = 1.0f, gravityScale = 1.0f, damping = 0.0f;
     BodyType type = BodyType::Dynamic;
+
+    void addForce(const Vec2& force)
+    {
+        if (type == BodyType::Dynamic) forceAccumulator += force;
+    }
+    void addAcceleration(const Vec2& acceleration)
+    {
+        if (type == BodyType::Dynamic) forceAccumulator += acceleration * mass;
+    }
+
+    void addImpulse(const Vec2& impulse)
+    {
+        if (type == BodyType::Dynamic && mass > 0) velocity += impulse / mass;
+    }
+    void addVelocityChange(const Vec2& velocityChange)
+    {
+        if (type == BodyType::Dynamic) velocity += velocityChange;
+    }
 };
 
 }   // namespace Engine
