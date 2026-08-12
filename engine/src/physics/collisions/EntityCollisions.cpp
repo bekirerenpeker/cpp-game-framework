@@ -129,6 +129,22 @@ RayHit testBoxCastEntity(const Ray& path, const Vec2& halfExtents, EntityHandle 
     );
 }
 
+RayHit testEntityCastEntity(const Vec2& motion, EntityHandle mover, EntityHandle target)
+{
+    return dispatch<RayHit>(
+        mover,
+        [&](const Box& box) {
+            return testBoxCastEntity({box.center, box.center + motion}, box.halfExtents, target);
+        },
+        [&](const Circle& circle) {
+            return testCircleCastEntity(
+                {circle.center, circle.center + motion}, circle.radius, target
+            );
+        },
+        [&](const TilemapComponent&, const TileGrid&) { return RayHit {}; }
+    );
+}
+
 Contact testEntities(EntityHandle a, EntityHandle b)
 {
     return dispatch<Contact>(

@@ -30,19 +30,18 @@ void movePosition(TransformComponent* transform, const Vec2& push)
 
 }   // namespace
 
-void resolveContact(
+// Split from resolveContact because a swept mover has already been placed short of the surface
+// and only wants the velocity half; correcting its position again would drag it back in.
+void correctPositions(
     EntityHandle a, EntityHandle b, const Contact& contact, const ResolveSettings& settings
 )
 {
     TransformComponent* t1 = a.tryGet<TransformComponent>();
     TransformComponent* t2 = b.tryGet<TransformComponent>();
-    RigidBodyComponent* body1 = a.tryGet<RigidBodyComponent>();
-    RigidBodyComponent* body2 = b.tryGet<RigidBodyComponent>();
 
-    // Something with no transform cannot be moved at all, which is how a tilemap absorbs none
-    // of the correction without needing a case of its own.
-    float inverseMass1 = t1 ? inverseMassOf(body1) : 0.0f;
-    float inverseMass2 = t2 ? inverseMassOf(body2) : 0.0f;
+    // Something with no transform cannot be moved at all.
+    float inverseMass1 = t1 ? inverseMassOf(a.tryGet<RigidBodyComponent>()) : 0.0f;
+    float inverseMass2 = t2 ? inverseMassOf(b.tryGet<RigidBodyComponent>()) : 0.0f;
     float inverseMassSum = inverseMass1 + inverseMass2;
     if (inverseMassSum <= 0) return;
 
@@ -54,6 +53,19 @@ void resolveContact(
 
     movePosition(t1, push * -inverseMass1);
     movePosition(t2, push * inverseMass2);
+}
+
+void applyImpulse(
+    EntityHandle a, EntityHandle b, const Contact& contact, const ResolveSettings& settings
+)
+{
+    RigidBodyComponent* body1 = a.tryGet<RigidBodyComponent>();
+    RigidBodyComponent* body2 = b.tryGet<RigidBodyComponent>();
+
+    float inverseMass1 = inverseMassOf(body1);
+    float inverseMass2 = inverseMassOf(body2);
+    float inverseMassSum = inverseMass1 + inverseMass2;
+    if (inverseMassSum <= 0) return;
 
     Vec2 relativeVelocity = velocityOf(body2) - velocityOf(body1);
     float alongNormal = Vec2::dot(relativeVelocity, contact.normal);
@@ -89,6 +101,14 @@ void resolveContact(
 
     addVelocity(body1, tangent * -tangentImpulse, inverseMass1);
     addVelocity(body2, tangent * tangentImpulse, inverseMass2);
+}
+
+void resolveContact(
+    EntityHandle a, EntityHandle b, const Contact& contact, const ResolveSettings& settings
+)
+{
+    correctPositions(a, b, contact, settings);
+    applyImpulse(a, b, contact, settings);
 }
 
 }   // namespace Collisions

@@ -12,6 +12,7 @@ namespace {
 
 struct SpawnSettings
 {
+    int bodyCount = 24;
     float speedRange = 280.0f;
     float liftMin = -200.0f;
     float liftMax = 320.0f;
@@ -19,6 +20,19 @@ struct SpawnSettings
     float bouncinessMax = 0.9f;
     float friction = 0.3f;
 };
+
+struct RoomSettings
+{
+    int width = 30;
+    int height = 24;
+};
+
+const float TILE_SIZE = 40.0f;
+constexpr int MAX_ROOM_TILES = 64 * 48;
+
+// The kinematic platform sweeps this band, so no ledge may generate into it.
+const float PLATFORM_BAND_MIN = -175.0f;
+const float PLATFORM_BAND_MAX = -100.0f;
 
 // The trigger box publishes onTriggerEnter/onTriggerExit once per pair per crossing; counting
 // them here is what shows the diffing works rather than firing every frame the pair overlaps.
@@ -37,7 +51,30 @@ struct TriggerLog
 };
 
 SpawnSettings g_spawn;
+RoomSettings g_room;
 TriggerLog g_triggerLog;
+
+// The room is centred on the origin so resizing grows it in every direction at once.
+Vec2 roomOrigin() { return Vec2(g_room.width * TILE_SIZE, g_room.height * TILE_SIZE) * -0.5f; }
+
+Vec2 spawnMin()
+{
+    Vec2 origin = roomOrigin();
+    return origin + Vec2(TILE_SIZE * 2.0f, TILE_SIZE * (g_room.height - 6));
+}
+
+Vec2 spawnMax()
+{
+    Vec2 origin = roomOrigin();
+    return origin + Vec2(TILE_SIZE * (g_room.width - 2), TILE_SIZE * (g_room.height - 2));
+}
+
+float interiorHalfWidth() { return -roomOrigin().x - TILE_SIZE; }
+
+// The platform shrinks and turns around early enough to keep clear of the walls, whatever the
+// room is sized to -- a kinematic body that reaches one has its velocity zeroed and stays put.
+float platformHalfWidth() { return Math::min(110.0f, interiorHalfWidth() * 0.3f); }
+float platformRange() { return Math::max(interiorHalfWidth() - platformHalfWidth(), 0.0f); }
 
 Entity triggerPartner(Registry& registry, const ContactRecord& record)
 {
@@ -120,6 +157,9 @@ void drawColliders(Registry& registry)
 
     View<TransformComponent, ColliderComponent> view(registry);
     view.each([&](Entity entity, TransformComponent& transform, ColliderComponent& collider) {
+        // The tilemap draws itself through TilemapRenderer.
+        if (collider.shape == ColliderShape::Tilemap) return;
+
         RigidBodyComponent* body = bodies.contains(entity) ? &bodies.get(entity) : nullptr;
         Color color = colliderColor(body, collider);
         float thickness = g_triggerLog.inside.count(entity) ? 4.0f : 2.0f;
@@ -158,26 +198,77 @@ void toss(EntityHandle entity)
     body.friction = g_spawn.friction;
 }
 
+// Walls, ceiling and a scatter of ledges, all as solid tiles -- the room the bodies live in is
+// the tilemap, so the swept axis-separated path in `integrate` is what holds everything up.
+void buildRoom(EntityHandle room, uint16_t tileId)
+{
+    Vec2 origin = roomOrigin();
+    room.get<TransformComponent>().position = Vec3(origin.x, origin.y, 0.0f);
+
+    TilemapComponent& tilemap = room.get<TilemapComponent>();
+    const TilemapManager& tiles = TilemapManager::get();
+    tiles.clear(tilemap);
+
+    auto fill = [&](int x0, int y0, int x1, int y1) {
+        for (int y = y0; y <= y1; y++) {
+            for (int x = x0; x <= x1; x++) tiles.setAt(tilemap, x, y, {tileId});
+        }
+    };
+
+    fill(0, 0, g_room.width - 1, 0);
+    fill(0, g_room.height - 1, g_room.width - 1, g_room.height - 1);
+    fill(0, 0, 0, g_room.height - 1);
+    fill(g_room.width - 1, 0, g_room.width - 1, g_room.height - 1);
+
+    // A body spawned inside solid tiles has no contact normal to push out along and drops
+    // straight through them, so nothing generates into the spawn band or the platform's lane.
+    float spawnFloor = spawnMin().y;
+    auto rowIsClear = [&](int row) {
+        float low = origin.y + row * TILE_SIZE;
+        float high = low + TILE_SIZE;
+        if (high > spawnFloor - TILE_SIZE) return false;
+        return low >= PLATFORM_BAND_MAX || high <= PLATFORM_BAND_MIN;
+    };
+
+    int ledgeCount = g_room.width * g_room.height / 90;
+    for (int i = 0; i < ledgeCount; i++) {
+        int row = Random::rangeInt(2, g_room.height - 2);
+        if (!rowIsClear(row)) continue;
+
+        int length = Random::rangeInt(3, 9);
+        int startX = Random::rangeInt(1, g_room.width - 1);
+        int endX = startX + length - 1;
+        fill(startX, row, endX < g_room.width - 1 ? endX : g_room.width - 2, row);
+    }
+
+    for (int i = 0; i < ledgeCount / 2; i++) {
+        int row = Random::rangeInt(2, g_room.height - 2);
+        if (!rowIsClear(row)) continue;
+        tiles.setAt(tilemap, Random::rangeInt(1, g_room.width - 1), row, {tileId});
+    }
+}
+
 Entity buildScene(Registry& registry)
 {
-    makeBox(registry, Vec2(0, -380), Vec2(460, 20), BodyType::Static, false);
-    makeBox(registry, Vec2(-440, -60), Vec2(20, 300), BodyType::Static, false);
-    makeBox(registry, Vec2(440, -60), Vec2(20, 300), BodyType::Static, true);
-    makeBox(registry, Vec2(-180, -270), Vec2(120, 20), BodyType::Static, false);
-
-    EntityHandle platform = makeBox(registry, Vec2(0, -130), Vec2(110, 15), BodyType::Kinematic);
+    EntityHandle platform =
+        makeBox(registry, Vec2(0, -130), Vec2(platformHalfWidth(), 15), BodyType::Kinematic);
     platform.get<RigidBodyComponent>().velocity = Vec2(180.0f, 0.0f);
 
-    makeBox(registry, Vec2(250, -240), Vec2(70, 70), BodyType::Static, false, true);
+    float triggerHalf = Math::min(70.0f, interiorHalfWidth() * 0.2f);
+    Vec2 triggerPos(interiorHalfWidth() * 0.45f, roomOrigin().y + TILE_SIZE + triggerHalf);
+    makeBox(registry, triggerPos, Vec2(triggerHalf, triggerHalf), BodyType::Static, false, true);
 
-    toss(makeBox(registry, Vec2(-200, 200), Vec2(25, 25), BodyType::Dynamic));
-    toss(makeBox(registry, Vec2(-140, 340), Vec2(30, 18), BodyType::Dynamic));
-    toss(makeBox(registry, Vec2(40, 260), Vec2(20, 20), BodyType::Dynamic));
-    toss(makeBox(registry, Vec2(300, 300), Vec2(35, 35), BodyType::Dynamic));
+    Vec2 low = spawnMin(), high = spawnMax();
+    for (int i = 0; i < g_spawn.bodyCount; i++) {
+        Vec2 pos(Random::rangeFloat(low.x, high.x), Random::rangeFloat(low.y, high.y));
 
-    toss(makeCircle(registry, Vec2(-60, 380), 28.0f, BodyType::Dynamic));
-    toss(makeCircle(registry, Vec2(120, 180), 34.0f, BodyType::Dynamic));
-    toss(makeCircle(registry, Vec2(230, 420), 22.0f, BodyType::Dynamic));
+        if (Random::float01() < 0.5f) {
+            toss(makeCircle(registry, pos, Random::rangeFloat(12.0f, 32.0f), BodyType::Dynamic));
+            continue;
+        }
+        Vec2 halfExtents(Random::rangeFloat(12.0f, 35.0f), Random::rangeFloat(12.0f, 35.0f));
+        toss(makeBox(registry, pos, halfExtents, BodyType::Dynamic));
+    }
 
     return platform.getEntity();
 }
@@ -186,7 +277,10 @@ Entity resetScene(Registry& registry)
 {
     std::vector<Entity> toDestroy;
     View<ColliderComponent> view(registry);
-    view.each([&](Entity entity, ColliderComponent&) { toDestroy.push_back(entity); });
+    view.each([&](Entity entity, ColliderComponent& collider) {
+        if (collider.shape == ColliderShape::Tilemap) return;
+        toDestroy.push_back(entity);
+    });
     for (Entity entity : toDestroy) registry.destroy(entity);
 
     // Trigger pairs outlive the entities they name, so an exit would fire for dead ids.
@@ -225,7 +319,7 @@ const Color QUERY_HIT(1.0f, 0.45f, 0.2f);
 const float CAST_RADIUS = 40.0f;
 const Vec2 CAST_HALF_EXTENTS(50.0f, 32.0f);
 
-void panel(Registry& registry, bool& resetClicked, QueryMode& mode)
+void panel(Registry& registry, bool& resetClicked, bool& roomChanged, QueryMode& mode)
 {
     using namespace UIWidgets;
 
@@ -241,6 +335,12 @@ void panel(Registry& registry, bool& resetClicked, QueryMode& mode)
     mode = static_cast<QueryMode>(selected);
     closeContainer();
 
+    if (openSection("Room", {.openByDefault = true, .key = "physicsRoom"})) {
+        roomChanged |= sliderInt("Width", g_room.width, 10, 65, {.key = "roomWidth"}).isReleased;
+        roomChanged |= sliderInt("Height", g_room.height, 10, 49, {.key = "roomHeight"}).isReleased;
+    }
+    closeSection();
+
     if (openSection("World", {.openByDefault = true, .key = "physicsWorld"})) {
         sliderFloat("Gravity X", world.gravity.x, -2000.0f, 2000.0f, {.key = "gravityX"});
         sliderFloat("Gravity Y", world.gravity.y, -2000.0f, 2000.0f, {.key = "gravityY"});
@@ -251,6 +351,7 @@ void panel(Registry& registry, bool& resetClicked, QueryMode& mode)
     closeSection();
 
     if (openSection("Spawn", {.openByDefault = true, .key = "physicsSpawn"})) {
+        sliderInt("Bodies", g_spawn.bodyCount, 1, 121, {.key = "bodyCount"});
         sliderFloat("Speed X", g_spawn.speedRange, 0.0f, 800.0f, {.key = "speedX"});
         sliderFloat("Lift Min", g_spawn.liftMin, -800.0f, 800.0f, {.key = "liftMin"});
         sliderFloat("Lift Max", g_spawn.liftMax, -800.0f, 800.0f, {.key = "liftMax"});
@@ -302,6 +403,9 @@ void outlineEntity(Registry& registry, Entity entity)
 
     TransformComponent& transform = registry.getPool<TransformComponent>().get(entity);
     ColliderComponent& collider = colliders.get(entity);
+
+    // A tilemap has no single outline worth drawing; the hit marker already says where.
+    if (collider.shape == ColliderShape::Tilemap) return;
 
     if (collider.shape == ColliderShape::Circle) {
         Collisions::Circle circle = Collisions::toCircle(transform, collider);
@@ -453,11 +557,22 @@ int physics_test()
     EntityHandle camera = registry.create();
     camera.emplace<TransformComponent>();
     camera.emplace<CameraComponent>().windowId = windowId;
-    camera.get<CameraComponent>().orthoSize = 500;
+    camera.get<CameraComponent>().orthoSize = 540;
 
     Renderer::get().init();
     TextRenderer::get().init();
     UIRenderer::get().init();
+    TilemapRenderer::get().init(nullptr, MAX_ROOM_TILES);
+
+    Tileset tileset(FileManager::get().gameAsset("images/ruletile-47-kingspigs-tileset.png"));
+    int tileCount = static_cast<int>(tileset.getAtlas().fromCellSize("tile", 32, 32).size());
+    if (tileCount < 1) {
+        LOG_ERROR("tileset produced no tiles; is ruletile-47-kingspigs-tileset.png present?");
+        return 1;
+    }
+
+    uint16_t roomTileId = tileset.createRuleTile("room", "tile", 0, tileCount, "47-tile");
+    tileset.setTileSolid(roomTileId, true);
 
     Input::get().addAxis("Horizontal", {KeyCode::D, KeyCode::A});
     Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
@@ -471,13 +586,20 @@ int physics_test()
     world.onTriggerEnter.connect<&TriggerLog::onEnter>(&g_triggerLog);
     world.onTriggerExit.connect<&TriggerLog::onExit>(&g_triggerLog);
 
+    EntityHandle room = registry.create();
+    room.emplace<TransformComponent>().scale = Vec2(TILE_SIZE, TILE_SIZE);
+    room.emplace<ColliderComponent>().shape = ColliderShape::Tilemap;
+    TilemapManager::get().setTileset(room.emplace<TilemapComponent>(), &tileset);
+    buildRoom(room, roomTileId);
+
     Entity platform = buildScene(registry);
 
     auto onFixedUpdate = [&](float dt) {
         RigidBodyComponent& platformBody = registry.getPool<RigidBodyComponent>().get(platform);
         float platformX = registry.getPool<TransformComponent>().get(platform).position.x;
-        if (platformX > 250 && platformBody.velocity.x > 0) platformBody.velocity.x *= -1;
-        if (platformX < -250 && platformBody.velocity.x < 0) platformBody.velocity.x *= -1;
+        float range = platformRange();
+        if (platformX > range && platformBody.velocity.x > 0) platformBody.velocity.x *= -1;
+        if (platformX < -range && platformBody.velocity.x < 0) platformBody.velocity.x *= -1;
 
         PhysicsManager::get().step(registry, dt);
     };
@@ -496,17 +618,21 @@ int physics_test()
         Renderer::get().clearColor(Color(0.09f, 0.09f, 0.13f));
 
         Renderer::get().beginScene();
+        TilemapRenderer::get().render(registry);
         drawColliders(registry);
         drawContacts(registry);
         runQuery(registry, queryMode, ViewContext::get().getMouseWorldPos());
         Renderer::get().endScene();
 
-        bool resetClicked = false;
+        bool resetClicked = false, roomChanged = false;
         UIWidgets::clear();
-        panel(registry, resetClicked, queryMode);
+        panel(registry, resetClicked, roomChanged, queryMode);
         UIManager::get().draw();
 
-        if (resetClicked) platform = resetScene(registry);
+        // Resizing moves the walls out from under whatever is resting on them, so the bodies
+        // are respawned with them.
+        if (roomChanged) buildRoom(room, roomTileId);
+        if (roomChanged || resetClicked) platform = resetScene(registry);
     };
 
     Application app(registry);

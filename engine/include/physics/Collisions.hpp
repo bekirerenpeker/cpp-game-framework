@@ -95,8 +95,15 @@ Contact testBoxEntity(const Box& box, EntityHandle entity);
 Contact testCircleEntity(const Circle& circle, EntityHandle entity);
 RayHit testCircleCastEntity(const Ray& path, float radius, EntityHandle entity);
 RayHit testBoxCastEntity(const Ray& path, const Vec2& halfExtents, EntityHandle entity);
+RayHit testEntityCastEntity(const Vec2& motion, EntityHandle mover, EntityHandle target);
 Contact testEntities(EntityHandle a, EntityHandle b);
 
+void correctPositions(
+    EntityHandle a, EntityHandle b, const Contact& contact, const ResolveSettings& settings = {}
+);
+void applyImpulse(
+    EntityHandle a, EntityHandle b, const Contact& contact, const ResolveSettings& settings = {}
+);
 void resolveContact(
     EntityHandle a, EntityHandle b, const Contact& contact, const ResolveSettings& settings = {}
 );

@@ -8,6 +8,10 @@ namespace Engine {
 
 namespace {
 
+// A sweep that lands exactly on a surface starts the next one already touching, where a cast
+// has no entry face to report a normal from.
+constexpr float SWEEP_SKIN = 0.01f;
+
 bool isStatic(const RigidBodyComponent* body)
 {
     return body == nullptr || body->type == BodyType::Static;
@@ -27,10 +31,65 @@ void PhysicsManager::step(Registry& registry, float dt)
     dispatchTriggerEvents(world);
 }
 
+Collisions::RayHit
+PhysicsManager::sweepTilemaps(Registry& registry, Entity entity, const Vec2& motion)
+{
+    Collisions::RayHit nearest;
+    if (motion == VEC2_ZERO) return nearest;
+
+    EntityHandle mover(entity, registry);
+
+    View<TilemapComponent> tilemaps(registry);
+    tilemaps.each([&](Entity tilemapEntity, TilemapComponent&) {
+        Collisions::RayHit hit =
+            Collisions::testEntityCastEntity(motion, mover, EntityHandle(tilemapEntity, registry));
+        if (!hit.isHit) return;
+        if (nearest.isHit && hit.distance >= nearest.distance) return;
+
+        hit.entity = tilemapEntity;
+        nearest = hit;
+    });
+    return nearest;
+}
+
 void PhysicsManager::integrate(Registry& registry, PhysicsWorld& world, float dt)
 {
+    // One axis at a time, and swept rather than moved outright: a tile grid's interior faces
+    // are not real surfaces, and pushing out of a two-axis overlap keeps picking them, which
+    // slides a body sideways along what should be a flat floor. With no tilemap in the registry
+    // every sweep misses and this is just position += velocity * dt.
+    auto sweepAxis = [&](Entity entity, float& position, float want, bool horizontal) {
+        Collisions::RayHit hit =
+            sweepTilemaps(registry, entity, horizontal ? Vec2(want, 0.0f) : Vec2(0.0f, want));
+
+        // A zero normal means the sweep began already touching, which leaves no direction to
+        // resolve along; letting the move through is what keeps an embedded body able to leave.
+        if (!hit.isHit || hit.normal == VEC2_ZERO) {
+            position += want;
+            return;
+        }
+
+        // Stopping a hair short leaves the next sweep starting outside the surface, where it
+        // still has a normal to report.
+        float travelled = Math::max(hit.distance - SWEEP_SKIN, 0.0f);
+        position += want > 0 ? travelled : -travelled;
+
+        Collisions::Contact contact;
+        contact.isTouching = true;
+        contact.point = hit.point;
+        contact.normal = -hit.normal;
+        contact.depth = 0.0f;
+
+        // The position is already handled by stopping short, so only the velocity half runs --
+        // the same bounciness, rest threshold and friction every other collider goes through.
+        Collisions::applyImpulse(
+            EntityHandle(entity, registry), EntityHandle(hit.entity, registry), contact,
+            world.resolveSettings
+        );
+    };
+
     View<TransformComponent, RigidBodyComponent> view(registry);
-    view.each([&](Entity, TransformComponent& transform, RigidBodyComponent& body) {
+    view.each([&](Entity entity, TransformComponent& transform, RigidBodyComponent& body) {
         if (body.type == BodyType::Static) return;
 
         // Kinematic bodies carry whatever velocity the caller gave them and nothing else acts
@@ -39,8 +98,8 @@ void PhysicsManager::integrate(Registry& registry, PhysicsWorld& world, float dt
             body.velocity += world.gravity * body.gravityScale * dt;
         }
 
-        transform.position.x += body.velocity.x * dt;
-        transform.position.y += body.velocity.y * dt;
+        sweepAxis(entity, transform.position.x, body.velocity.x * dt, true);
+        sweepAxis(entity, transform.position.y, body.velocity.y * dt, false);
     });
 }
 

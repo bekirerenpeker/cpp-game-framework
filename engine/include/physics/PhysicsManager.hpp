@@ -34,6 +34,8 @@ class PhysicsManager : public Singleton<PhysicsManager>
     std::vector<Collisions::RayHit>
     boxCastAll(Registry& registry, const Collisions::Ray& path, const Vec2& halfExtents);
 
+    Collisions::RayHit sweepTilemaps(Registry& registry, Entity entity, const Vec2& motion);
+
   private:
     PhysicsManager() = default;
     ~PhysicsManager() = default;
