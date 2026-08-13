@@ -12,10 +12,17 @@ path; everything else is polish on things that already work.
 
 ## Implement Now
 
+- [ ] **Physics System** - progress is kept at [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md)
+
+## General Changes
+
 - [ ] **Organize namespaces** — everything is in `Engine`; split into `Engine::UI`, `Engine::Rendering`, `Engine::Audio`, `Engine::ECS` etc. Folds in the `UIWidgets` → `UI` rename.
+- [ ] **Organize folders** - to start it text should be in the ui folder and maybe small changes from there on.
+- [ ] **Find a way to reliably profile and test performance** - currently no easy way to test what is a bottleneck and what needs work.
 
 ## Bugs
 
+- [ ] **App lags whole computer sometimes** - sometimes the whole computer lags and even after closing app it takes a couple of seconds to get back. couldnt really understand since it wasnt easily repeatable.
 - [ ] **Home / End / PageUp / PageDown may be dead** — not reproduced; key table is aligned and the arrows share the same path. Suspect the numpad, which glfw reports as `KP_7`/`KP_1`/`KP_9`/`KP_3`. Re-test and say which keys.
 - [ ] **GL errors on shutdown** — three `GL_INVALID_OPERATION` on shader handles as the window closes; a `GlShader` is destroyed after its context is gone.
 - [ ] **Registry contexts are never freed** — `~Registry` and `clear()` delete the pools but ignore `m_contexes`, and a context is stored as `void*` so no destructor could run anyway. `PhysicsWorld` is the first one holding heap members. Needs a type-erased holder with a virtual destructor, like `ISparseSet`.
@@ -26,27 +33,25 @@ path; everything else is polish on things that already work.
 - [ ] **Physics for actual gameplay** — layers and masks, then render interpolation. Steps 2-3 of [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md); everything still collides with everything.
 - [ ] **Character controller** — a controllable body in `physics_test` first, then grounded/airborne states, coyote time, jump buffering. Forces the `onFixedUpdate`-before-`Input::update` decision.
 - [ ] **World save/load** — ECS + tilemap through `JsonFile`/`BinaryFile`; chunked so a big world streams.
-- [ ] **2D lighting** — tile flood-fill into a light texture sampled by the tile and sprite shaders.
 - [ ] **Sprite animation** — frame ranges over a `TextureAtlas`, plus a small state machine component.
 - [ ] **Particles** — pooled, batched through the existing quad renderer.
-- [ ] **Item + inventory model** — the grid UI for it already landed.
 - [ ] **Prefabs** — spawn an entity from a JSON description instead of by hand.
+- [ ] **2D lighting** — tile flood-fill into a light texture sampled by the tile and sprite shaders.
 
 ## Engine core
 
 - [ ] **Scene abstraction** — `onEnter`/`onExit`/`update`/`render`, replacing the hand-written test functions and the `main.cpp` switch.
-- [ ] **Named input actions** — actions over `InputAxis`, rebindable and serialized.
-- [ ] **Settings file** — resolution, volume, keybinds, through `JsonFile`.
 - [ ] **Hot-reload** — shaders first; it is the fastest iteration win in the engine.
+- [ ] **Named input actions** — actions over `InputAxis`, rebindable and serialized.
 - [ ] **Error convention** — one way to report a recoverable failure; right now it is a mix of `nullptr`, `bool` and a log line.
+- [ ] **Settings file** — resolution, volume, keybinds, through `JsonFile`.
 
 ## Rendering
 
-- [ ] **Sprite culling** — the tilemap culls against `ViewContext`, sprites do not.
-- [ ] **Cache the sprite sort** — `renderSprites` re-sorts every entity every frame.
 - [ ] **Render layers** — explicit sorting groups instead of the single `layer` int.
-- [ ] **Post-processing chain** — a stack of passes, not the one hardcoded pass.
-- [ ] **Debug draw channel** — persistent per-frame lines/boxes over `addLine`/`addFrame`; collision work will need it immediately.
+- [ ] **Cache the sprite sort** — `renderSprites` re-sorts every entity every frame.
+- [ ] **Sprite culling** — the tilemap culls against `ViewContext`, sprites do not.
+- [ ] **Fix the pass logic to work for one pass** — currently if no pp-shaders are used we need to use end/beginScene and to use pp-shaders we have to use beginPass.
 - [ ] **Per-sprite material uniforms** — shared uniform set referenced by sprites, applied on shader switch.
 
 ## Tilemap
@@ -56,18 +61,16 @@ path; everything else is polish on things that already work.
 
 ## UI — widgets & features
 
-- [ ] **`contextMenu` and menu bar** — compositions on top of the overlay machinery.
+- [ ] **Image Leaf** - an image leaf and a user friendly widget to go along with it.
+- [ ] **File Explorer** - a file explorer that will allow us to select files/folders (with extension filters) using the file system in place.
 - [ ] **`transition`** — animate style fields per key in the state store; needs a rule for what each field interpolates as. `cursor`, its other half, has landed.
 - [ ] **Keyboard-operable widgets** — focus landed but only text fields use it; buttons, checkboxes, radios and sliders should take Space/Enter/arrows.
 - [ ] **Focus ring** — a visible focus indicator for everything that is not a text field.
-- [ ] **Drag and drop** — between widgets, for the inventory.
-- [ ] **More widgets** — `image`, `progressBar`, `tabs`, `treeView`, `groupBox`, `dragFloat`.
+- [ ] **More widgets** — always keep thinking of more widgets to add.
 - [ ] **Text field follow-ups** — undo/redo (Ctrl+Z/Y); triple-click to select a line, which needs a click *count* on `UINodeState`; IME/composition input, which the char-callback path cannot represent.
 
 ## UI — polish & known warts
 
-- [ ] **Hit test lags a frame** — this frame's mouse against last frame's geometry.
-- [ ] **No `minHeight`/`maxHeight`** — `UISizeSpec` carries min/max, `UIWidgets` never exposes them.
 - [ ] **Floating children don't scroll** — they anchor to the unscrolled parent rect.
 - [ ] **Clip rects are AABBs** — square children poke into a rounded corner's arc.
 - [ ] **Scrollbars cross in the corner** — no corner gap when both are visible.
@@ -80,9 +83,9 @@ path; everything else is polish on things that already work.
 
 ## Performance
 
+- [ ] **Profiling scopes** — a scoped timer plus a frame-stats overlay; there is no way to see where a frame goes.
 - [ ] **Physics solver cost** — 120 bodies needs ~3 substeps to settle and that is already too slow; the pair loop is ~28k exact tests a frame with no rejection. Thirteen ordered entries in [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md) under Optimizations. Deliberately after the features.
 - [ ] **One batch for UI rects and glyphs** — merge the shaders to cut draw calls.
-- [ ] **Profiling scopes** — a scoped timer plus a frame-stats overlay; there is no way to see where a frame goes.
 - [ ] **Pool allocators** — for per-frame churn (UI nodes, particles) instead of `new`/`delete`.
 
 ## Tooling, tests & docs
