@@ -28,6 +28,15 @@ struct BlastSettings
     float strength = 900.0f;
 };
 
+struct CharacterSettings
+{
+    float maxSpeed = 340.0f;
+    float acceleration = 4000.0f;
+    float responsiveness = 12.0f;
+    float airControl = 0.4f;
+    float jumpHeight = 150.0f;
+};
+
 struct RoomSettings
 {
     int width = 30;
@@ -71,6 +80,15 @@ bool g_drawTileColliders = true;
 BlastSettings g_blast;
 Vec2 g_blastPos;
 float g_blastFade = 0.0f;
+
+CharacterSettings g_character;
+const Vec2 PLAYER_HALF_EXTENTS(16.0f, 26.0f);
+const float PLAYER_GROUND_PROBE = 6.0f;
+
+Entity g_player = NULL_ENTITY;
+float g_moveInput = 0.0f;
+bool g_jumpRequested = false;
+bool g_playerGrounded = false;
 
 // The room is centred on the origin so resizing grows it in every direction at once.
 Vec2 roomOrigin() { return Vec2(g_room.width * TILE_SIZE, g_room.height * TILE_SIZE) * -0.5f; }
@@ -187,6 +205,11 @@ void drawColliders(Registry& registry)
         Color color = colliderColor(body, collider);
         float thickness = g_triggerLog.inside.count(entity) ? 4.0f : 2.0f;
 
+        if (entity == g_player) {
+            color = g_playerGrounded ? Color(1.0f, 0.95f, 0.35f) : Color(1.0f, 0.55f, 0.25f);
+            thickness = 3.0f;
+        }
+
         if (collider.shape == ColliderShape::Circle) {
             Collisions::Circle circle = Collisions::toCircle(transform, collider);
             Renderer::get().addCircleFrame(circle.center, circle.radius, color, thickness);
@@ -288,6 +311,58 @@ void explode(Registry& registry, const Vec2& center)
     g_blastFade = 1.0f;
 }
 
+EntityHandle makePlayer(Registry& registry, Vec2 pos)
+{
+    EntityHandle entity = makeBox(registry, pos, PLAYER_HALF_EXTENTS, BodyType::Dynamic);
+    ColliderComponent& collider = entity.get<ColliderComponent>();
+    collider.surface.bounciness = 0.0f;
+    collider.surface.friction = 0.35f;
+
+    g_player = entity.getEntity();
+    return entity;
+}
+
+// boxCastAll rather than boxCast: with no layers yet the cast cannot be told to ignore its
+// own caster, and the self hit at distance zero would win every time.
+bool checkGrounded(Registry& registry, Entity player)
+{
+    Collisions::Box box = Collisions::toBox(EntityHandle(player, registry));
+    Vec2 probeHalf(box.halfExtents.x - 2.0f, box.halfExtents.y);
+    Collisions::Ray probe {box.center, box.center + Vec2(0.0f, -PLAYER_GROUND_PROBE)};
+
+    for (const Collisions::RayHit& hit :
+         PhysicsManager::get().boxCastAll(registry, probe, probeHalf)) {
+        if (hit.entity == player) continue;
+        if (hit.normal.y > 0.7f) return true;
+    }
+    return false;
+}
+
+void driveCharacter(Registry& registry)
+{
+    SparseSet<RigidBodyComponent>& bodies = registry.getPool<RigidBodyComponent>();
+    if (g_player == NULL_ENTITY || !bodies.contains(g_player)) return;
+
+    RigidBodyComponent& body = bodies.get(g_player);
+    g_playerGrounded = checkGrounded(registry, g_player);
+
+    // A proportional drive rather than a flat shove: full acceleration while far from the
+    // target speed, easing off as it arrives, so a knock from the pit is fought back
+    // gradually instead of snapped away. Mass-independent, so tuning survives a mass change.
+    float target = g_moveInput * g_character.maxSpeed;
+    float pull = (target - body.velocity.x) * g_character.responsiveness;
+    float accel = Math::clamp(pull, -g_character.acceleration, g_character.acceleration);
+    body.addAcceleration(Vec2(accel * (g_playerGrounded ? 1.0f : g_character.airControl), 0.0f));
+
+    if (g_jumpRequested && g_playerGrounded) {
+        // v = sqrt(2gh), so the slider reads as the height actually reached.
+        PhysicsWorld& world = PhysicsManager::get().getWorld(registry);
+        float gravity = Math::abs(world.gravity.y * body.gravityScale);
+        body.addVelocityChange(Vec2(0.0f, Math::sqrt(2.0f * gravity * g_character.jumpHeight)));
+    }
+    g_jumpRequested = false;
+}
+
 // Walls, ceiling and a scatter of ledges -- the room the bodies live in is the tilemap, so the
 // swept axis-separated path in `integrate` is what holds everything up. The ledges cycle
 // through the tile types so every collision mode and surface is on screen at once.
@@ -352,6 +427,8 @@ Entity buildScene(Registry& registry)
     EntityHandle platform =
         makeBox(registry, Vec2(0, -130), Vec2(platformHalfWidth(), 15), BodyType::Kinematic);
     platform.get<RigidBodyComponent>().velocity = Vec2(180.0f, 0.0f);
+
+    makePlayer(registry, Vec2(0.0f, roomOrigin().y + TILE_SIZE * 4.0f));
 
     float triggerHalf = Math::min(70.0f, interiorHalfWidth() * 0.2f);
     Vec2 triggerPos(interiorHalfWidth() * 0.45f, roomOrigin().y + TILE_SIZE + triggerHalf);
@@ -461,6 +538,15 @@ void panel(Registry& registry, bool& resetClicked, bool& roomChanged, QueryMode&
         sliderFloat("Bounce Max", g_spawn.bouncinessMax, 0.0f, 1.0f, {.key = "bounceMax"});
         sliderFloat("Friction", g_spawn.friction, 0.0f, 1.0f, {.key = "friction"});
         sliderFloat("Damping", g_spawn.damping, 0.0f, 5.0f, {.key = "damping"});
+    }
+    closeSection();
+
+    if (openSection("Character", {.openByDefault = true, .key = "physicsCharacter"})) {
+        sliderFloat("Jump Height", g_character.jumpHeight, 0.0f, 600.0f, {.key = "jumpHeight"});
+        sliderFloat("Max Speed", g_character.maxSpeed, 0.0f, 900.0f, {.key = "runSpeed"});
+        sliderFloat("Accel", g_character.acceleration, 0.0f, 12000.0f, {.key = "runAccel"});
+        sliderFloat("Air Control", g_character.airControl, 0.0f, 1.0f, {.key = "airControl"});
+        text(g_playerGrounded ? "A/D run   W jump   grounded" : "A/D run   W jump   airborne");
     }
     closeSection();
 
@@ -707,8 +793,9 @@ int physics_test()
     // A half-height slab: the drawn tile is a full cell, the collision box is its bottom half.
     tileset.setTileCollisionBounds(tileIds.slab, Vec2(0.0f, 0.0f), Vec2(1.0f, 0.5f));
 
-    Input::get().addAxis("Horizontal", {KeyCode::D, KeyCode::A});
-    Input::get().addAxis("Vertical", {KeyCode::W, KeyCode::S});
+    Input::get().addAxis("Move", {KeyCode::D, KeyCode::A});
+    Input::get().addAxis("PanX", {KeyCode::Right, KeyCode::Left});
+    Input::get().addAxis("PanY", {KeyCode::Up, KeyCode::Down});
     Input::get().addAxis("Zoom", {KeyCode::E, KeyCode::Q});
 
     PhysicsWorld& world = registry.getContext<PhysicsWorld>();
@@ -734,15 +821,22 @@ int physics_test()
         if (platformX > range && platformBody.velocity.x > 0) platformBody.velocity.x *= -1;
         if (platformX < -range && platformBody.velocity.x < 0) platformBody.velocity.x *= -1;
 
+        driveCharacter(registry);
         PhysicsManager::get().update(registry, dt, g_substeps);
     };
 
     auto onWindowUpdate = [&](IdType winId, float dt) {
         TransformComponent& transform = camera.get<TransformComponent>();
         CameraComponent& cam = camera.get<CameraComponent>();
-        transform.position.x += Input::get().getAxis("Horizontal") * dt * cam.orthoSize;
-        transform.position.y += Input::get().getAxis("Vertical") * dt * cam.orthoSize;
+        transform.position.x += Input::get().getAxis("PanX") * dt * cam.orthoSize;
+        transform.position.y += Input::get().getAxis("PanY") * dt * cam.orthoSize;
         cam.orthoSize -= Input::get().getAxis("Zoom") * dt * cam.orthoSize;
+
+        // Latched here rather than read in onFixedUpdate: input updates per window, after the
+        // fixed steps have run, so a press read there is stale and an edge can be missed or
+        // seen twice depending on how many steps the frame produced.
+        g_moveInput = Input::get().getAxis("Move");
+        if (Input::get().keyPressed(KeyCode::W)) g_jumpRequested = true;
 
         if (Input::get().keyPressed(KeyCode::Space)) {
             explode(registry, ViewContext::get().getMouseWorldPos());
