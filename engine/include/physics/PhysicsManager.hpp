@@ -20,20 +20,31 @@ class PhysicsManager : public Singleton<PhysicsManager>
     const std::vector<ContactRecord>& getContacts(Registry& registry);
     std::vector<ContactRecord> getContacts(Registry& registry, Entity entity);
 
-    std::vector<Entity> pointTest(Registry& registry, const Vec2& point);
+    std::vector<Entity>
+    pointTest(Registry& registry, const Vec2& point, LayerMask mask = LAYER_ALL);
     std::vector<Collisions::Contact>
-    circleTest(Registry& registry, const Collisions::Circle& circle);
-    std::vector<Collisions::Contact> boxTest(Registry& registry, const Collisions::Box& box);
-    Collisions::RayHit rayTest(Registry& registry, const Collisions::Ray& ray);
-    std::vector<Collisions::RayHit> rayTestAll(Registry& registry, const Collisions::Ray& ray);
-
-    Collisions::RayHit circleCast(Registry& registry, const Collisions::Ray& path, float radius);
-    std::vector<Collisions::RayHit>
-    circleCastAll(Registry& registry, const Collisions::Ray& path, float radius);
+    circleTest(Registry& registry, const Collisions::Circle& circle, LayerMask mask = LAYER_ALL);
+    std::vector<Collisions::Contact>
+    boxTest(Registry& registry, const Collisions::Box& box, LayerMask mask = LAYER_ALL);
     Collisions::RayHit
-    boxCast(Registry& registry, const Collisions::Ray& path, const Vec2& halfExtents);
+    rayTest(Registry& registry, const Collisions::Ray& ray, LayerMask mask = LAYER_ALL);
     std::vector<Collisions::RayHit>
-    boxCastAll(Registry& registry, const Collisions::Ray& path, const Vec2& halfExtents);
+    rayTestAll(Registry& registry, const Collisions::Ray& ray, LayerMask mask = LAYER_ALL);
+
+    Collisions::RayHit circleCast(
+        Registry& registry, const Collisions::Ray& path, float radius, LayerMask mask = LAYER_ALL
+    );
+    std::vector<Collisions::RayHit> circleCastAll(
+        Registry& registry, const Collisions::Ray& path, float radius, LayerMask mask = LAYER_ALL
+    );
+    Collisions::RayHit boxCast(
+        Registry& registry, const Collisions::Ray& path, const Vec2& halfExtents,
+        LayerMask mask = LAYER_ALL
+    );
+    std::vector<Collisions::RayHit> boxCastAll(
+        Registry& registry, const Collisions::Ray& path, const Vec2& halfExtents,
+        LayerMask mask = LAYER_ALL
+    );
 
     Collisions::RayHit sweepTilemaps(Registry& registry, Entity entity, const Vec2& motion);
 

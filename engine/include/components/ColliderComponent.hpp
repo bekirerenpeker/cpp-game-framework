@@ -44,6 +44,8 @@ struct ColliderComponent
     // A Tilemap uses this only where a tile does not override it.
     PhysicsSurfaceOptions surface;
 
+    LayerMask collidesWith = LAYER_ALL;
+
     bool isTrigger = false;
 };
 

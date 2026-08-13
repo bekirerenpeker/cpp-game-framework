@@ -7,3 +7,4 @@
 #include "TilemapComponent.hpp"
 #include "ColliderComponent.hpp"
 #include "RigidBodyComponent.hpp"
+#include "LayerComponent.hpp"

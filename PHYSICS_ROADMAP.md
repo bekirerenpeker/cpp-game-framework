@@ -79,7 +79,19 @@ fired through `Signal` *after* the loop, so an enter is knowable and a listener 
 invalidate the view it is iterating.
 
 **Queries and casts.** Point/box/circle overlap, ray, and circle/box casts in closest and
-`*All` forms on `PhysicsManager`, all closed-form.
+`*All` forms on `PhysicsManager`, all closed-form, each taking an optional `LayerMask`.
+
+**Layers and masks.** A global matrix in `LayerManager` is the rule; `ColliderComponent::
+collidesWith` can only *veto* it, never grant. Letting a mask grant would leave two colliders
+able to disagree with the matrix and with each other, with no principled winner — requiring
+all three conditions to agree keeps "why did these not collide" answerable in reading order.
+`LayerComponent::layers` is a mask rather than one index, so an entity can be Enemy *and*
+Flammable; the matrix then asks whether any layer of A meets any layer of B, walking only the
+set bits. Absent `LayerComponent` reads as the Default layer, and every row starts `LAYER_ALL`,
+so nothing changes until a rule is authored. Queries consult neither the matrix nor
+`collidesWith` — a raycast asks "hit things in these layers", it is not two objects
+negotiating. `LayerMask` is a `uint64_t` alias in `TypeAliases.hpp` with
+`LAYER_COUNT = sizeof(LayerMask) * 8`, so the width is one edit.
 
 **Character controller.** Scene-side in `physics_test`, deliberately not an engine type — a
 controller is game design, and the engine's job is only to make one expressible. Run and jump
@@ -87,8 +99,8 @@ off a proportional drive: `addAcceleration` toward a target speed, full accelera
 from it and easing off as it arrives, so being knocked about is fought back gradually rather
 than snapped away. Mass-independent throughout, so tuning survives a mass change. Jump is
 `addVelocityChange` of `sqrt(2gh)`, which makes the height slider read in world units. Ground
-is a downward box cast; it uses `boxCastAll` and skips its own entity, because with no layers
-yet a cast cannot be told to ignore its caster and the self hit at distance zero wins.
+is a downward `boxCast` masked to Ground and Debris, which is also what keeps it from hitting
+the caster's own collider at distance zero.
 
 **Input ordering, resolved.** `onFixedUpdate` runs before `Input::update`, so a controller
 reading input there gets it stale — and worse, an edge like a jump press is missed or seen
@@ -111,26 +123,14 @@ query members.
 
 ## Next
 
-### 1. Layers and masks
-
-Everything tests against everything. A real game needs the player to pass through pickups,
-enemies to ignore each other, a bullet to hit terrain but not its shooter, and a query to ask
-about one category. A layer id plus a collision matrix, checked in the pair loop and passed
-as an optional filter on every query and cast — the character's ground probe already has to
-work around the missing filter by gathering every hit and discarding itself.
-
-Was parked as "not designed yet" pending a broader layer component shared with rendering.
-That is still the nicer shape, but the physics side is blocking real gameplay and the two can
-be reconciled later. It also cuts the pair count, so it pays for itself twice.
-
-### 2. Render interpolation
+### 1. Render interpolation
 
 Physics runs at a fixed rate and rendering does not, so motion currently beats visibly
 against the display refresh. Store `prevPosition` at the top of `update`, lerp by the
 leftover accumulator at render time. Cheap, and every fixed-step engine needs it — the
 reason it reads as "polish" is that the test scenes are all short.
 
-### 3. Hardening pass
+### 2. Hardening pass
 
 The named failure modes, not a vague "fix bugs":
 
@@ -147,14 +147,14 @@ The named failure modes, not a vague "fix bugs":
   body standing on the very edge is still judged by its lower edge alone, not by how much of
   it is actually over the tile.
 
-### 4. Continuous collision between entities
+### 3. Continuous collision between entities
 
 The tilemap path cannot tunnel because it sweeps, but entity-vs-entity still moves then
 pushes out, so a fast body passes straight through a thin one. Opt-in per body, since making
 it unconditional costs a cast per pair. `testEntityCastEntity` already exists — this is
 mostly deciding when to spend it.
 
-### 5. Joints and constraints
+### 4. Joints and constraints
 
 A distance constraint gets ropes, chains, swinging platforms and grappling hooks; a hinge
 gets doors and ragdolls. Wants a constraint list on `PhysicsWorld` solved after contacts.
@@ -168,7 +168,7 @@ from a convergence one. It is also the most speculative entry here: layers, forc
 character are universal, ropes and ragdolls are genre-specific. Worth deciding against a real
 game rather than in advance.
 
-### 6. Rotated colliders and angular motion
+### 5. Rotated colliders and angular motion
 
 Opt-in per collider. Adds `testObbObb` + `testObbCircle` and one branch in the dispatch;
 because the tests take `Box`/`Circle` structs and not components, nothing else changes.

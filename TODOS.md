@@ -30,7 +30,7 @@ path; everything else is polish on things that already work.
 
 ## Gameplay systems — none of this exists yet
 
-- [ ] **Physics for actual gameplay** — layers and masks, then render interpolation. Steps 2-3 of [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md); everything still collides with everything.
+- [ ] **Render interpolation** — physics is fixed-rate and rendering is not, so motion beats against the refresh. `prevPosition` plus a lerp by the leftover accumulator. Step 1 of [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md).
 - [ ] **Character controller polish** — run and jump exist in `physics_test`; still wants coyote time, jump buffering, variable jump height and wall states.
 - [ ] **World save/load** — ECS + tilemap through `JsonFile`/`BinaryFile`; chunked so a big world streams.
 - [ ] **Sprite animation** — frame ranges over a `TextureAtlas`, plus a small state machine component.
@@ -119,6 +119,11 @@ path; everything else is polish on things that already work.
 - [x] **Collision and resolution** — collider and rigidbody components, all three narrowphase pairs
   behind one `Contact`, MTV resolution with bounciness and friction, contacts exposed as output,
   and deferred trigger enter/exit events. Remaining work is in [PHYSICS_ROADMAP.md](PHYSICS_ROADMAP.md).
+
+- [x] **Layers and masks** — a global matrix in `LayerManager` decides, and a collider's
+  `collidesWith` can only veto it, never grant: letting a mask grant leaves two colliders able
+  to disagree with the matrix and each other with no principled winner. `LayerComponent::layers`
+  is a mask so an entity can hold several layers. Every query takes an optional `LayerMask`.
 
 - [x] **Character controller in `physics_test`** — scene-side, not an engine type. Proportional
   `addAcceleration` drive toward a target speed, `sqrt(2gh)` jump so the height slider reads in

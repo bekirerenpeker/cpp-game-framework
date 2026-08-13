@@ -35,6 +35,7 @@ struct CharacterSettings
     float responsiveness = 12.0f;
     float airControl = 0.4f;
     float jumpHeight = 150.0f;
+    bool standOnDebris = true;
 };
 
 struct RoomSettings
@@ -83,7 +84,8 @@ float g_blastFade = 0.0f;
 
 CharacterSettings g_character;
 const Vec2 PLAYER_HALF_EXTENTS(16.0f, 26.0f);
-const float PLAYER_GROUND_PROBE = 6.0f;
+const float PLAYER_PROBE_LIFT = 2.0f;
+const float PLAYER_PROBE_REACH = 4.0f;
 
 Entity g_player = NULL_ENTITY;
 float g_moveInput = 0.0f;
@@ -160,6 +162,11 @@ EntityHandle makeCollider(Registry& registry, Vec2 pos, BodyType type, bool hasB
     entity.emplace<TransformComponent>().position = Vec3(pos.x, pos.y, 0);
     if (hasBody) entity.emplace<RigidBodyComponent>().type = type;
     return entity;
+}
+
+void setLayer(EntityHandle entity, const char* name)
+{
+    entity.emplace<LayerComponent>().layers = LayerManager::get().maskOf(name);
 }
 
 EntityHandle makeBox(
@@ -314,6 +321,8 @@ void explode(Registry& registry, const Vec2& center)
 EntityHandle makePlayer(Registry& registry, Vec2 pos)
 {
     EntityHandle entity = makeBox(registry, pos, PLAYER_HALF_EXTENTS, BodyType::Dynamic);
+    setLayer(entity, "Player");
+
     ColliderComponent& collider = entity.get<ColliderComponent>();
     collider.surface.bounciness = 0.0f;
     collider.surface.friction = 0.35f;
@@ -322,20 +331,22 @@ EntityHandle makePlayer(Registry& registry, Vec2 pos)
     return entity;
 }
 
-// boxCastAll rather than boxCast: with no layers yet the cast cannot be told to ignore its
-// own caster, and the self hit at distance zero would win every time.
 bool checkGrounded(Registry& registry, Entity player)
 {
     Collisions::Box box = Collisions::toBox(EntityHandle(player, registry));
-    Vec2 probeHalf(box.halfExtents.x - 2.0f, box.halfExtents.y);
-    Collisions::Ray probe {box.center, box.center + Vec2(0.0f, -PLAYER_GROUND_PROBE)};
 
-    for (const Collisions::RayHit& hit :
-         PhysicsManager::get().boxCastAll(registry, probe, probeHalf)) {
-        if (hit.entity == player) continue;
-        if (hit.normal.y > 0.7f) return true;
-    }
-    return false;
+    // The collider's own shape, lifted clear of the feet so the cast starts outside whatever it
+    // stands on: a one-way tile only blocks something moving down onto it, so the probe needs a
+    // real direction and entry normal rather than a zero-distance overlap.
+    Vec2 start(box.center.x, box.center.y + PLAYER_PROBE_LIFT);
+    Collisions::Ray probe {start, start + Vec2(0.0f, -(PLAYER_PROBE_LIFT + PLAYER_PROBE_REACH))};
+
+    LayerManager& layers = LayerManager::get();
+    LayerMask mask =
+        g_character.standOnDebris ? layers.maskOf({"Ground", "Debris"}) : layers.maskOf("Ground");
+
+    Collisions::RayHit hit = PhysicsManager::get().boxCast(registry, probe, box.halfExtents, mask);
+    return hit.isHit && hit.normal.y > 0.7f;
 }
 
 void driveCharacter(Registry& registry)
@@ -427,23 +438,34 @@ Entity buildScene(Registry& registry)
     EntityHandle platform =
         makeBox(registry, Vec2(0, -130), Vec2(platformHalfWidth(), 15), BodyType::Kinematic);
     platform.get<RigidBodyComponent>().velocity = Vec2(180.0f, 0.0f);
+    setLayer(platform, "Ground");
 
     makePlayer(registry, Vec2(0.0f, roomOrigin().y + TILE_SIZE * 4.0f));
 
     float triggerHalf = Math::min(70.0f, interiorHalfWidth() * 0.2f);
     Vec2 triggerPos(interiorHalfWidth() * 0.45f, roomOrigin().y + TILE_SIZE + triggerHalf);
-    makeBox(registry, triggerPos, Vec2(triggerHalf, triggerHalf), BodyType::Static, false, true);
+    setLayer(
+        makeBox(
+            registry, triggerPos, Vec2(triggerHalf, triggerHalf), BodyType::Static, false, true
+        ),
+        "Trigger"
+    );
 
     Vec2 low = spawnMin(), high = spawnMax();
     for (int i = 0; i < g_spawn.bodyCount; i++) {
         Vec2 pos(Random::rangeFloat(low.x, high.x), Random::rangeFloat(low.y, high.y));
 
-        if (Random::float01() < 0.5f) {
-            toss(makeCircle(registry, pos, Random::rangeFloat(12.0f, 32.0f), BodyType::Dynamic));
-            continue;
-        }
-        Vec2 halfExtents(Random::rangeFloat(12.0f, 35.0f), Random::rangeFloat(12.0f, 35.0f));
-        toss(makeBox(registry, pos, halfExtents, BodyType::Dynamic));
+        EntityHandle body =
+            Random::float01() < 0.5f ?
+                makeCircle(registry, pos, Random::rangeFloat(12.0f, 32.0f), BodyType::Dynamic) :
+                makeBox(
+                    registry, pos,
+                    Vec2(Random::rangeFloat(12.0f, 35.0f), Random::rangeFloat(12.0f, 35.0f)),
+                    BodyType::Dynamic
+                );
+
+        setLayer(body, "Debris");
+        toss(body);
     }
 
     return platform.getEntity();
@@ -541,19 +563,37 @@ void panel(Registry& registry, bool& resetClicked, bool& roomChanged, QueryMode&
     }
     closeSection();
 
+    if (openSection("Layers", {.openByDefault = true, .key = "physicsLayers"})) {
+        auto matrixToggle = [](const char* a, const char* b, const char* key) {
+            LayerManager& layers = LayerManager::get();
+            bool enabled = layers.getCollision(a, b);
+            if (checkBox(std::format("{} / {}", a, b), enabled, {.key = key}).isReleased) {
+                layers.setCollision(a, b, enabled);
+            }
+        };
+
+        matrixToggle("Debris", "Debris", "layerDebrisDebris");
+        matrixToggle("Player", "Debris", "layerPlayerDebris");
+        matrixToggle("Debris", "Ground", "layerDebrisGround");
+    }
+    closeSection();
+
     if (openSection("Character", {.openByDefault = true, .key = "physicsCharacter"})) {
         sliderFloat("Jump Height", g_character.jumpHeight, 0.0f, 600.0f, {.key = "jumpHeight"});
         sliderFloat("Max Speed", g_character.maxSpeed, 0.0f, 900.0f, {.key = "runSpeed"});
         sliderFloat("Accel", g_character.acceleration, 0.0f, 12000.0f, {.key = "runAccel"});
         sliderFloat("Air Control", g_character.airControl, 0.0f, 1.0f, {.key = "airControl"});
-        text(g_playerGrounded ? "A/D run   W jump   grounded" : "A/D run   W jump   airborne");
+        checkBox("Stand On Debris", g_character.standOnDebris, {.key = "standOnDebris"});
+        text(
+            g_playerGrounded ? "A/D run   space jump   grounded" : "A/D run   space jump   airborne"
+        );
     }
     closeSection();
 
     if (openSection("Blast", {.openByDefault = true, .key = "physicsBlast"})) {
         sliderFloat("Radius", g_blast.radius, 40.0f, 800.0f, {.key = "blastRadius"});
         sliderFloat("Strength", g_blast.strength, 0.0f, 4000.0f, {.key = "blastStrength"});
-        text("space at the cursor");
+        text("left click at the cursor");
     }
     closeSection();
 
@@ -798,6 +838,11 @@ int physics_test()
     Input::get().addAxis("PanY", {KeyCode::Up, KeyCode::Down});
     Input::get().addAxis("Zoom", {KeyCode::E, KeyCode::Q});
 
+    LayerManager::get().registerLayer("Ground");
+    LayerManager::get().registerLayer("Player");
+    LayerManager::get().registerLayer("Debris");
+    LayerManager::get().registerLayer("Trigger");
+
     PhysicsWorld& world = registry.getContext<PhysicsWorld>();
     world.gravity = Vec2(0.0f, -900.0f);
     world.resolveSettings.bounceThreshold = 40.0f;
@@ -809,6 +854,7 @@ int physics_test()
     EntityHandle room = registry.create();
     room.emplace<TransformComponent>().scale = Vec2(TILE_SIZE, TILE_SIZE);
     room.emplace<ColliderComponent>().shape = ColliderShape::Tilemap;
+    setLayer(room, "Ground");
     TilemapManager::get().setTileset(room.emplace<TilemapComponent>(), &tileset);
     buildRoom(room, tileIds);
 
@@ -836,9 +882,9 @@ int physics_test()
         // fixed steps have run, so a press read there is stale and an edge can be missed or
         // seen twice depending on how many steps the frame produced.
         g_moveInput = Input::get().getAxis("Move");
-        if (Input::get().keyPressed(KeyCode::W)) g_jumpRequested = true;
+        if (Input::get().keyPressed(KeyCode::Space)) g_jumpRequested = true;
 
-        if (Input::get().keyPressed(KeyCode::Space)) {
+        if (Input::get().mouseButtonPressed(MouseButton::Left)) {
             explode(registry, ViewContext::get().getMouseWorldPos());
         }
         if (g_blastFade > 0.0f) g_blastFade -= dt * 3.0f;

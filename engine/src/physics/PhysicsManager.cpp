@@ -1,5 +1,7 @@
 #include "physics/PhysicsManager.hpp"
+#include "components/LayerComponent.hpp"
 #include "ecs/registry/View.hpp"
+#include "physics/LayerManager.hpp"
 #include "components/RigidBodyComponent.hpp"
 #include "components/TransformComponent.hpp"
 #include "physics/Collisions.hpp"
@@ -18,6 +20,29 @@ bool isStatic(const RigidBodyComponent* body)
     return body == nullptr || body->type == BodyType::Static;
 }
 Vec2 velocityOf(const RigidBodyComponent* body) { return body ? body->velocity : VEC2_ZERO; }
+
+LayerMask layersOf(EntityHandle entity)
+{
+    LayerComponent* layer = entity.tryGet<LayerComponent>();
+    return layer ? layer->layers : LAYER_DEFAULT;
+}
+
+// The matrix is the rule; a collider's own mask can only take interactions away, never add
+// them back. Letting it grant would leave two colliders able to disagree with the matrix and
+// with each other, with no principled winner.
+bool canCollide(EntityHandle a, EntityHandle b)
+{
+    ColliderComponent* colliderA = a.tryGet<ColliderComponent>();
+    ColliderComponent* colliderB = b.tryGet<ColliderComponent>();
+    if (!colliderA || !colliderB) return false;
+
+    LayerMask layersA = layersOf(a);
+    LayerMask layersB = layersOf(b);
+
+    if (!(colliderA->collidesWith & layersB)) return false;
+    if (!(colliderB->collidesWith & layersA)) return false;
+    return LayerManager::get().matrixAllows(layersA, layersB);
+}
 
 }   // namespace
 
@@ -71,8 +96,10 @@ PhysicsManager::sweepTilemaps(Registry& registry, Entity entity, const Vec2& mot
 
     View<TilemapComponent> tilemaps(registry);
     tilemaps.each([&](Entity tilemapEntity, TilemapComponent&) {
-        Collisions::RayHit hit =
-            Collisions::testEntityCastEntity(motion, mover, EntityHandle(tilemapEntity, registry));
+        EntityHandle target(tilemapEntity, registry);
+        if (!canCollide(mover, target)) return;
+
+        Collisions::RayHit hit = Collisions::testEntityCastEntity(motion, mover, target);
         if (!hit.isHit) return;
         if (nearest.isHit && hit.distance >= nearest.distance) return;
 
@@ -102,8 +129,10 @@ void PhysicsManager::depenetrateTilemaps(Registry& registry)
             bool pushed = false;
 
             for (Entity tilemapEntity : tilemapEntities) {
-                Collisions::Contact contact =
-                    Collisions::testEntities(mover, EntityHandle(tilemapEntity, registry));
+                EntityHandle target(tilemapEntity, registry);
+                if (!canCollide(mover, target)) continue;
+
+                Collisions::Contact contact = Collisions::testEntities(mover, target);
                 if (!contact.isTouching) continue;
 
                 // The normal runs body -> tile, and the whole correction lands on the body:
@@ -203,6 +232,7 @@ void PhysicsManager::collideEntities(Registry& registry, PhysicsWorld& world)
             if (isStatic(bodyA) && isStatic(bodyB)) continue;
 
             EntityHandle handleA(a, registry), handleB(b, registry);
+            if (!canCollide(handleA, handleB)) continue;
 
             Collisions::Contact contact = Collisions::testEntities(handleA, handleB);
             if (!contact.isTouching) continue;
