@@ -1,6 +1,7 @@
 #include "EngineInclude.hpp"
 #include "physics/PhysicsManager.hpp"
 #include "test_funcs.hpp"
+#include "ui/widgets/UIWidgets.hpp"
 #include <format>
 #include <string>
 #include <unordered_set>
@@ -525,6 +526,14 @@ void panel(Registry& registry, bool& resetClicked, bool& roomChanged, QueryMode&
     Collisions::ResolveSettings& resolve = world.resolveSettings;
 
     openWindow("Physics", {.windowLayout = {.width = UISizeSpec::fixed(320.0f)}});
+
+    static float counter = 0, fps = 0;
+    counter += Time::get().getDeltaTime();
+    if (counter > 0.3) {
+        fps = 1 / Time::get().getDeltaTime();
+        counter = 0;
+    }
+    text("FPS: " + std::to_string(fps));
 
     openContainer({.gap = 8.0f}, {}, "physicsActions");
     resetClicked = button("Reset Scene", {.key = "physicsReset"}).isReleased;
